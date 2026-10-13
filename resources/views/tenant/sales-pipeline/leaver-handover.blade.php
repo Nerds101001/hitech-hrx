@@ -31,17 +31,29 @@
   ] as [$title, $sub, $list, $btn, $kind])
   <div class="px-4 mb-6">
     <div class="hitech-card-white p-0 overflow-hidden shadow-sm">
-      <div class="p-4 pb-2"><h5 class="fw-bold mb-1 text-dark">{{ $loop->iteration }}. {{ $title }}</h5>
-        <div class="small text-muted">{{ $sub }}</div></div>
+      <div class="p-4 pb-2 d-flex flex-wrap align-items-end justify-content-between gap-3">
+        <div><h5 class="fw-bold mb-1 text-dark">{{ $loop->iteration }}. {{ $title }}</h5>
+          <div class="small text-muted">{{ $sub }}</div></div>
+        <div class="d-flex flex-wrap gap-2">
+          <input type="search" class="form-control js-lf-text" data-table="tbl_{{ $kind }}" style="min-width:220px;" placeholder="Search by name…">
+          <select class="form-select js-lf-role" data-table="tbl_{{ $kind }}" style="min-width:170px;">
+            <option value="">Any role held</option>
+            <option value="sp">Holds as Salesperson</option>
+            <option value="cc">Holds as CCare</option>
+            <option value="nb">Holds as New Biz</option>
+            <option value="tags">Has extra-rep tags</option>
+          </select>
+        </div>
+      </div>
       <div class="table-responsive" @if($kind === 'transfer') style="max-height:420px;overflow:auto;" @endif>
-        <table class="table m-0 shadow-none border-0">
+        <table class="table m-0 shadow-none border-0" id="tbl_{{ $kind }}">
           <thead class="text-dark"><tr>
             <th class="ps-4">Employee</th>@if($kind === 'handover')<th>Left</th>@endif<th class="text-center">Salesperson</th><th class="text-center">CCare</th>
             <th class="text-center">New Biz</th><th class="text-center">Extra-rep tags</th><th class="text-end pe-4"></th>
           </tr></thead>
           <tbody>
           @forelse($list as $l)
-            <tr style="border-bottom:1px solid #f1f5f9;">
+            <tr style="border-bottom:1px solid #f1f5f9;" data-text="{{ strtolower($l['name']) }}" data-sp="{{ $l['salesperson'] }}" data-cc="{{ $l['ccare'] }}" data-nb="{{ $l['new_biz'] }}" data-tags="{{ $l['tags'] }}">
               <td class="ps-4 fw-medium">{{ $l['name'] }} @if($kind === 'handover')<span class="badge bg-label-secondary rounded-pill ms-1">{{ $l['status'] }}</span>@endif</td>
               @if($kind === 'handover')<td>{{ $l['left'] ? \Carbon\Carbon::parse($l['left'])->format('d M Y') : '—' }}</td>@endif
               <td class="text-center">{{ $l['salesperson'] ?: '—' }}</td>
@@ -109,22 +121,33 @@
   {{-- 3. History --}}
   <div class="px-4 mb-6">
     <div class="hitech-card-white p-0 overflow-hidden shadow-sm">
-      <div class="p-4 pb-2"><h5 class="fw-bold mb-1 text-dark">Recent handovers</h5>
-        <div class="small text-muted">Each can be undone while nothing has changed on those customers since.</div></div>
+      <div class="p-4 pb-2 d-flex flex-wrap align-items-end justify-content-between gap-3">
+        <div><h5 class="fw-bold mb-1 text-dark">Recent handovers</h5>
+          <div class="small text-muted">Open one for the detailed sheet of who moved to whom. Each can be undone while nothing has changed on those customers since.</div></div>
+        <div class="d-flex flex-wrap gap-2">
+          <input type="search" class="form-control js-lf-text" data-table="tbl_history" style="min-width:220px;" placeholder="Search by person…">
+          <select class="form-select js-lf-status" data-table="tbl_history" style="min-width:150px;">
+            <option value="">All</option><option value="applied">Applied</option><option value="reverted">Undone</option>
+          </select>
+        </div>
+      </div>
       <div class="table-responsive">
-        <table class="table m-0 shadow-none border-0">
-          <thead class="text-dark"><tr><th class="ps-4">#</th><th>Leaver</th><th>From</th><th>Customers</th><th>Done by</th><th>When</th><th>Status</th><th class="text-end pe-4"></th></tr></thead>
+        <table class="table m-0 shadow-none border-0" id="tbl_history">
+          <thead class="text-dark"><tr><th class="ps-4">#</th><th>Person</th><th>From</th><th>Customers</th><th>Done by</th><th>When</th><th>Status</th><th class="text-end pe-4"></th></tr></thead>
           <tbody>
           @forelse($batches as $b)
-            <tr style="border-bottom:1px solid #f1f5f9;">
+            <tr style="border-bottom:1px solid #f1f5f9;" data-text="{{ strtolower($b->leaver_name . ' ' . $b->by) }}" data-status="{{ $b->status }}">
               <td class="ps-4">{{ $b->id }}</td>
-              <td class="fw-medium">{{ $b->leaver_name }}</td>
+              <td class="fw-medium"><a href="{{ route('sales-visits.leaver-handover.show', $b->id) }}" class="text-dark">{{ $b->leaver_name }}</a></td>
               <td>{{ \Carbon\Carbon::createFromFormat('Y-m', $b->effective_month)->format('M Y') }}</td>
               <td>{{ $b->summary['customers'] ?? '—' }}</td>
               <td>{{ $b->by }}</td>
               <td>{{ \Carbon\Carbon::parse($b->created_at)->format('d M Y H:i') }}</td>
               <td>@if($b->status === 'applied')<span class="badge bg-teal-light text-teal rounded-pill px-3">Applied</span>@else<span class="badge bg-label-secondary rounded-pill px-3">Undone</span>@endif</td>
-              <td class="text-end pe-4">@if($b->status === 'applied')<button type="button" class="btn btn-sm btn-hitech-secondary rounded-pill px-3 js-revert" data-id="{{ $b->id }}">Undo</button>@endif</td>
+              <td class="text-end pe-4 text-nowrap">
+                <a href="{{ route('sales-visits.leaver-handover.show', $b->id) }}" class="btn btn-sm btn-hitech rounded-pill px-3">View sheet</a>
+                @if($b->status === 'applied')<button type="button" class="btn btn-sm btn-hitech-secondary rounded-pill px-3 js-revert" data-id="{{ $b->id }}">Undo</button>@endif
+              </td>
             </tr>
           @empty
             <tr><td colspan="8" class="text-center py-4 text-muted">Nothing has been handed over yet.</td></tr>
@@ -153,6 +176,44 @@
     document.querySelectorAll('.js-repl').forEach(function (s) { p[s.dataset.key] = s.value || null; });
     return p;
   }
+
+  // Search / filter the three lists and the history table.
+  function filterTable(id) {
+    var table = $(id); if (!table) return;
+    var wrap = table.closest('.hitech-card-white');
+    var q = (wrap.querySelector('.js-lf-text') || {}).value || '';
+    var role = (wrap.querySelector('.js-lf-role') || {}).value || '';
+    var status = (wrap.querySelector('.js-lf-status') || {}).value || '';
+    q = q.trim().toLowerCase();
+    table.querySelectorAll('tbody tr[data-text]').forEach(function (tr) {
+      var ok = (!q || tr.dataset.text.indexOf(q) !== -1)
+            && (!role || Number(tr.dataset[role] || 0) > 0)
+            && (!status || tr.dataset.status === status);
+      tr.style.display = ok ? '' : 'none';
+    });
+  }
+  document.querySelectorAll('.js-lf-text, .js-lf-role, .js-lf-status').forEach(function (el) {
+    el.addEventListener('input', function () { filterTable(el.dataset.table); });
+    el.addEventListener('change', function () { filterTable(el.dataset.table); });
+  });
+
+  // A small search box above each replacement list (the list is long).
+  document.querySelectorAll('.js-repl').forEach(function (sel) {
+    var box = document.createElement('input');
+    box.type = 'search'; box.className = 'form-control form-control-sm mb-1'; box.placeholder = 'Search people…';
+    sel.parentNode.insertBefore(box, sel);
+    box.addEventListener('input', function () {
+      var q = box.value.trim().toLowerCase();
+      sel.querySelectorAll('optgroup').forEach(function (g) {
+        var any = false;
+        g.querySelectorAll('option').forEach(function (o) {
+          var show = !q || o.textContent.toLowerCase().indexOf(q) !== -1 || g.label.toLowerCase().indexOf(q) !== -1;
+          o.hidden = !show; o.disabled = !show; if (show) any = true;
+        });
+        g.hidden = !any;
+      });
+    });
+  });
 
   document.querySelectorAll('.js-pick').forEach(function (b) {
     b.addEventListener('click', function () {
@@ -200,7 +261,7 @@
         var p = payload(); p.fingerprint = lastPreview.fingerprint; p.confirm = $('hoConfirm').value.trim();
         a.disabled = true;
         post(urls.apply, p).then(function (r) {
-          if (r.ok) { location.reload(); return; }
+          if (r.ok) { location.href = (r.body && r.body.redirect) ? r.body.redirect : location.href; return; }
           a.disabled = false;
           $('hoResult').insertAdjacentHTML('afterbegin', '<div class="alert alert-danger py-2 mb-2">' + esc((r.body && (r.body.message || (r.body.errors && JSON.stringify(r.body.errors)))) || 'Failed.') + '</div>');
         });

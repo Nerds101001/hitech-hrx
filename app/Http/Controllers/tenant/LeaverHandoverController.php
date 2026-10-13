@@ -135,7 +135,58 @@ class LeaverHandoverController extends Controller
             return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
         }
 
-        return response()->json(['success' => true, 'batch' => $id, 'message' => 'Handover applied.']);
+        return response()->json(['success' => true, 'batch' => $id, 'message' => 'Handover applied.',
+            'redirect' => route('sales-visits.leaver-handover.show', $id)]);
+    }
+
+    /** The detailed sheet for one handover: which customers moved, from whom to whom. */
+    public function show(int $id)
+    {
+        $this->authorizeHandover();
+        $d = LeaverHandoverService::detail($id);
+        abort_unless($d, 404);
+
+        return view('tenant.sales-pipeline.leaver-handover-show', $d + ['id' => $id]);
+    }
+
+    /** The same sheet as a CSV file (opens in Excel). */
+    public function export(int $id)
+    {
+        $this->authorizeHandover();
+        $d = LeaverHandoverService::detail($id);
+        abort_unless($d, 404);
+
+        $b = $d['batch'];
+        $name = 'handover-' . $id . '-' . preg_replace('/[^A-Za-z0-9]+/', '-', (string) $d['leaver']) . '.csv';
+
+        return response()->streamDownload(function () use ($d, $b) {
+            $out = fopen('php://output', 'w');
+            fwrite($out, "\xEF\xBB\xBF");   // so Excel reads it as UTF-8
+            fputcsv($out, ['Handover', '#' . $b->id, 'From person', $d['leaver'], 'Effective month', $b->effective_month, 'Done by', $d['by'], 'On', (string) $b->created_at, 'Status', $b->status]);
+            fputcsv($out, []);
+            fputcsv($out, ['SALES REPORT CUSTOMERS']);
+            fputcsv($out, ['Customer', 'Role', 'From', 'To', 'Credited to new person from', 'Sale before (L, stays with previous)', 'Sale from then on (L, goes to new)']);
+            foreach ($d['customers'] as $c) {
+                fputcsv($out, [$c['customer'], $c['role'], $c['from'], $c['to'], $c['from_month'], $c['stays'], $c['goes']]);
+            }
+            if ($d['client_master']) {
+                fputcsv($out, []);
+                fputcsv($out, ['CLIENT MASTER']);
+                fputcsv($out, ['Customer', 'Field', 'From', 'To']);
+                foreach ($d['client_master'] as $c) {
+                    fputcsv($out, [$c['customer'], $c['field'], $c['from'], $c['to']]);
+                }
+            }
+            if ($d['ccare_map']) {
+                fputcsv($out, []);
+                fputcsv($out, ['CCARE MAP ROWS ADDED']);
+                fputcsv($out, ['CCare person', 'Salesperson', 'Role']);
+                foreach ($d['ccare_map'] as $c) {
+                    fputcsv($out, [$c['ccare'], $c['salesperson'], $c['role']]);
+                }
+            }
+            fclose($out);
+        }, $name, ['Content-Type' => 'text/csv; charset=UTF-8']);
     }
 
     public function revert(Request $request, int $id): JsonResponse

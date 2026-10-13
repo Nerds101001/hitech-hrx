@@ -106,6 +106,42 @@ class LeaverHandoverPageTest extends TestCase
         $this->assertSame($this->leaver->id, (int) $this->p->fresh()->salesperson_id);
     }
 
+    public function test_applying_opens_a_detailed_sheet_of_who_moved_to_whom(): void
+    {
+        $fp = $this->actingAs($this->admin)->postJson('/sales-visits/leaver-handover/preview', $this->body())->json('fingerprint');
+        $apply = $this->actingAs($this->admin)->postJson('/sales-visits/leaver-handover/apply', $this->body(['fingerprint' => $fp, 'confirm' => 'HANDOVER']))->assertOk();
+
+        $url = $apply->json('redirect');
+        $this->assertNotEmpty($url, 'the apply response says where the detailed sheet is');
+        $batch = (int) $apply->json('batch');
+
+        $sheet = $this->actingAs($this->admin)->get("/sales-visits/leaver-handover/{$batch}")->assertOk();
+        $sheet->assertSee($this->p->party_name)->assertSee('QA HoPage');
+        $d = $sheet->viewData('customers');
+        $this->assertCount(1, $d);
+        $this->assertSame('Salesperson', $d[0]['role']);
+        $this->assertSame('QA HoPage', $d[0]['from']);
+        $this->assertEquals(3.0, $d[0]['stays'], 'February stays with the leaver');
+        $this->assertEquals(4.0, $d[0]['goes'], 'May goes to the replacement');
+    }
+
+    public function test_the_sheet_downloads_as_a_csv_and_is_for_admin_and_hr_only(): void
+    {
+        $fp = $this->actingAs($this->admin)->postJson('/sales-visits/leaver-handover/preview', $this->body())->json('fingerprint');
+        $batch = (int) $this->actingAs($this->admin)->postJson('/sales-visits/leaver-handover/apply', $this->body(['fingerprint' => $fp, 'confirm' => 'HANDOVER']))->json('batch');
+
+        $csv = $this->actingAs($this->admin)->get("/sales-visits/leaver-handover/{$batch}/export")->assertOk();
+        $this->assertStringContainsString('text/csv', $csv->headers->get('Content-Type'));
+        $text = $csv->streamedContent();
+        $this->assertStringContainsString($this->p->party_name, $text);
+        $this->assertStringContainsString('Customer,Role,From,To', $text);
+
+        foreach (["/sales-visits/leaver-handover/{$batch}", "/sales-visits/leaver-handover/{$batch}/export"] as $url) {
+            $this->assertContains($this->actingAs($this->plain)->get($url)->getStatusCode(), [302, 403]);
+        }
+        $this->actingAs($this->admin)->get('/sales-visits/leaver-handover/99999999')->assertNotFound();
+    }
+
     public function test_a_bad_request_is_explained_not_applied(): void
     {
         $r = $this->actingAs($this->admin)->postJson('/sales-visits/leaver-handover/preview', ['leaver_id' => $this->leaver->id, 'month' => '2031-04']);

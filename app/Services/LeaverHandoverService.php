@@ -313,6 +313,83 @@ class LeaverHandoverService
     }
 
     /**
+     * Everything one handover did, for the detail sheet and its export: each customer
+     * with who it moved from and to, and what stays with the previous person versus
+     * what goes to the new one. Null when there is no such batch.
+     *
+     * @return array<string,mixed>|null
+     */
+    public static function detail(int $batchId): ?array
+    {
+        $batch = DB::table('sales_pipeline_handover_batches')->where('id', $batchId)->first();
+        if (!$batch) {
+            return null;
+        }
+
+        $events = DB::table('sales_pipeline_handovers as h')
+            ->leftJoin('sales_pipelines as sp', 'sp.id', '=', 'h.sales_pipeline_id')
+            ->where('h.batch_id', $batchId)->orderBy('sp.party_name')->orderBy('h.id')
+            ->get(['h.id', 'h.sales_pipeline_id', 'h.role', 'h.from_user_id', 'h.to_user_id', 'h.effective_month', 'h.reverted_at', 'sp.party_name']);
+
+        $before = json_decode((string) $batch->before_state, true) ?: [];
+        $crm = $before['crm'] ?? [];
+        $mapIds = $before['map_added'] ?? [];
+
+        $userIds = collect([$batch->leaver_id, $batch->created_by, $batch->reverted_by])
+            ->merge($events->pluck('from_user_id'))->merge($events->pluck('to_user_id'))
+            ->merge(array_column($crm, 'from'))->merge(array_column($crm, 'to'))->filter()->unique()->values();
+        $maps = $mapIds ? DB::table('cc_salesperson_map')->whereIn('id', $mapIds)->get() : collect();
+        $userIds = $userIds->merge($maps->pluck('cc_user_id'))->merge($maps->pluck('sales_user_id'))->unique()->values();
+        $names = User::whereIn('id', $userIds)->get()->mapWithKeys(fn ($u) => [$u->id => trim($u->first_name . ' ' . $u->last_name)]);
+        $name = fn ($id) => $id ? ($names[$id] ?? ('#' . $id)) : null;
+
+        // Sales on each customer, split at the effective month.
+        $money = [];
+        $pids = $events->pluck('sales_pipeline_id')->unique()->values();
+        foreach ($pids->chunk(1000) as $chunk) {
+            foreach (DB::table('sales_pipeline_months')->whereIn('sales_pipeline_id', $chunk)
+                ->groupBy('sales_pipeline_id')
+                ->selectRaw('sales_pipeline_id pid, SUM(CASE WHEN month_year < ? THEN sale_amount ELSE 0 END) stays, SUM(CASE WHEN month_year >= ? THEN sale_amount ELSE 0 END) goes', [$batch->effective_month, $batch->effective_month])
+                ->get() as $m) {
+                $money[(int) $m->pid] = ['stays' => (float) $m->stays, 'goes' => (float) $m->goes];
+            }
+        }
+
+        $roleLabel = ['salesperson_id' => 'Salesperson', 'ccare_id' => 'CCare', 'new_biz_id' => 'New Biz', 'new_biz_2_id' => 'New Biz 2', SalesPipelineHandover::EXTRA => 'Additional rep (tag ends)'];
+        $customers = $events->map(fn ($e) => [
+            'pipeline_id' => (int) $e->sales_pipeline_id,
+            'customer'    => $e->party_name ?: ('#' . $e->sales_pipeline_id),
+            'role'        => $roleLabel[$e->role] ?? $e->role,
+            'from'        => $name($e->from_user_id),
+            'to'          => $e->to_user_id ? $name($e->to_user_id) : '— (tag ends)',
+            'from_month'  => $e->effective_month,
+            'stays'       => round($money[(int) $e->sales_pipeline_id]['stays'] ?? 0.0, 2),
+            'goes'        => round($money[(int) $e->sales_pipeline_id]['goes'] ?? 0.0, 2),
+        ])->values()->all();
+
+        $crmNames = $crm ? DB::table('crm_client_mappings')->whereIn('id', array_column($crm, 'id'))->pluck('crm_company_name', 'id') : collect();
+        $clientMaster = array_map(fn ($c) => [
+            'customer' => $crmNames[$c['id']] ?? ('#' . $c['id']), 'field' => str_replace('_id', '', $c['column']),
+            'from' => $name($c['from']), 'to' => $name($c['to']),
+        ], $crm);
+
+        $ccareMap = $maps->map(fn ($m) => [
+            'ccare' => $name($m->cc_user_id), 'salesperson' => $name($m->sales_user_id), 'role' => $m->role ?: 'ccare',
+        ])->values()->all();
+
+        return [
+            'batch'        => $batch,
+            'summary'      => json_decode((string) $batch->summary, true) ?: [],
+            'leaver'       => $name($batch->leaver_id),
+            'by'           => $name($batch->created_by) ?: 'System',
+            'reverted_by'  => $name($batch->reverted_by),
+            'customers'    => $customers,
+            'client_master' => $clientMaster,
+            'ccare_map'    => $ccareMap,
+        ];
+    }
+
+    /**
      * Undo a batch. Refused if a later handover touches the same customers, or a
      * customer was changed by hand since: then it reports what to look at.
      *

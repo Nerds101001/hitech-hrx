@@ -964,6 +964,8 @@ Route::middleware([
                 Route::get('/', [\App\Http\Controllers\tenant\LeaverHandoverController::class, 'index'])->name('index');
                 Route::post('/preview', [\App\Http\Controllers\tenant\LeaverHandoverController::class, 'preview'])->name('preview');
                 Route::post('/apply', [\App\Http\Controllers\tenant\LeaverHandoverController::class, 'apply'])->name('apply');
+                Route::get('/{id}', [\App\Http\Controllers\tenant\LeaverHandoverController::class, 'show'])->whereNumber('id')->name('show');
+                Route::get('/{id}/export', [\App\Http\Controllers\tenant\LeaverHandoverController::class, 'export'])->whereNumber('id')->name('export');
                 Route::post('/{id}/revert', [\App\Http\Controllers\tenant\LeaverHandoverController::class, 'revert'])->whereNumber('id')->name('revert');
             });
             Route::post('/sales-report/sync-crm-mapping/{salespersonId}', [\App\Http\Controllers\tenant\SalesPipelineController::class, 'syncCrmMapping'])->name('pipeline.sync-crm-mapping');
