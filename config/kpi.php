@@ -18,8 +18,11 @@ return [
   | Production is to carry the KPIs regardless of designation, including these
   | three. Restore the ids here to exclude them again.
   |
+  | 2026-10-13: 476 Jasbir Kaur (New Biz only, in the combined CCare department)
+  | and 600 Demo CCARE are excluded so the CCare scoring KPIs skip them.
+  |
   */
 
-  'excluded_user_ids' => [],
+  'excluded_user_ids' => [476, 600],
 
 ];
