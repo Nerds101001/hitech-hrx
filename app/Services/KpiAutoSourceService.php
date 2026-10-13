@@ -178,6 +178,12 @@ class KpiAutoSourceService
                 // New Biz months they sold in (SalesPipeline::whereMonthCredited()).
                 if ($withMovedOn) {
                     $q->orWhere('former_new_biz_id', $userId);
+                    // ...and customers handed on to a replacement when this person left, for
+                    // the months before the handover (SalesPipelineHandover).
+                    $heldBefore = \App\Models\SalesPipelineHandover::pipelineIdsHeldBefore([$userId]);
+                    if ($heldBefore->isNotEmpty()) {
+                        $q->orWhereIn('id', $heldBefore->all());
+                    }
                 }
             });
     }
@@ -620,6 +626,7 @@ class KpiAutoSourceService
                   ->orWhere('sp.new_biz_2_id', $userId)
                   ->orWhere('sp.ccare_id', $userId)
                   ->orWhere('sp.former_new_biz_id', $userId)
+                  ->orWhereIn('sp.id', \App\Models\SalesPipelineHandover::pipelineIdsHeldBefore([$userId])->all())
                   ->orWhereExists(function ($e) use ($userId) {
                       $e->selectRaw('1')
                         ->from('sales_pipeline_extra_reps as er')

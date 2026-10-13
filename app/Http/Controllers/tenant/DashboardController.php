@@ -504,8 +504,10 @@ class DashboardController extends Controller
               ->where('m.month_year', $mk)
               ->where('sp.is_locked', true)          // locked = Sales Report (realized sales)
               ->whereNull('sp.deleted_at')
-              ->groupBy('sp.salesperson_id')
-              ->selectRaw('sp.salesperson_id AS spid, SUM(m.sale_amount) AS achieved')
+              // The salesperson of each month: after a leaver handover, the month goes to whoever held it then.
+              // (grouped by the alias: strict MySQL rejects grouping on the subquery itself)
+              ->groupBy('spid')
+              ->selectRaw(\App\Models\SalesPipelineHandover::holderSql('salesperson_id', 'sp', 'm') . ' AS spid, SUM(m.sale_amount) AS achieved')
               ->pluck('achieved', 'spid');
           $salesAchieved = (float) $achievedBySp->sum();
 
@@ -677,8 +679,8 @@ class DashboardController extends Controller
             ->join('sales_pipeline_months as m', 'm.sales_pipeline_id', '=', 'sales_pipelines.id')
             ->where('m.month_year', $monthKey)
             ->whereNotNull('sales_pipelines.salesperson_id')
-            ->selectRaw('sales_pipelines.salesperson_id sp_id, SUM(COALESCE(m.sale_amount,0)) achieved')
-            ->groupBy('sales_pipelines.salesperson_id')
+            ->selectRaw(\App\Models\SalesPipelineHandover::holderSql('salesperson_id', 'sales_pipelines', 'm') . ' sp_id, SUM(COALESCE(m.sale_amount,0)) achieved')
+            ->groupBy('sp_id')
             ->pluck('achieved', 'sp_id');
 
           $targetsByRep = \App\Models\SalespersonTarget::where('month_year', $monthKey)

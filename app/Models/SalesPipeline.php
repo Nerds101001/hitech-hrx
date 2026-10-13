@@ -76,6 +76,42 @@ class SalesPipeline extends Model implements AuditableContract
     }
 
     /**
+     * The customer as it stood in month $mk for $userId, once leaver handovers are
+     * applied: each role column holds whoever held it in that month. Null when the
+     * person was neither a holder then nor a live additional-rep tag. A customer with
+     * no handover comes back as it is, so this is a no-op until one exists.
+     */
+    public static function handoverView(object $row, int $userId, string $mk): ?object
+    {
+        if (empty($row->id) || !SalesPipelineHandover::hasAny()) {
+            return $row;
+        }
+        $events = SalesPipelineHandover::eventsFor([(int) $row->id])[(int) $row->id] ?? [];
+        if (!$events) {
+            return $row;
+        }
+
+        $eff = clone $row;
+        $isHolder = (int) ($row->former_new_biz_id ?? 0) === $userId;
+        foreach (SalesPipelineHandover::ROLE_COLUMNS as $col) {
+            $eff->{$col} = SalesPipelineHandover::holderAt(isset($row->{$col}) ? (int) $row->{$col} : null, $col, $mk, $events);
+            $isHolder = $isHolder || (int) $eff->{$col} === $userId;
+        }
+        if (!$isHolder
+            && (!SalesPipelineHandover::isTagged((int) $row->id, $userId) || SalesPipelineHandover::extraTagEnded($userId, $mk, $events))) {
+            return null;
+        }
+
+        return $eff;
+    }
+
+    /** Was $userId on this customer in month $mk, as far as leaver handovers go? (Ignores the New Biz -> CCare split.) */
+    public function heldInMonth(int $userId, string $mk): bool
+    {
+        return self::handoverView($this, $userId, $mk) !== null;
+    }
+
+    /**
      * creditsMonth() for a plain DB row; $beforeMove = the month is before ccare_from.
      *
      * $mk (YYYY-MM) lets a leaver handover apply: the people in each role column are
@@ -85,22 +121,10 @@ class SalesPipeline extends Model implements AuditableContract
      */
     public static function creditsSide(object $row, int $userId, bool $beforeMove, ?string $mk = null): bool
     {
-        if ($mk !== null && !empty($row->id) && SalesPipelineHandover::hasAny()) {
-            $events = SalesPipelineHandover::eventsFor([(int) $row->id])[(int) $row->id] ?? [];
-            if ($events) {
-                $eff = clone $row;
-                foreach (SalesPipelineHandover::ROLE_COLUMNS as $col) {
-                    $eff->{$col} = SalesPipelineHandover::holderAt(isset($row->{$col}) ? (int) $row->{$col} : null, $col, $mk, $events);
-                }
-                $isHolder = (int) ($row->former_new_biz_id ?? 0) === $userId;
-                foreach (SalesPipelineHandover::ROLE_COLUMNS as $col) {
-                    $isHolder = $isHolder || (int) $eff->{$col} === $userId;
-                }
-                if (!$isHolder
-                    && (!SalesPipelineHandover::isTagged((int) $row->id, $userId) || SalesPipelineHandover::extraTagEnded($userId, $mk, $events))) {
-                    return false;
-                }
-                $row = $eff;
+        if ($mk !== null) {
+            $row = self::handoverView($row, $userId, $mk);
+            if ($row === null) {
+                return false;
             }
         }
 

@@ -163,6 +163,11 @@ class KingoBingoController extends Controller
                         ->whereColumn('er.sales_pipeline_id', 'sales_pipelines.id')
                         ->where('er.user_id', $spId);
                   });
+                // Customers held before a leaver handover still count for the earlier months.
+                $heldBefore = \App\Models\SalesPipelineHandover::pipelineIdsHeldBefore([(int) $spId]);
+                if ($heldBefore->isNotEmpty()) {
+                    $q->orWhereIn('id', $heldBefore->all());
+                }
             })->get();
 
             $lockedPipelines = $pipelines->where('is_locked', true);
@@ -437,6 +442,11 @@ class KingoBingoController extends Controller
                 if ($repsByPipeline !== []) {
                     $q->orWhereIn('id', array_keys($repsByPipeline));
                 }
+                // Customers a leaver held before a handover still count for their earlier months.
+                $heldBefore = \App\Models\SalesPipelineHandover::pipelineIdsHeldBefore($spIds);
+                if ($heldBefore->isNotEmpty()) {
+                    $q->orWhereIn('id', $heldBefore->all());
+                }
             })->get();
 
         $liveByCsp = [];
@@ -463,6 +473,14 @@ class KingoBingoController extends Controller
                 }
                 // A service tag wins over any other tagging on the same row.
                 $tagged[$er->user_id] = ($tagged[$er->user_id] ?? false) || $er->type === 'service';
+            }
+            // People who held a role before a leaver handover: creditsMonth() decides which months are theirs.
+            foreach (\App\Models\SalesPipelineHandover::eventsFor([$p->id])[$p->id] ?? [] as $ev) {
+                foreach ([$ev->from_user_id, $ev->to_user_id] as $uid) {
+                    if ($uid && isset($spIdSet[$uid])) {
+                        $tagged[$uid] = $tagged[$uid] ?? false;
+                    }
+                }
             }
 
             if ($tagged === []) {

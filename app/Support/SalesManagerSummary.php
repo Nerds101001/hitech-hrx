@@ -135,23 +135,32 @@ class SalesManagerSummary
                         ->get(array_merge(['id', 'ccare_from'], $holderCols));
                     // Split at the move (`pre` = months before ccare_from), so
                     // each side of a moved customer is credited its own months.
+                    // Once a leaver's customers have been handed over, the totals are kept
+                    // per month so each month goes to whoever held the customer then.
+                    $byMonth = \App\Models\SalesPipelineHandover::hasAny();
                     $fyTotals = DB::table('sales_pipeline_months as m')
                         ->join('sales_pipelines as sp', 'sp.id', '=', 'm.sales_pipeline_id')
                         ->whereIn('m.sales_pipeline_id', $allPipeIds)
                         ->whereIn('m.month_year', $fyMonths)
-                        ->groupBy('m.sales_pipeline_id', 'pre')
+                        ->groupBy(...($byMonth ? ['m.sales_pipeline_id', 'pre', 'm.month_year'] : ['m.sales_pipeline_id', 'pre']))
                         ->selectRaw('m.sales_pipeline_id pid,
-                                     (sp.ccare_from IS NOT NULL AND m.month_year < sp.ccare_from) pre,
+                                     (sp.ccare_from IS NOT NULL AND m.month_year < sp.ccare_from) pre,'
+                                     . ($byMonth ? ' m.month_year mk,' : '') . '
                                      SUM(m.sale_amount) sold, SUM(m.forecast_amount) fcst, SUM(m.pending_amount) pend')
                         ->get()->groupBy('pid');
+                    $handoverEvents = $byMonth ? \App\Models\SalesPipelineHandover::eventsFor($allPipeIds->all()) : [];
                     $repLookupPerf = array_flip($repIds);
                     foreach ($rowHolders as $row) {
                         foreach ($fyTotals[$row->id] ?? [] as $t) {
                             $onRow = [];
+                            $tMk = $t->mk ?? null;
                             foreach ($holderCols as $col) {
                                 $holder = $row->{$col} ?? null;
+                                if ($tMk !== null && in_array($col, \App\Models\SalesPipelineHandover::ROLE_COLUMNS, true)) {
+                                    $holder = \App\Models\SalesPipelineHandover::holderAt($holder ? (int) $holder : null, $col, $tMk, $handoverEvents[$row->id] ?? []);
+                                }
                                 if ($holder && isset($repLookupPerf[$holder])
-                                    && \App\Models\SalesPipeline::creditsSide($row, (int) $holder, (bool) $t->pre)) {
+                                    && \App\Models\SalesPipeline::creditsSide($row, (int) $holder, (bool) $t->pre, $tMk)) {
                                     $onRow[$holder] = true;
                                 }
                             }
@@ -328,8 +337,12 @@ class SalesManagerSummary
                     $onThisRow = [];
                     foreach ($holderCols as $col) {
                         $holder = $row->{$col} ?? null;
+                        // The person who held this role in the month, once a leaver's customers have been handed over.
+                        if (in_array($col, \App\Models\SalesPipelineHandover::ROLE_COLUMNS, true)) {
+                            $holder = \App\Models\SalesPipelineHandover::holderAt($holder ? (int) $holder : null, $col, $mk, \App\Models\SalesPipelineHandover::eventsFor([$row->id])[$row->id] ?? []);
+                        }
                         if ($holder && isset($repLookup[$holder])
-                            && \App\Models\SalesPipeline::creditsSide($row, (int) $holder, $beforeMove)) {
+                            && \App\Models\SalesPipeline::creditsSide($row, (int) $holder, $beforeMove, $mk)) {
                             $onThisRow[$holder] = true;   // set — one credit per rep
                         }
                     }

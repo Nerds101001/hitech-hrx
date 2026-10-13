@@ -817,7 +817,9 @@ class SalesPipelineController extends Controller
                               $s->selectRaw('1')->from('sales_pipeline_extra_reps as er')
                                 ->whereColumn('er.sales_pipeline_id', 'sales_pipelines.id')
                                 ->where('er.user_id', $spId);
-                          });
+                          })
+                          // Customers held before a leaver handover still count for the earlier months.
+                          ->orWhereIn('id', \App\Models\SalesPipelineHandover::pipelineIdsHeldBefore([(int) $spId])->all());
                     })
                     ->get();
                 foreach ($achieveMonthKeys as $mk) {
@@ -826,7 +828,7 @@ class SalesPipelineController extends Controller
                     $forecast = 0.0;
                     foreach ($achieverPipelines as $p) {
                         $m = $p->months->firstWhere('month_year', $mk);
-                        if ($m) {
+                        if ($m && $p->heldInMonth((int) $spId, $mk)) {
                             $actual   += (float) $m->sale_amount;
                             $pending  += (float) $m->pending_amount;
                             // Same population as Actual and Pending above, so the
