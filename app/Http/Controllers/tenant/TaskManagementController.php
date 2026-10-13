@@ -10,6 +10,7 @@ use App\Models\TaskSchedule;
 use App\Models\User;
 use App\Notifications\Task\TaskAssigned;
 use App\Notifications\Task\TaskObjection;
+use App\Services\TaskEscalationService;
 use App\Services\TaskScheduleService;
 use App\Support\TaskAccess;
 use App\Support\TaskAttachment;
@@ -281,8 +282,95 @@ class TaskManagementController extends Controller
             ->map(fn ($rows) => $rows->first()); // most recent fire_date per schedule
 
         $pendency = $this->buildPendency($request, $user);
+        $escalations = $this->buildEscalations($request, $user, $canSeeAll);
 
-        return view('tenant.task-management.index', compact('tasks', 'departments', 'employees', 'stats', 'batchCounts', 'schedules', 'targetNames', 'activeTargetIds', 'lastFireStats', 'pendency', 'canSeeAll', 'sort', 'dir', 'recurringSort', 'recurringDir', 'recurringStatus'));
+        return view('tenant.task-management.index', compact('tasks', 'departments', 'employees', 'stats', 'batchCounts', 'schedules', 'targetNames', 'activeTargetIds', 'lastFireStats', 'pendency', 'escalations', 'canSeeAll', 'sort', 'dir', 'recurringSort', 'recurringDir', 'recurringStatus'));
+    }
+
+    /**
+     * Every currently-overdue open task with a due date, scoped to what this
+     * viewer may see, and marked with its escalation status - 'escalated'
+     * (already sent), 'will_escalate' (past the threshold, the next cron run
+     * will send it) or 'pending' (overdue but not there yet). Gives a
+     * manager visibility into exactly what TaskEscalationService /
+     * EscalateOverdueTasks would do, before and after it runs.
+     *
+     * Scope for a regular user (not canSeeAll): their own overdue tasks
+     * (assigned to or by them) PLUS any overdue task that would escalate TO
+     * them as a manager - the same recipientFor() the real cron uses, so
+     * this tab shows exactly what that person is on the hook for.
+     */
+    private function buildEscalations(Request $request, $user, bool $canSeeAll): array
+    {
+        $base = Task::whereNotIn('status', Task::CLOSED_STATUSES)
+            ->whereNotNull('due_date')
+            ->whereRaw(Task::DEADLINE_SQL . ' < ?', [now()])
+            ->with(['user:id,first_name,last_name', 'assignedBy:id,first_name,last_name']);
+
+        $rows = (clone $base)->get()->filter(function ($task) use ($user, $canSeeAll) {
+            if ($canSeeAll) {
+                return true;
+            }
+            if ((int) $task->user_id === (int) $user->id || (int) $task->assigned_by_id === (int) $user->id) {
+                return true;
+            }
+            $recipient = TaskEscalationService::recipientFor($task);
+
+            return $recipient && (int) $recipient->id === (int) $user->id;
+        })->map(function ($task) {
+            return [
+                'taskId'       => $task->id,
+                'title'        => $task->title,
+                'assignedBy'   => optional($task->assignedBy)->getFullName() ?? '—',
+                'assignee'     => optional($task->user)->getFullName() ?? '—',
+                'dueLabel'     => $task->dueLabel(),
+                'daysOverdue'  => TaskEscalationService::daysOverdue($task),
+                'status'       => TaskEscalationService::statusFor($task),
+                'escalatedAt'  => $task->escalated_at,
+            ];
+        })->values();
+
+        if ($request->filled('escalation_search')) {
+            $term = mb_strtolower($request->input('escalation_search'));
+            $rows = $rows->filter(fn ($r) => str_contains(mb_strtolower($r['title']), $term)
+                || str_contains(mb_strtolower($r['assignee']), $term)
+                || str_contains(mb_strtolower($r['assignedBy']), $term));
+        }
+        if ($request->filled('escalation_status')) {
+            $rows = $rows->where('status', $request->input('escalation_status'));
+        }
+
+        $escSort = in_array($request->input('escalation_sort'), ['title', 'days', 'status'], true)
+            ? $request->input('escalation_sort') : 'days';
+        $escDir = $request->input('escalation_dir') === 'asc' ? 'asc' : 'desc';
+        $rows = match ($escSort) {
+            'title'  => $escDir === 'asc' ? $rows->sortBy('title') : $rows->sortByDesc('title'),
+            'status' => $escDir === 'asc' ? $rows->sortBy('status') : $rows->sortByDesc('status'),
+            default  => $escDir === 'asc' ? $rows->sortBy('daysOverdue') : $rows->sortByDesc('daysOverdue'),
+        };
+        $rows = $rows->values();
+
+        $perPageOptions = ['10' => 10, '15' => 15, '25' => 25, '50' => 50, 'all' => 1000000];
+        $perPage = $perPageOptions[(string) $request->input('escalation_per_page', '15')] ?? 15;
+        $page = max(1, (int) $request->input('escalation_page', 1));
+        $paginated = new \Illuminate\Pagination\LengthAwarePaginator(
+            $rows->slice(($page - 1) * $perPage, $perPage)->values(),
+            $rows->count(),
+            $perPage,
+            $page,
+            ['path' => $request->url(), 'query' => $request->query(), 'pageName' => 'escalation_page']
+        );
+        $paginated->fragment('tmEscalations');
+
+        return [
+            'rows'              => $paginated,
+            'escalatedCount'    => $rows->where('status', 'escalated')->count(),
+            'willEscalateCount' => $rows->where('status', 'will_escalate')->count(),
+            'pendingCount'      => $rows->where('status', 'pending')->count(),
+            'sort'              => $escSort,
+            'dir'               => $escDir,
+            'thresholdDays'     => max(1, (int) config('tasks.escalate_after_days', 2)),
+        ];
     }
 
     /**

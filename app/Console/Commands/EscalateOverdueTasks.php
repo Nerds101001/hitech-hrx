@@ -3,9 +3,9 @@
 namespace App\Console\Commands;
 
 use App\Models\Task;
-use App\Models\User;
 use App\Notifications\Task\EscalationDeskDigest;
 use App\Notifications\Task\TaskEscalated;
+use App\Services\TaskEscalationService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Notification;
@@ -13,7 +13,10 @@ use Illuminate\Support\Facades\Notification;
 /**
  * A task still open config('tasks.escalate_after_days') days past its
  * deadline is escalated, once, to the assignee's manager - the step beyond
- * the one-time overdue notice the assignee already got.
+ * the one-time overdue notice the assignee already got. Recipient and status
+ * logic live in TaskEscalationService, shared with the Task Management
+ * "Escalations" tab so the screen never disagrees with who actually gets
+ * notified.
  *
  * Storm guard: only tasks whose deadline fell on or after
  * config('tasks.escalate_from') are ever escalated. That stops the day this
@@ -47,8 +50,8 @@ class EscalateOverdueTasks extends Command
         // escalation this run, regardless of which manager it went to.
         $deskRows = [];
         foreach ($tasks as $task) {
-            $recipient = $this->recipientFor($task);
-            $daysOverdue = max(1, (int) $task->due_deadline->startOfDay()->diffInDays(now()->startOfDay()));
+            $recipient = TaskEscalationService::recipientFor($task);
+            $daysOverdue = TaskEscalationService::daysOverdue($task);
             if ($recipient) {
                 try {
                     $recipient->notify(new TaskEscalated($task, $daysOverdue));
@@ -89,33 +92,5 @@ class EscalateOverdueTasks extends Command
 
         $this->info("{$sent} escalated; {$noManager} had no manager to escalate to; {$tasks->count()} eligible; "
             . ($deskRows ? 'desk digest sent to ' . count(config('tasks.escalation_desk_emails', [])) . ' address(es).' : 'no desk digest (nothing escalated).'));
-    }
-
-    /**
-     * The assignee's manager (via reporting_to_id, honouring delegation of a
-     * vacant seat), falling back to whoever assigned the task. Never the
-     * assignee themselves, and only an active account.
-     */
-    private function recipientFor(Task $task): ?User
-    {
-        $candidates = [];
-        if ($task->user && $task->user->reporting_to_id) {
-            $manager = User::find($task->user->reporting_to_id);
-            if ($manager) {
-                $candidates[] = $manager->effectiveActor();
-            }
-        }
-        if ($task->assigned_by_id) {
-            $candidates[] = User::find($task->assigned_by_id);
-        }
-
-        foreach ($candidates as $c) {
-            if ($c && (int) $c->id !== (int) $task->user_id
-                && ($c->status instanceof \App\Enums\UserAccountStatus ? $c->status === \App\Enums\UserAccountStatus::ACTIVE : $c->status === 'active')) {
-                return $c;
-            }
-        }
-
-        return null;
     }
 }

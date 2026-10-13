@@ -269,11 +269,17 @@
       </button>
       <button class="btn btn-sm status-toggle-btn js-tm-tab" data-tm-target="#tmRecurring" type="button">
         <i class="bx bx-repeat me-1"></i>Recurring Tasks
-        @if($schedules->isNotEmpty())<span class="badge-hitech badge-brand-soft ms-1">{{ $schedules->count() }}</span>@endif
+        @if($schedules->total() > 0)<span class="badge-hitech badge-brand-soft ms-1">{{ $schedules->total() }}</span>@endif
       </button>
       <button class="btn btn-sm status-toggle-btn js-tm-tab" data-tm-target="#tmPendency" type="button">
         <i class="bx bx-bar-chart-alt-2 me-1"></i>Pendency
         @if($pendency['totalPending'] > 0)<span class="badge-hitech badge-hitech-danger ms-1">{{ $pendency['totalPending'] }}</span>@endif
+      </button>
+      <button class="btn btn-sm status-toggle-btn js-tm-tab" data-tm-target="#tmEscalations" type="button">
+        <i class="bx bx-trending-up me-1"></i>Escalations
+        @if($escalations['escalatedCount'] + $escalations['willEscalateCount'] > 0)
+          <span class="badge-hitech badge-hitech-danger ms-1">{{ $escalations['escalatedCount'] + $escalations['willEscalateCount'] }}</span>
+        @endif
       </button>
     </div>
 
@@ -910,6 +916,124 @@
       </div>
     </div>{{-- /#tmPendency --}}
 
+    <div class="tab-pane fade" id="tmEscalations">
+      <div class="row row-cols-2 row-cols-md-3 g-6 mb-6">
+        <div class="col">
+          <div class="hitech-stat-card dashboard-variant card-red uniform-card">
+            <div class="stat-card-header mb-2"><div class="stat-icon-wrap icon-red" style="width:38px;height:38px;font-size:1.2rem;"><i class="bx bx-error-circle"></i></div></div>
+            <div><h3 class="stat-value mb-0">{{ $escalations['escalatedCount'] }}</h3><span class="stat-label">Already Escalated</span></div>
+          </div>
+        </div>
+        <div class="col">
+          <div class="hitech-stat-card dashboard-variant card-amber uniform-card">
+            <div class="stat-card-header mb-2"><div class="stat-icon-wrap icon-amber" style="width:38px;height:38px;font-size:1.2rem;"><i class="bx bx-time-five"></i></div></div>
+            <div><h3 class="stat-value mb-0">{{ $escalations['willEscalateCount'] }}</h3><span class="stat-label">Will Escalate Next Run</span></div>
+          </div>
+        </div>
+        <div class="col">
+          <div class="hitech-stat-card dashboard-variant card-blue uniform-card">
+            <div class="stat-card-header mb-2"><div class="stat-icon-wrap icon-blue" style="width:38px;height:38px;font-size:1.2rem;"><i class="bx bx-hourglass"></i></div></div>
+            <div><h3 class="stat-value mb-0">{{ $escalations['pendingCount'] }}</h3><span class="stat-label">Overdue, Not Yet at {{ $escalations['thresholdDays'] }}d</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="hitech-card">
+        <div class="card-body p-4 pb-2 border-bottom">
+          <p class="text-muted small mb-3">
+            A task open past its due date crosses the line once it has been overdue
+            <strong>{{ $escalations['thresholdDays'] }}+ {{ \Illuminate\Support\Str::plural('day', $escalations['thresholdDays']) }}</strong>
+            — it then escalates (once) to the assignee's manager. This is every currently overdue task you can see, with its exact status.
+          </p>
+          <form method="GET" class="row align-items-end g-4">
+            <div class="col-lg-3 col-md-6">
+              <div class="search-wrapper-hitech mw-100">
+                <i class="bx bx-search text-muted ms-3"></i>
+                <input type="text" name="escalation_search" class="form-control" placeholder="Search task, assignee or assigner..." value="{{ request('escalation_search') }}">
+                <button class="btn-search shadow-sm" type="submit"><i class="bx bx-search fs-5"></i><span>Search</span></button>
+              </div>
+            </div>
+            <div class="col-lg-2 col-md-6">
+              <label class="form-label fw-bold small text-muted text-uppercase mb-2">Status</label>
+              <select class="form-select form-select-hitech" name="escalation_status" onchange="this.form.submit()">
+                <option value="">All</option>
+                <option value="escalated" {{ request('escalation_status') === 'escalated' ? 'selected' : '' }}>Already Escalated</option>
+                <option value="will_escalate" {{ request('escalation_status') === 'will_escalate' ? 'selected' : '' }}>Will Escalate Next Run</option>
+                <option value="pending" {{ request('escalation_status') === 'pending' ? 'selected' : '' }}>Overdue, Not Yet at Threshold</option>
+              </select>
+            </div>
+            <div class="col-lg-2 col-md-6">
+              <label class="form-label fw-bold small text-muted text-uppercase mb-2">Per Page</label>
+              <select class="form-select form-select-hitech" name="escalation_per_page" onchange="this.form.submit()">
+                @foreach(['10' => '10 per page', '15' => '15 per page', '25' => '25 per page', '50' => '50 per page', 'all' => 'All'] as $val => $label)
+                  <option value="{{ $val }}" {{ (string) request('escalation_per_page', '15') === $val ? 'selected' : '' }}>{{ $label }}</option>
+                @endforeach
+              </select>
+            </div>
+            <div class="col-lg-1 col-md-6">
+              <a href="{{ route('task-management.index') }}#tmEscalations" class="btn btn-hitech-cancel w-100">Clear</a>
+            </div>
+            @foreach(['escalation_sort', 'escalation_dir'] as $keep)
+              @if(request()->filled($keep))<input type="hidden" name="{{ $keep }}" value="{{ request($keep) }}">@endif
+            @endforeach
+          </form>
+        </div>
+        <div class="table-responsive">
+          @php
+            $escSortLink = fn($col) => request()->fullUrlWithQuery([
+              'escalation_sort' => $col,
+              'escalation_dir' => ($escalations['sort'] === $col && $escalations['dir'] === 'desc') ? 'asc' : 'desc',
+              'escalation_page' => null,
+            ]) . '#tmEscalations';
+            $escSortIcon = fn($col) => $escalations['sort'] !== $col ? '' : ($escalations['dir'] === 'desc' ? ' <i class="bx bx-chevron-down"></i>' : ' <i class="bx bx-chevron-up"></i>');
+            $escStatusBadge = ['escalated' => ['Escalated', 'badge-hitech-danger'], 'will_escalate' => ['Will Escalate', 'badge-brand-soft'], 'pending' => ['Pending', 'badge-muted']];
+          @endphp
+          <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+              <tr>
+                <th style="min-width:200px"><a href="{{ $escSortLink('title') }}" class="text-dark text-decoration-none">Task{!! $escSortIcon('title') !!}</a></th>
+                <th>Assigned By</th>
+                <th>Assigned To</th>
+                <th>Due Date</th>
+                <th><a href="{{ $escSortLink('days') }}" class="text-dark text-decoration-none">Days Overdue{!! $escSortIcon('days') !!}</a></th>
+                <th><a href="{{ $escSortLink('status') }}" class="text-dark text-decoration-none">Status{!! $escSortIcon('status') !!}</a></th>
+              </tr>
+            </thead>
+            <tbody>
+              @forelse($escalations['rows'] as $r)
+                <tr>
+                  <td class="fw-medium">{{ $r['title'] }}</td>
+                  <td><small class="text-muted">{{ $r['assignedBy'] }}</small></td>
+                  <td><small class="text-muted">{{ $r['assignee'] }}</small></td>
+                  <td><small>{{ $r['dueLabel'] }}</small></td>
+                  <td><span class="badge-hitech badge-hitech-danger">{{ $r['daysOverdue'] }}</span></td>
+                  <td>
+                    @php [$label, $cls] = $escStatusBadge[$r['status']] ?? ['—', 'badge-muted']; @endphp
+                    <span class="badge-hitech {{ $cls }}">{{ $label }}</span>
+                    @if($r['status'] === 'escalated' && $r['escalatedAt'])
+                      <div class="small text-muted mt-1">on {{ $r['escalatedAt']->format('d M Y') }}</div>
+                    @endif
+                  </td>
+                </tr>
+              @empty
+                <tr><td colspan="6" class="text-center text-muted py-5">
+                  <i class="bx bx-check-shield fs-3 d-block mb-2 text-success"></i>
+                  @if(request()->filled('escalation_search') || request()->filled('escalation_status'))
+                    Nothing matches these filters — <a href="{{ route('task-management.index') }}#tmEscalations">clear them</a>.
+                  @else
+                    Nothing overdue right now — clean slate.
+                  @endif
+                </td></tr>
+              @endforelse
+            </tbody>
+          </table>
+        </div>
+        @if($escalations['rows']->hasPages())
+          <div class="p-3 border-top">{{ $escalations['rows']->links() }}</div>
+        @endif
+      </div>
+    </div>{{-- /#tmEscalations --}}
+
     </div>{{-- /.tab-content --}}
   </div>
 </div>
@@ -1255,6 +1379,7 @@ document.addEventListener('DOMContentLoaded', function () {
     let target = null;
     if (window.location.hash === '#tmRecurring' || hasPrefix('recurring_')) target = '#tmRecurring';
     else if (window.location.hash === '#tmPendency' || hasPrefix('pendency_')) target = '#tmPendency';
+    else if (window.location.hash === '#tmEscalations' || hasPrefix('escalation_')) target = '#tmEscalations';
     if (target) {
       const trigger = document.querySelector('.js-tm-tab[data-tm-target="' + target + '"]');
       if (trigger) trigger.click();
