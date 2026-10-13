@@ -19,6 +19,18 @@
 @endsection
 
 @section('content')
+<style>
+  /* A native multi-select's custom "hitech" skin suppressed the browser's
+     own selected-row highlight, so a policy targeting many/all departments
+     looked like only the focused row was picked (reported on the
+     Confidentiality policy - all 30 were genuinely selected server-side,
+     none of that showed on screen). Force a clear, consistent highlight on
+     every selected option, not just the one with keyboard focus. */
+  .hitech-dept-select option:checked {
+    background-color: #127464 !important;
+    color: #ffffff !important;
+  }
+</style>
 <div class="layout-full-width animate__animated animate__fadeIn">
 
     <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-6 mx-4">
@@ -269,14 +281,28 @@
                                 @endforeach
                             </select>
                         </div>
+                        @php $isAllDepts = empty($pt) || count($pt) === $departments->count(); @endphp
                         <div class="col-12">
                             <label class="form-label-hitech">Target Departments</label>
-                            <select name="target_departments[]" class="form-select form-control-hitech" multiple size="7">
+                            <div class="form-check mb-2 p-3 rounded-3" style="background-color: #F8FAFC;">
+                                <input class="form-check-input hitech-all-depts-toggle" type="checkbox" id="edit_all_depts{{ $policy->id }}"
+                                       @checked($isAllDepts)
+                                       data-target="#edit_depts_select{{ $policy->id }}">
+                                <label class="form-check-label fw-bold text-dark" for="edit_all_depts{{ $policy->id }}">
+                                    Applies to <span class="text-uppercase">ALL</span> departments — no restriction
+                                </label>
+                            </div>
+                            <select name="target_departments[]" id="edit_depts_select{{ $policy->id }}"
+                                    class="form-select form-control-hitech hitech-dept-select" multiple size="7"
+                                    @disabled($isAllDepts)>
                                 @foreach($departments as $department)
                                     <option value="{{ $department->id }}" @selected(in_array($department->id, $pt))>{{ $department->name }}</option>
                                 @endforeach
                             </select>
-                            <div class="form-text small mt-1 text-muted">Hold Ctrl (Cmd on Mac) to select several. Select none to apply to <strong>everyone</strong>. Currently: <strong>{{ empty($pt) ? 'All departments' : count($pt) . ' selected' }}</strong>.</div>
+                            <div class="form-text small mt-1 text-muted">
+                                Untick "ALL departments" above to pick specific ones (hold Ctrl / Cmd to pick several).
+                                Currently: <strong>{{ $isAllDepts ? 'ALL departments' : count($pt) . ' department' . (count($pt) === 1 ? '' : 's') . ' selected' }}</strong>.
+                            </div>
                         </div>
                         <div class="col-12">
                             <label class="form-label-hitech">Current document</label>
@@ -324,6 +350,17 @@ document.addEventListener('DOMContentLoaded', function() {
     $(function() {
         // Edit modals are per-policy and prefilled server-side; they open via
         // Bootstrap's data-bs-toggle, so no JS is needed to populate them.
+
+        // "Applies to ALL departments" toggle: disabling the <select> when
+        // checked is enough on its own - a disabled control is never
+        // submitted, so the server sees target_departments absent and treats
+        // it as null (everyone), exactly like leaving it untouched on create.
+        // Delegated (not bound per-modal) since every policy has its own.
+        document.body.addEventListener('change', function (e) {
+            if (!e.target.classList.contains('hitech-all-depts-toggle')) return;
+            var select = document.querySelector(e.target.dataset.target);
+            if (select) select.disabled = e.target.checked;
+        });
 
         $('.delete-policy').on('click', function() {
             const id = $(this).data('id');
