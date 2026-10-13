@@ -72,12 +72,38 @@ class SalesPipeline extends Model implements AuditableContract
      */
     public function creditsMonth(int $userId, string $mk): bool
     {
-        return self::creditsSide($this, $userId, (bool) ($this->ccare_from && $mk < $this->ccare_from));
+        return self::creditsSide($this, $userId, (bool) ($this->ccare_from && $mk < $this->ccare_from), $mk);
     }
 
-    /** creditsMonth() for a plain DB row; $beforeMove = the month is before ccare_from. */
-    public static function creditsSide(object $row, int $userId, bool $beforeMove): bool
+    /**
+     * creditsMonth() for a plain DB row; $beforeMove = the month is before ccare_from.
+     *
+     * $mk (YYYY-MM) lets a leaver handover apply: the people in each role column are
+     * then the ones who held it IN THAT MONTH (SalesPipelineHandover::holderAt), and
+     * somebody who is neither a holder then nor a live additional-rep tag gets nothing.
+     * Without $mk, or with no handover on this customer, nothing here changes.
+     */
+    public static function creditsSide(object $row, int $userId, bool $beforeMove, ?string $mk = null): bool
     {
+        if ($mk !== null && !empty($row->id) && SalesPipelineHandover::hasAny()) {
+            $events = SalesPipelineHandover::eventsFor([(int) $row->id])[(int) $row->id] ?? [];
+            if ($events) {
+                $eff = clone $row;
+                foreach (SalesPipelineHandover::ROLE_COLUMNS as $col) {
+                    $eff->{$col} = SalesPipelineHandover::holderAt(isset($row->{$col}) ? (int) $row->{$col} : null, $col, $mk, $events);
+                }
+                $isHolder = (int) ($row->former_new_biz_id ?? 0) === $userId;
+                foreach (SalesPipelineHandover::ROLE_COLUMNS as $col) {
+                    $isHolder = $isHolder || (int) $eff->{$col} === $userId;
+                }
+                if (!$isHolder
+                    && (!SalesPipelineHandover::isTagged((int) $row->id, $userId) || SalesPipelineHandover::extraTagEnded($userId, $mk, $events))) {
+                    return false;
+                }
+                $row = $eff;
+            }
+        }
+
         if (empty($row->ccare_from)) {
             return true;
         }
@@ -100,6 +126,12 @@ class SalesPipeline extends Model implements AuditableContract
      */
     public static function whereMonthCredited($monthQuery, int $userId, string $m = 'sales_pipeline_months'): void
     {
+        if (SalesPipelineHandover::hasAny()) {
+            self::whereMonthCreditedWithHandovers($monthQuery, $userId, $m);
+
+            return;
+        }
+
         $monthQuery->whereExists(function ($e) use ($userId, $m) {
             $e->selectRaw('1')->from('sales_pipelines as cf')
               ->whereColumn('cf.id', "$m.sales_pipeline_id")
@@ -112,6 +144,44 @@ class SalesPipeline extends Model implements AuditableContract
                     ->orWhere(fn ($x) => $x->where('cf.former_new_biz_id', $userId)->whereColumn("$m.month_year", '<', 'cf.ccare_from'))
                     ->orWhere(fn ($x) => $x->where(fn ($y) => $y->whereNull('cf.ccare_id')->orWhere('cf.ccare_id', '<>', $userId))
                                            ->where(fn ($y) => $y->whereNull('cf.former_new_biz_id')->orWhere('cf.former_new_biz_id', '<>', $userId)));
+              });
+        });
+    }
+
+    /**
+     * whereMonthCredited() once leaver handovers exist: each role column is read as
+     * the person who held it in that month, and a person who is neither a holder
+     * then nor a live additional-rep tag is credited nothing on a customer that has
+     * been handed over. Customers with no handover behave exactly as before.
+     */
+    private static function whereMonthCreditedWithHandovers($monthQuery, int $userId, string $m): void
+    {
+        $u  = (int) $userId;
+        $sp = SalesPipelineHandover::holderSql('salesperson_id', 'cf', $m);
+        $cc = SalesPipelineHandover::holderSql('ccare_id', 'cf', $m);
+        $nb = SalesPipelineHandover::holderSql('new_biz_id', 'cf', $m);
+        $n2 = SalesPipelineHandover::holderSql('new_biz_2_id', 'cf', $m);
+
+        $monthQuery->whereExists(function ($e) use ($u, $m, $sp, $cc, $nb, $n2) {
+            $e->selectRaw('1')->from('sales_pipelines as cf')
+              ->whereColumn('cf.id', "$m.sales_pipeline_id")
+              ->where(function ($w) use ($u, $m, $sp, $cc, $nb, $n2) {
+                  $w->whereNull('cf.ccare_from')
+                    ->orWhereRaw("$sp = $u")
+                    ->orWhereRaw("$nb = $u")
+                    ->orWhereRaw("$n2 = $u")
+                    ->orWhereRaw("($cc = $u AND $m.month_year >= cf.ccare_from)")
+                    ->orWhereRaw("(cf.former_new_biz_id = $u AND $m.month_year < cf.ccare_from)")
+                    ->orWhereRaw("(($cc IS NULL OR $cc <> $u) AND (cf.former_new_biz_id IS NULL OR cf.former_new_biz_id <> $u))");
+              })
+              // A handed-over customer credits only whoever held it in that month,
+              // or a still-live additional-rep tag.
+              ->where(function ($w) use ($u, $m, $sp, $cc, $nb, $n2) {
+                  $w->whereRaw("NOT EXISTS (SELECT 1 FROM sales_pipeline_handovers hx WHERE hx.sales_pipeline_id = cf.id AND hx.reverted_at IS NULL)")
+                    ->orWhereRaw("($sp = $u OR $cc = $u OR $nb = $u OR $n2 = $u OR cf.former_new_biz_id = $u)")
+                    ->orWhereRaw("(EXISTS (SELECT 1 FROM sales_pipeline_extra_reps er WHERE er.sales_pipeline_id = cf.id AND er.user_id = $u)"
+                        . " AND NOT EXISTS (SELECT 1 FROM sales_pipeline_handovers hy WHERE hy.sales_pipeline_id = cf.id AND hy.role = 'extra'"
+                        . " AND hy.from_user_id = $u AND hy.reverted_at IS NULL AND hy.effective_month <= $m.month_year))");
               });
         });
     }
