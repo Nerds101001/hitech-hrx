@@ -30,9 +30,10 @@ class TaskExpectedDateReached extends Notification
     $this->message = 'You expected to finish "' . $task->title . '" by today (' . $task->completion_expected_date->format('d M Y') . ') — update its status.';
   }
 
+  /** No 'mail' - per-task emails are consolidated into TaskDailyDigest. In-app + push stay instant. */
   public function via(object $notifiable): array
   {
-    return ['database', 'mail', FirebaseChannel::class, WebPushChannel::class];
+    return ['database', FirebaseChannel::class, WebPushChannel::class];
   }
 
   public function toMail(object $notifiable): MailMessage

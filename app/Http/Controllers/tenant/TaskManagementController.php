@@ -295,34 +295,41 @@ class TaskManagementController extends Controller
      * manager visibility into exactly what TaskEscalationService /
      * EscalateOverdueTasks would do, before and after it runs.
      *
-     * Scope for a regular user (not canSeeAll): their own overdue tasks
-     * (assigned to or by them) PLUS any overdue task that would escalate TO
-     * them as a manager - the same recipientFor() the real cron uses, so
-     * this tab shows exactly what that person is on the hook for.
+     * Visible to NOBODY else: the task's creator, its assignee, whoever
+     * assigned it, anyone CC'd on it, the manager it escalates TO (the same
+     * recipientFor() the real cron uses), or HR/Admin/tasks.manage
+     * (canSeeAll) - not any other logged-in user.
      */
     private function buildEscalations(Request $request, $user, bool $canSeeAll): array
     {
         $base = Task::whereNotIn('status', Task::CLOSED_STATUSES)
             ->whereNotNull('due_date')
             ->whereRaw(Task::DEADLINE_SQL . ' < ?', [now()])
-            ->with(['user:id,first_name,last_name', 'assignedBy:id,first_name,last_name']);
+            ->with(['user:id,first_name,last_name', 'assignedBy:id,first_name,last_name', 'taskCcs']);
 
         $rows = (clone $base)->get()->filter(function ($task) use ($user, $canSeeAll) {
             if ($canSeeAll) {
                 return true;
             }
-            if ((int) $task->user_id === (int) $user->id || (int) $task->assigned_by_id === (int) $user->id) {
-                return true;
+            $uid = (int) $user->id;
+            if ((int) $task->user_id === $uid || (int) $task->assigned_by_id === $uid || (int) $task->created_by_id === $uid) {
+                return true; // assignee, assigner, or creator
+            }
+            if ($task->taskCcs->contains(fn ($cc) => (int) $cc->user_id === $uid)) {
+                return true; // CC'd
             }
             $recipient = TaskEscalationService::recipientFor($task);
 
-            return $recipient && (int) $recipient->id === (int) $user->id;
+            return $recipient && (int) $recipient->id === $uid; // the manager it escalates to
         })->map(function ($task) {
+            $escalatedTo = TaskEscalationService::recipientFor($task);
+
             return [
                 'taskId'       => $task->id,
                 'title'        => $task->title,
                 'assignedBy'   => optional($task->assignedBy)->getFullName() ?? '—',
                 'assignee'     => optional($task->user)->getFullName() ?? '—',
+                'escalatedTo'  => $escalatedTo ? $escalatedTo->getFullName() : '— (no manager set)',
                 'dueLabel'     => $task->dueLabel(),
                 'daysOverdue'  => TaskEscalationService::daysOverdue($task),
                 'status'       => TaskEscalationService::statusFor($task),
@@ -334,7 +341,8 @@ class TaskManagementController extends Controller
             $term = mb_strtolower($request->input('escalation_search'));
             $rows = $rows->filter(fn ($r) => str_contains(mb_strtolower($r['title']), $term)
                 || str_contains(mb_strtolower($r['assignee']), $term)
-                || str_contains(mb_strtolower($r['assignedBy']), $term));
+                || str_contains(mb_strtolower($r['assignedBy']), $term)
+                || str_contains(mb_strtolower($r['escalatedTo']), $term));
         }
         if ($request->filled('escalation_status')) {
             $rows = $rows->where('status', $request->input('escalation_status'));

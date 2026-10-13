@@ -29,9 +29,10 @@ class TaskOverdue extends Notification
     $this->message = 'Your task "' . $task->title . '" was due ' . $task->dueLabel() . ' and is still open.';
   }
 
+  /** No 'mail' - per-task emails are consolidated into TaskDailyDigest. In-app + push stay instant. */
   public function via(object $notifiable): array
   {
-    return ['database', 'mail', FirebaseChannel::class, WebPushChannel::class];
+    return ['database', FirebaseChannel::class, WebPushChannel::class];
   }
 
   public function toMail(object $notifiable): MailMessage

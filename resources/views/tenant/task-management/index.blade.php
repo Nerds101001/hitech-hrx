@@ -1001,6 +1001,7 @@
                 <th style="min-width:200px"><a href="{{ $escSortLink('title') }}" class="text-dark text-decoration-none">Task{!! $escSortIcon('title') !!}</a></th>
                 <th>Assigned By</th>
                 <th>Assigned To</th>
+                <th>Escalated To</th>
                 <th>Due Date</th>
                 <th><a href="{{ $escSortLink('days') }}" class="text-dark text-decoration-none">Days Overdue{!! $escSortIcon('days') !!}</a></th>
                 <th><a href="{{ $escSortLink('status') }}" class="text-dark text-decoration-none">Status{!! $escSortIcon('status') !!}</a></th>
@@ -1012,6 +1013,7 @@
                   <td class="fw-medium">{{ $r['title'] }}</td>
                   <td><small class="text-muted">{{ $r['assignedBy'] }}</small></td>
                   <td><small class="text-muted">{{ $r['assignee'] }}</small></td>
+                  <td><small class="text-muted">{{ $r['escalatedTo'] }}</small></td>
                   <td><small>{{ $r['dueLabel'] }}</small></td>
                   <td><span class="badge-hitech badge-hitech-danger">{{ $r['daysOverdue'] }}</span></td>
                   <td>
@@ -1023,7 +1025,7 @@
                   </td>
                 </tr>
               @empty
-                <tr><td colspan="6" class="text-center text-muted py-5">
+                <tr><td colspan="7" class="text-center text-muted py-5">
                   <i class="bx bx-check-shield fs-3 d-block mb-2 text-success"></i>
                   @if(request()->filled('escalation_search') || request()->filled('escalation_status'))
                     Nothing matches these filters — <a href="{{ route('task-management.index') }}#tmEscalations">clear them</a>.
