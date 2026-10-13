@@ -95,12 +95,38 @@ class LeaverHandoverServiceTest extends TestCase
         $this->assertSame($this->leaver->id, (int) $p->fresh()->salesperson_id, 'a preview moves nothing');
         $this->assertFalse(SalesPipelineHandover::hasAny());
 
-        $this->assertNotEmpty(LeaverHandoverService::plan($this->next, $this->repl(), '2031-04')['errors'], 'someone who has not left cannot be handed over');
+        $this->assertNotEmpty(LeaverHandoverService::plan($this->person('onboarding'), $this->repl(), '2031-04')['errors'], 'someone who has not started cannot be handed over');
         $this->assertNotEmpty(LeaverHandoverService::plan($this->leaver, $this->repl(), '2031-02')['errors'], 'a month that has already started is refused');
         $this->assertNotEmpty(LeaverHandoverService::plan($this->leaver, $this->repl(), 'March')['errors']);
         $this->assertNotEmpty(LeaverHandoverService::plan($this->leaver, ['salesperson' => null], '2031-04')['errors'], 'no replacement chosen for a role the leaver holds');
         $this->assertNotEmpty(LeaverHandoverService::plan($this->leaver, ['salesperson' => $this->leaver->id], '2031-04')['errors'], 'not themselves');
         $this->assertNotEmpty(LeaverHandoverService::plan($this->leaver, ['salesperson' => $this->person('terminated')->id], '2031-04')['errors'], 'an inactive replacement');
+    }
+
+    public function test_a_transfer_from_someone_still_working_moves_only_the_roles_chosen(): void
+    {
+        $worker = $this->person('active');
+        $p = $this->customer(['salesperson_id' => $worker->id, 'ccare_id' => $worker->id]);
+
+        // Only the salesperson role is moved; the CCare role is left empty and stays with them.
+        $plan = LeaverHandoverService::plan($worker, ['salesperson' => $this->next->id], '2031-04');
+        $this->assertSame([], $plan['errors'], 'no complaint about the CCare role left empty');
+        $this->assertNotEmpty($plan['warnings'], 'but they are told it is a transfer');
+        $this->assertSame(1, $plan['summary']['role_moves']);
+
+        LeaverHandoverService::apply($worker, ['salesperson' => $this->next->id], '2031-04', $plan['fingerprint'], null, 'transfer');
+        $p->refresh();
+        $this->assertSame($this->next->id, (int) $p->salesperson_id);
+        $this->assertSame($worker->id, (int) $p->ccare_id, 'the role that was not chosen stays');
+        $this->assertEquals(17.0, $this->revenue($worker), 'still credited on every month through the CCare role they kept');
+        $this->assertEquals(7.0, $this->revenue($this->next), 'the new salesperson gets April on');
+    }
+
+    public function test_a_leaver_still_needs_every_role_covered(): void
+    {
+        $this->customer(['salesperson_id' => $this->leaver->id, 'ccare_id' => $this->leaver->id]);
+        $plan = LeaverHandoverService::plan($this->leaver, ['salesperson' => $this->next->id], '2031-04');
+        $this->assertNotEmpty($plan['errors'], 'a leaver cannot leave a role without a new owner');
     }
 
     public function test_apply_splits_the_months_and_the_company_total_does_not_move(): void

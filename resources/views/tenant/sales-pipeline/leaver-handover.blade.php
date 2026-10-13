@@ -16,7 +16,7 @@
     <div>
       <h3 class="fw-extrabold mb-0 text-dark">Leaver Handover</h3>
       <p class="text-muted mb-0 mt-1">
-        Hand a leaver's customers to a replacement from a month you choose. Earlier months stay credited to the leaver.
+        Hand a leaver's customers to a replacement, or transfer them between people still working, from a month you choose. Earlier months stay credited to the previous person.
       </p>
     </div>
     <a href="{{ route('sales-visits.pipeline.index') }}" class="btn btn-hitech shadow-sm rounded-pill px-5 d-flex align-items-center gap-2">
@@ -24,45 +24,49 @@
     </a>
   </div>
 
-  {{-- 1. Who left and still holds customers --}}
+  {{-- 1. Who holds customers: people who have left (handover) and people still working (transfer) --}}
+  @foreach([
+    ['People who have left and still hold customers', 'Handover: everything they hold needs a new owner.', $leavers, 'Hand over', 'handover'],
+    ['People still working', 'Transfer: move some or all of a working employee\'s customers (for example after a role change). A role you leave empty stays with them.', $workers, 'Transfer', 'transfer'],
+  ] as [$title, $sub, $list, $btn, $kind])
   <div class="px-4 mb-6">
     <div class="hitech-card-white p-0 overflow-hidden shadow-sm">
-      <div class="p-4 pb-2"><h5 class="fw-bold mb-1 text-dark">1. People who have left and still hold customers</h5>
-        <div class="small text-muted">Customers they hold on the Sales Report, by role. Pick one to hand over.</div></div>
-      <div class="table-responsive">
+      <div class="p-4 pb-2"><h5 class="fw-bold mb-1 text-dark">{{ $loop->iteration }}. {{ $title }}</h5>
+        <div class="small text-muted">{{ $sub }}</div></div>
+      <div class="table-responsive" @if($kind === 'transfer') style="max-height:420px;overflow:auto;" @endif>
         <table class="table m-0 shadow-none border-0">
           <thead class="text-dark"><tr>
-            <th class="ps-4">Employee</th><th>Left</th><th class="text-center">Salesperson</th><th class="text-center">CCare</th>
+            <th class="ps-4">Employee</th>@if($kind === 'handover')<th>Left</th>@endif<th class="text-center">Salesperson</th><th class="text-center">CCare</th>
             <th class="text-center">New Biz</th><th class="text-center">Extra-rep tags</th><th class="text-end pe-4"></th>
           </tr></thead>
           <tbody>
-          @forelse($leavers as $l)
+          @forelse($list as $l)
             <tr style="border-bottom:1px solid #f1f5f9;">
-              <td class="ps-4 fw-medium">{{ $l['name'] }} <span class="badge bg-label-secondary rounded-pill ms-1">{{ $l['status'] }}</span></td>
-              <td>{{ $l['left'] ? \Carbon\Carbon::parse($l['left'])->format('d M Y') : '—' }}</td>
+              <td class="ps-4 fw-medium">{{ $l['name'] }} @if($kind === 'handover')<span class="badge bg-label-secondary rounded-pill ms-1">{{ $l['status'] }}</span>@endif</td>
+              @if($kind === 'handover')<td>{{ $l['left'] ? \Carbon\Carbon::parse($l['left'])->format('d M Y') : '—' }}</td>@endif
               <td class="text-center">{{ $l['salesperson'] ?: '—' }}</td>
               <td class="text-center">{{ $l['ccare'] ?: '—' }}</td>
               <td class="text-center">{{ $l['new_biz'] ?: '—' }}</td>
               <td class="text-center">{{ $l['tags'] ?: '—' }}</td>
               <td class="text-end pe-4">
-                <button type="button" class="btn btn-hitech rounded-pill px-4 py-1 js-pick" data-id="{{ $l['id'] }}" data-name="{{ $l['name'] }}"
-                        data-sp="{{ $l['salesperson'] }}" data-cc="{{ $l['ccare'] }}" data-nb="{{ $l['new_biz'] }}">Hand over</button>
+                <button type="button" class="btn btn-hitech rounded-pill px-4 py-1 js-pick" data-id="{{ $l['id'] }}" data-name="{{ $l['name'] }}" data-kind="{{ $kind }}"
+                        data-sp="{{ $l['salesperson'] }}" data-cc="{{ $l['ccare'] }}" data-nb="{{ $l['new_biz'] }}">{{ $btn }}</button>
               </td>
             </tr>
           @empty
-            <tr><td colspan="7" class="text-center py-5 text-muted"><i class="bx bx-check-circle mb-2" style="font-size:2.5rem;"></i><p class="mb-0">No leaver holds any customer.</p></td></tr>
+            <tr><td colspan="7" class="text-center py-5 text-muted"><i class="bx bx-check-circle mb-2" style="font-size:2.5rem;"></i><p class="mb-0">Nobody here holds any customer.</p></td></tr>
           @endforelse
           </tbody>
         </table>
       </div>
     </div>
   </div>
-
+  @endforeach
   {{-- 2. Choose replacements and the month --}}
   <div class="px-4 mb-6 d-none" id="hoForm">
     <div class="hitech-card-white p-4 shadow-sm">
-      <h5 class="fw-bold mb-1 text-dark">2. Hand over <span id="hoName"></span></h5>
-      <div class="small text-muted mb-4">Choose who takes over each role. Leave a role empty only if the leaver holds nothing in it.</div>
+      <h5 class="fw-bold mb-1 text-dark"><span id="hoVerb">Hand over</span> <span id="hoName"></span></h5>
+      <div class="small text-muted mb-4" id="hoHelp">Choose who takes over each role.</div>
       <div class="row g-4">
         @foreach([['salesperson','Salesperson','sp'],['ccare','CCare','cc'],['new_biz','New Biz','nb']] as [$key,$label,$short])
           <div class="col-lg-4 col-md-6">
@@ -154,6 +158,11 @@
     b.addEventListener('click', function () {
       leaverId = b.dataset.id;
       $('hoName').textContent = b.dataset.name;
+      var transfer = b.dataset.kind === 'transfer';
+      $('hoVerb').textContent = transfer ? 'Transfer from' : 'Hand over';
+      $('hoHelp').textContent = transfer
+        ? 'They are still working. Choose a replacement only for the roles you want to move; a role left empty stays with them.'
+        : 'They have left. Every role they hold needs a replacement, so nothing is left without an owner.';
       $('hoCount_sp').textContent = b.dataset.sp > 0 ? '(' + b.dataset.sp + ' customers)' : '';
       $('hoCount_cc').textContent = b.dataset.cc > 0 ? '(' + b.dataset.cc + ' customers)' : '';
       $('hoCount_nb').textContent = b.dataset.nb > 0 ? '(' + b.dataset.nb + ' customers)' : '';

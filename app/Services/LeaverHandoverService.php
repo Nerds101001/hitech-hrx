@@ -70,9 +70,14 @@ class LeaverHandoverService
         } elseif ($effectiveMonth < now()->format('Y-m')) {
             $errors[] = "The effective month cannot be before the current month ({$effectiveMonth}): a month that has already started is never re-credited.";
         }
+        // Two uses of the same tool: a leaver's whole book must be handed over (nothing may
+        // be stranded), while a TRANSFER from someone still working may move only some roles.
         $leaverStatus = self::statusOf($leaver);
-        if (in_array($leaverStatus, ['active', 'onboarding', 'onboarding_submitted'], true)) {
-            $errors[] = "{$leaver->first_name} {$leaver->last_name} has not left (status: {$leaverStatus}). Record the exit first.";
+        $isTransfer = $leaverStatus === 'active';
+        if (in_array($leaverStatus, ['onboarding', 'onboarding_submitted'], true)) {
+            $errors[] = "{$leaver->first_name} {$leaver->last_name} has not started yet (status: {$leaverStatus}).";
+        } elseif ($isTransfer) {
+            $warnings[] = "{$leaver->first_name} {$leaver->last_name} is still working, so this is a transfer: any role with no replacement chosen stays with them.";
         }
 
         // The replacements.
@@ -121,6 +126,9 @@ class LeaverHandoverService
             }
         }
         foreach ($missing as $role => $n) {
+            if ($isTransfer) {
+                continue;   // not moving that role
+            }
             $errors[] = "{$n} customer(s) are held as " . self::ROLES[$role]['label'] . ' but no replacement was chosen for that role.';
         }
 
@@ -159,6 +167,9 @@ class LeaverHandoverService
                     continue;
                 }
                 if (empty($replacements[$role])) {
+                    if ($isTransfer) {
+                        continue;
+                    }
                     $errors[] = "{$ids->count()} Client Master record(s) have the leaver as " . str_replace('_id', '', $col) . ' but no replacement was chosen for that role.';
                     continue;
                 }
@@ -173,7 +184,7 @@ class LeaverHandoverService
         foreach (DB::table('cc_salesperson_map')->where('sales_user_id', $leaver->id)->get() as $r) {
             if (!empty($replacements['salesperson'])) {
                 $mapAdds[] = ['cc_user_id' => (int) $r->cc_user_id, 'sales_user_id' => $replacements['salesperson'], 'role' => $r->role, 'tenant_id' => $r->tenant_id];
-            } else {
+            } elseif (!$isTransfer) {
                 $warnings[] = 'Mapped to a CCare person as a salesperson but no salesperson replacement chosen: the map is not carried over.';
                 break;
             }
@@ -182,7 +193,7 @@ class LeaverHandoverService
             $rr = self::MAP_ROLE[$r->role ?? ''] ?? null;
             if ($rr && !empty($replacements[$rr])) {
                 $mapAdds[] = ['cc_user_id' => $replacements[$rr], 'sales_user_id' => (int) $r->sales_user_id, 'role' => $r->role, 'tenant_id' => $r->tenant_id];
-            } else {
+            } elseif (!$isTransfer) {
                 $warnings[] = 'The leaver was a ' . ($r->role ?: 'CCare') . ' agent for ' . 'some salespeople but no matching replacement was chosen: those mappings are not carried over.';
                 break;
             }

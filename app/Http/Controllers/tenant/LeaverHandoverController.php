@@ -26,33 +26,42 @@ class LeaverHandoverController extends Controller
     {
         $this->authorizeHandover();
 
-        $leavers = User::whereNotIn('status', ['active', 'onboarding', 'onboarding_submitted'])->get()->keyBy('id');
-        $count = function (string $col) use ($leavers) {
-            return DB::table('sales_pipelines')->whereNull('deleted_at')->whereIn($col, $leavers->keys())
+        // Everyone who can hold customers: those who have left (a handover) and those
+        // still working (a transfer). Not-yet-started staff are left out.
+        $everyone = User::whereNotIn('status', ['onboarding', 'onboarding_submitted'])->get()->keyBy('id');
+        $count = function (string $col) use ($everyone) {
+            return DB::table('sales_pipelines')->whereNull('deleted_at')->whereIn($col, $everyone->keys())
                 ->groupBy($col)->selectRaw("$col uid, COUNT(*) n")->pluck('n', 'uid');
         };
         $sp = $count('salesperson_id');
         $cc = $count('ccare_id');
         $nb = $count('new_biz_id');
         $nb2 = $count('new_biz_2_id');
-        $tags = DB::table('sales_pipeline_extra_reps')->whereIn('user_id', $leavers->keys())->groupBy('user_id')->selectRaw('user_id uid, COUNT(*) n')->pluck('n', 'uid');
+        $tags = DB::table('sales_pipeline_extra_reps')->whereIn('user_id', $everyone->keys())->groupBy('user_id')->selectRaw('user_id uid, COUNT(*) n')->pluck('n', 'uid');
 
-        $rows = [];
-        foreach ($leavers as $id => $u) {
+        $leavers = [];
+        $workers = [];
+        foreach ($everyone as $id => $u) {
             $held = (int) ($sp[$id] ?? 0) + (int) ($cc[$id] ?? 0) + (int) ($nb[$id] ?? 0) + (int) ($nb2[$id] ?? 0);
             $t = (int) ($tags[$id] ?? 0);
             if ($held + $t === 0) {
                 continue;
             }
             $left = $u->last_working_day ?: $u->exit_date;
-            $rows[] = [
+            $row = [
                 'id' => $id, 'name' => trim($u->first_name . ' ' . $u->last_name), 'status' => LeaverHandoverService::statusOf($u),
                 'left' => $left ? Carbon::parse($left)->toDateString() : null,
                 'salesperson' => (int) ($sp[$id] ?? 0), 'ccare' => (int) ($cc[$id] ?? 0),
                 'new_biz' => (int) ($nb[$id] ?? 0) + (int) ($nb2[$id] ?? 0), 'tags' => $t,
             ];
+            if (LeaverHandoverService::statusOf($u) === 'active') {
+                $workers[] = $row;
+            } else {
+                $leavers[] = $row;
+            }
         }
-        usort($rows, fn ($a, $b) => strcmp((string) $b['left'], (string) $a['left']));
+        usort($leavers, fn ($a, $b) => strcmp((string) $b['left'], (string) $a['left']));
+        usort($workers, fn ($a, $b) => strcmp($a['name'], $b['name']));
 
         $people = User::where('status', 'active')->with('department')->orderBy('first_name')->get()
             ->map(fn ($u) => ['id' => $u->id, 'name' => trim($u->first_name . ' ' . $u->last_name), 'dept' => optional($u->department)->name ?: 'No department']);
@@ -72,7 +81,7 @@ class LeaverHandoverController extends Controller
             return $b;
         });
 
-        return view('tenant.sales-pipeline.leaver-handover', ['leavers' => $rows, 'people' => $people, 'months' => $months, 'batches' => $batches]);
+        return view('tenant.sales-pipeline.leaver-handover', ['leavers' => $leavers, 'workers' => $workers, 'people' => $people, 'months' => $months, 'batches' => $batches]);
     }
 
     private function inputs(Request $request): array
