@@ -31,9 +31,10 @@ class TaskDetailsUpdated extends Notification
       . ' updated "' . $task->title . '": ' . $summary;
   }
 
+  /** No 'mail' - see TaskReplied for why. In-app + push only; the daily digest covers email. */
   public function via(object $notifiable): array
   {
-    return ['database', 'mail', FirebaseChannel::class, WebPushChannel::class];
+    return ['database', FirebaseChannel::class, WebPushChannel::class];
   }
 
   public function toMail(object $notifiable): MailMessage

@@ -57,6 +57,7 @@ Schedule::command('leave:grant-short-leave')->monthlyOn(1, '00:05');
 Schedule::command('onboarding:enforce-deadline')->daily()->description('Enforce onboarding completion deadlines');
 Schedule::command('probation:process-expirations')->daily()->description('Process employee probation expirations');
 Schedule::command('tasks:generate-recurring')->dailyAt('06:00')->description('Fire recurring task schedules due today');
+Schedule::command('tasks:daily-digest')->dailyAt('07:30')->description('Send each person their single daily task email (due/overdue/pending-reply/CC backlog) - replaces a separate email per reply or update');
 Schedule::command('tasks:notify-overdue')->dailyAt('09:00')->description('Notify staff whose assigned task is overdue');
 Schedule::command('tasks:notify-expected-date')->dailyAt('09:00')->description("Remind staff the day their own completion_expected_date arrives");
 Schedule::command('tasks:notify-due-soon')->dailyAt('08:30')->description('Remind staff their assigned task is due soon (before it is due)');

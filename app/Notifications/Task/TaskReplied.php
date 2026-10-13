@@ -29,9 +29,14 @@ class TaskReplied extends Notification
       . ' replied on "' . $task->title . '": ' . \Illuminate\Support\Str::limit((string) $update->comment, 120);
   }
 
+  /**
+   * No 'mail' here on purpose - a separate email per reply was exactly what
+   * the user asked to stop getting. The in-app bell and push stay instant;
+   * TaskDailyDigest is the one daily email that rolls this up.
+   */
   public function via(object $notifiable): array
   {
-    return ['database', 'mail', FirebaseChannel::class, WebPushChannel::class];
+    return ['database', FirebaseChannel::class, WebPushChannel::class];
   }
 
   public function toMail(object $notifiable): MailMessage
