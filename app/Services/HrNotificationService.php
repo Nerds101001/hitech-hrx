@@ -516,6 +516,59 @@ class HrNotificationService
         }
     }
 
+    /**
+     * Recipients for a warning/complaint alert: HR plus the employee's own
+     * reporting manager, when they have one.
+     *
+     * @return array{to: string[], cc: string[]}
+     */
+    public static function lifecycleNoticeRecipients(User $employee): array
+    {
+        $cfg = config('hr_notifications.lifecycle_notify', []);
+
+        $to = collect($cfg['emails'] ?? []);
+
+        if (!empty($cfg['include_reporting_manager']) && $employee->reporting_to_id) {
+            $mgr = User::find($employee->reporting_to_id);
+            if ($mgr && filter_var($mgr->email, FILTER_VALIDATE_EMAIL)) {
+                $to->push($mgr->email);
+            }
+        }
+
+        return self::dedupe($to, collect());
+    }
+
+    /**
+     * Email HR and the reporting manager that a warning or complaint was
+     * just recorded. Never throws — a mail failure must not undo a record
+     * that has already been saved.
+     *
+     * @param  \App\Models\EmployeeWarning|\App\Models\EmployeeComplaint  $notice
+     * @param  string  $kind  'warning' | 'complaint'
+     */
+    public static function notifyLifecycleNotice($notice, string $kind): void
+    {
+        try {
+            $employee = $notice->user; // alias relation on both models
+            if (!$employee) {
+                Log::warning("Lifecycle notice alert skipped for {$kind} #{$notice->id}: no employee resolved.");
+                return;
+            }
+
+            $r = self::lifecycleNoticeRecipients($employee);
+            if (empty($r['to'])) {
+                Log::warning("Lifecycle notice alert skipped for user {$employee->id}: no recipients configured.");
+                return;
+            }
+
+            \Illuminate\Support\Facades\Mail::to($r['to'])->send(
+                new \App\Mail\EmployeeLifecycleNoticeAlert($notice, $kind)
+            );
+        } catch (\Throwable $e) {
+            Log::error("Lifecycle notice alert failed for {$kind} #{$notice->id}: " . $e->getMessage());
+        }
+    }
+
     /** Field departments that never punch a biometric device. */
     public static function isBiometricExempt(User $user): bool
     {

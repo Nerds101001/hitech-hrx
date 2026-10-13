@@ -302,7 +302,7 @@
             <div class="table-responsive">
               <table class="table table-hover mb-0">
                 <thead><tr>
-                  <th>Employee</th><th>Type</th><th>Issued</th><th>Reason</th><th>Status</th><th>Attachment</th>
+                  <th>Employee</th><th>Type</th><th>Issued</th><th>Reason</th><th>Status</th><th>Acknowledged</th><th>Attachment</th>
                 </tr></thead>
                 <tbody>
                 @forelse($tabWarnings as $r)
@@ -313,6 +313,13 @@
                     <td><small class="text-muted">{{ \Illuminate\Support\Str::limit($r->description ?: '—', 40) }}</small></td>
                     <td>{!! $pill($r->status ?? null) !!}</td>
                     <td>
+                      @if($r->acknowledged_at)
+                        <span class="badge bg-label-success rounded-pill">{{ \Carbon\Carbon::parse($r->acknowledged_at)->format('d M Y') }}</span>
+                      @else
+                        <span class="badge badge-muted rounded-pill">Pending</span>
+                      @endif
+                    </td>
+                    <td>
                       @if($r->attachment_path)
                         <a href="{{ route('employee-lifecycle.warnings.attachment', $r->id) }}" target="_blank" class="btn btn-sm btn-hitech-modal-cancel"><i class="bx bx-paperclip"></i></a>
                       @else
@@ -321,7 +328,7 @@
                     </td>
                   </tr>
                 @empty
-                  <tr><td colspan="6" class="text-center text-muted py-5">No warnings recorded</td></tr>
+                  <tr><td colspan="7" class="text-center text-muted py-5">No warnings recorded</td></tr>
                 @endforelse
                 </tbody>
               </table>
@@ -346,7 +353,7 @@
             <div class="table-responsive">
               <table class="table table-hover mb-0">
                 <thead><tr>
-                  <th>Employee</th><th>Details</th><th>Type</th><th>Filed</th><th>Status</th><th>Attachment</th>
+                  <th>Employee</th><th>Details</th><th>Type</th><th>Filed</th><th>Status</th><th>Acknowledged</th><th>Attachment</th>
                 </tr></thead>
                 <tbody>
                 @forelse($tabComplaints as $r)
@@ -357,6 +364,13 @@
                     <td>{{ $fmt($r->complaint_date ?? $r->created_at ?? null) }}</td>
                     <td>{!! $pill($r->status ?? null) !!}</td>
                     <td>
+                      @if($r->acknowledged_at)
+                        <span class="badge bg-label-success rounded-pill">{{ \Carbon\Carbon::parse($r->acknowledged_at)->format('d M Y') }}</span>
+                      @else
+                        <span class="badge badge-muted rounded-pill">Pending</span>
+                      @endif
+                    </td>
+                    <td>
                       @if($r->attachment_path)
                         <a href="{{ route('employee-lifecycle.complaints.attachment', $r->id) }}" target="_blank" class="btn btn-sm btn-hitech-modal-cancel"><i class="bx bx-paperclip"></i></a>
                       @else
@@ -365,7 +379,7 @@
                     </td>
                   </tr>
                 @empty
-                  <tr><td colspan="6" class="text-center text-muted py-5">No complaints recorded</td></tr>
+                  <tr><td colspan="7" class="text-center text-muted py-5">No complaints recorded</td></tr>
                 @endforelse
                 </tbody>
               </table>

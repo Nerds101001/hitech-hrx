@@ -137,6 +137,23 @@ return [
     ],
 
     /*
+     | ---------------- Warnings & complaints ----------------
+     |
+     | HR files these; the employee's own reporting manager is added
+     | automatically so they're never surprised by something raised against
+     | one of their reports.
+     */
+    'lifecycle_notify' => [
+        'emails' => array_filter([
+            env('HR_NOTIFY_HR_1', 'suchita@rustx.com'),
+            env('HR_NOTIFY_HR_2', 'priyal@rustx.com'),
+            env('HR_NOTIFY_HR_3', 'hr@rustx.com'),
+        ]),
+
+        'include_reporting_manager' => true,
+    ],
+
+    /*
      | Designations treated as managerial when falling back to a department
      | lookup. Used because the `manager` ROLE does not reliably identify
      | managers in this tenant.

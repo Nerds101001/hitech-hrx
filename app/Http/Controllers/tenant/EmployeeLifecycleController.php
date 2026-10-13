@@ -289,7 +289,9 @@ class EmployeeLifecycleController extends Controller
         }
         unset($validated['attachment']);
 
-        EmployeeWarning::create($validated);
+        $warning = EmployeeWarning::create($validated);
+
+        \App\Services\HrNotificationService::notifyLifecycleNotice($warning, 'warning');
 
         return redirect()->back()->with('success', 'Warning recorded successfully.');
     }
@@ -586,7 +588,9 @@ class EmployeeLifecycleController extends Controller
             $data['attachment_path'] = $file->storeAs('employee-complaints', $filename, 'r2');
         }
 
-        EmployeeComplaint::create($data);
+        $complaint = EmployeeComplaint::create($data);
+
+        \App\Services\HrNotificationService::notifyLifecycleNotice($complaint, 'complaint');
 
         return redirect()->back()->with('success', 'Complaint recorded successfully.');
     }
@@ -599,7 +603,8 @@ class EmployeeLifecycleController extends Controller
      */
     public function myNotices(): View
     {
-        $userId = Auth::id();
+        $user = Auth::user();
+        $userId = $user->id;
 
         $myWarnings = EmployeeWarning::with('givenBy')
             ->where('user_id', $userId)
@@ -611,18 +616,85 @@ class EmployeeLifecycleController extends Controller
             ->latest()
             ->get();
 
-        return view('tenant.employee-lifecycle.my-notices', compact('myWarnings', 'myComplaints'));
+        // "My Team": read-only visibility into what's recorded about this
+        // user's own direct reports, so a manager is never surprised by
+        // something raised against one of their people. Nothing here is
+        // editable or acknowledgeable by the manager — only the employee
+        // the record concerns can do that.
+        $directReportIds = User::whereIn('reporting_to_id', $user->managerIdentityIds())
+            ->pluck('id');
+
+        $teamWarnings = $directReportIds->isNotEmpty()
+            ? EmployeeWarning::with(['user', 'givenBy'])->whereIn('user_id', $directReportIds)->latest()->get()
+            : collect();
+
+        $teamComplaints = $directReportIds->isNotEmpty()
+            ? EmployeeComplaint::with(['respondent', 'complainant'])->whereIn('respondent_id', $directReportIds)->latest()->get()
+            : collect();
+
+        return view('tenant.employee-lifecycle.my-notices', compact(
+            'myWarnings', 'myComplaints', 'teamWarnings', 'teamComplaints'
+        ));
     }
 
     /**
-     * Download a warning's attachment. Allowed for HR/Admin, or the employee
-     * the warning was issued to — nobody else.
+     * The signed-in employee acknowledges a warning issued to them. Nobody
+     * else — not even HR/Admin — can acknowledge on someone else's behalf.
+     */
+    public function acknowledgeWarning(EmployeeWarning $warning): RedirectResponse
+    {
+        if ($warning->user_id !== Auth::id()) {
+            abort(403);
+        }
+
+        if (!$warning->acknowledged_at) {
+            $warning->update(['acknowledged_at' => now()]);
+        }
+
+        return redirect()->back()->with('success', 'Acknowledged.');
+    }
+
+    /**
+     * The signed-in employee acknowledges a complaint recorded against them.
+     */
+    public function acknowledgeComplaint(EmployeeComplaint $complaint): RedirectResponse
+    {
+        if ($complaint->respondent_id !== Auth::id()) {
+            abort(403);
+        }
+
+        if (!$complaint->acknowledged_at) {
+            $complaint->update(['acknowledged_at' => now()]);
+        }
+
+        return redirect()->back()->with('success', 'Acknowledged.');
+    }
+
+    /**
+     * Whether $user may view this record's attachment: the employee it
+     * concerns, their reporting manager (direct, not grand-manager), or
+     * HR/Admin.
+     */
+    private function canViewLifecycleRecord(User $user, int $subjectUserId): bool
+    {
+        if ($subjectUserId === $user->id) {
+            return true;
+        }
+        if ($user->hasRole(['admin', 'hr']) || $user->can('lifecycle.manage')) {
+            return true;
+        }
+
+        $subject = User::find($subjectUserId);
+        return $subject && in_array($subject->reporting_to_id, $user->managerIdentityIds(), true);
+    }
+
+    /**
+     * Download a warning's attachment. Allowed for HR/Admin, the employee
+     * the warning was issued to, or their reporting manager — nobody else.
      */
     public function downloadWarningAttachment(EmployeeWarning $warning)
     {
-        $user = Auth::user();
-        $isOwner = $warning->user_id === $user->id;
-        if (!$isOwner && !$user->hasRole(['admin', 'hr']) && !$user->can('lifecycle.manage')) {
+        if (!$this->canViewLifecycleRecord(Auth::user(), $warning->user_id)) {
             abort(403);
         }
 
@@ -634,14 +706,14 @@ class EmployeeLifecycleController extends Controller
     }
 
     /**
-     * Download a complaint's attachment. Allowed for HR/Admin, or the
-     * employee the complaint concerns (the respondent) — nobody else.
+     * Download a complaint's attachment. Allowed for HR/Admin, the employee
+     * the complaint concerns (the respondent), or their reporting manager.
      */
     public function downloadComplaintAttachment(EmployeeComplaint $complaint)
     {
         $user = Auth::user();
-        $isOwner = $complaint->respondent_id === $user->id || $complaint->complainant_id === $user->id;
-        if (!$isOwner && !$user->hasRole(['admin', 'hr']) && !$user->can('lifecycle.manage')) {
+        $isComplainant = $complaint->complainant_id === $user->id;
+        if (!$isComplainant && !$this->canViewLifecycleRecord($user, $complaint->respondent_id)) {
             abort(403);
         }
 

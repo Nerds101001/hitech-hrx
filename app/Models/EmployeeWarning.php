@@ -23,11 +23,13 @@ class EmployeeWarning extends Model implements AuditableContract
         'notes',
         'status',
         'attachment_path',
+        'acknowledged_at',
     ];
 
     protected $casts = [
         'warning_date' => 'date',
         'given_at' => 'datetime',
+        'acknowledged_at' => 'datetime',
     ];
 
     // Relationships

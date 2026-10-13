@@ -24,11 +24,13 @@ class EmployeeComplaint extends Model implements AuditableContract
         'notes',
         'status',
         'attachment_path',
+        'acknowledged_at',
     ];
 
     protected $casts = [
         'complaint_date' => 'date',
         'resolved_at' => 'datetime',
+        'acknowledged_at' => 'datetime',
     ];
 
     // Relationships
