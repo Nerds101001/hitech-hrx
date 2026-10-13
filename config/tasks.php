@@ -22,4 +22,16 @@ return [
      * before it is due.
      */
     'reminder_lead_hours' => (int) env('TASKS_REMINDER_LEAD_HOURS', 24),
+
+    /*
+     * Who gets the ONE consolidated escalation email per run. Each individual
+     * manager still gets an instant in-app + push notice for their own report
+     * (TaskEscalated - mail dropped from it on purpose); every escalation
+     * across the whole run is additionally rolled into a single email here,
+     * instead of a separate email per manager per task. Comma-separated -
+     * does not have to be a registered HRX user, any mailbox works.
+     */
+    'escalation_desk_emails' => array_values(array_filter(array_map('trim',
+        explode(',', (string) env('TASKS_ESCALATION_DESK_EMAILS', 'ai@rustx.com'))
+    ))),
 ];

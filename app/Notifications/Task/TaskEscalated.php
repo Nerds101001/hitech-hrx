@@ -33,9 +33,15 @@ class TaskEscalated extends Notification
       . '" is ' . $daysOverdue . ' day' . ($daysOverdue === 1 ? '' : 's') . ' overdue and still open.';
   }
 
+  /**
+   * No 'mail' here on purpose - a separate escalation email per manager per
+   * task was exactly what was costing the most mail volume. In-app + push
+   * stay instant for the manager; EscalationDeskDigest sends the ONE
+   * consolidated email for the whole run, to the escalation desk.
+   */
   public function via(object $notifiable): array
   {
-    return ['database', 'mail', FirebaseChannel::class, WebPushChannel::class];
+    return ['database', FirebaseChannel::class, WebPushChannel::class];
   }
 
   public function toMail(object $notifiable): MailMessage
