@@ -71,4 +71,14 @@ class NinetyDayGoal extends Model implements AuditableContract
     {
         return $this->belongsTo(User::class, 'created_by_id');
     }
+
+    public function deleteRequests()
+    {
+        return $this->hasMany(NinetyDayGoalDeleteRequest::class, 'goal_id')->orderByDesc('id');
+    }
+
+    public function pendingDeleteRequest()
+    {
+        return $this->hasOne(NinetyDayGoalDeleteRequest::class, 'goal_id')->where('status', 'pending')->latestOfMany();
+    }
 }

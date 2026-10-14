@@ -3,13 +3,17 @@
 namespace App\Http\Controllers\tenant;
 
 use App\Http\Controllers\Controller;
+use App\Helpers\NotificationHelper;
 use App\Models\NinetyDayGoal;
 use App\Models\NinetyDayGoalCheckin;
+use App\Models\NinetyDayGoalDeleteRequest;
 use App\Models\NinetyDayGoalNote;
 use App\Models\NinetyDayProgram;
 use App\Models\NinetyDayRound;
 use App\Models\Task;
 use App\Models\User;
+use App\Notifications\NinetyDayGoal\NinetyDayGoalDeleteDecision;
+use App\Notifications\NinetyDayGoal\NinetyDayGoalDeleteRequested;
 use App\Notifications\NinetyDayGoal\ProgramInvite;
 use App\Notifications\NinetyDayGoal\WeekReminder;
 use App\Services\NinetyDayGoalService as Goals;
@@ -821,7 +825,7 @@ class NinetyDayGoalController extends Controller
             abort(403, 'That round is not in your team.');
         }
 
-        $goals = NinetyDayGoal::with('checkins.notes.author')->where('round_id', $round->id)
+        $goals = NinetyDayGoal::with('checkins.notes.author', 'pendingDeleteRequest.requestedBy')->where('round_id', $round->id)
             ->whereNull('closed_at')->orderBy('id')->get();
         $d = Goals::dashboard([$round->user_id], ['round_id' => $round->id]);
         $weeks = Goals::weeksOf($round);
@@ -1560,6 +1564,60 @@ class NinetyDayGoalController extends Controller
         $goal->delete();
 
         return response()->json(['success' => true, 'message' => 'Customer removed.']);
+    }
+
+    // ── ask to remove a goal (sales team can't delete outright; admin/HR decides) ────────
+
+    /** The goal's own owner asks for it to be removed. Admin/HR gets notified and decides. */
+    public function requestDelete(Request $request, $id)
+    {
+        $user = Auth::user();
+        $goal = NinetyDayGoal::findOrFail($id);
+        if ((int) $goal->user_id !== (int) $user->id) {
+            return response()->json(['success' => false, 'message' => 'Only the owner of this customer can ask for it to be removed.'], 403);
+        }
+        if ($goal->pendingDeleteRequest) {
+            return response()->json(['success' => false, 'message' => 'A removal request for this customer is already pending.'], 422);
+        }
+        $data = $request->validate(['reason' => 'nullable|string|max:500']);
+
+        $deleteRequest = NinetyDayGoalDeleteRequest::create([
+            'goal_id' => $goal->id, 'requested_by_id' => $user->id, 'reason' => $data['reason'] ?? null, 'status' => 'pending',
+        ]);
+        $deleteRequest->setRelation('goal', $goal)->setRelation('requestedBy', $user);
+        NotificationHelper::notifyHRAndAdminOnly(new NinetyDayGoalDeleteRequested($deleteRequest));
+
+        return response()->json(['success' => true, 'message' => 'Removal request sent to admin/HR.']);
+    }
+
+    /** Admin/HR approves (the goal is actually removed) or rejects a pending removal request. */
+    public function decideDelete(Request $request, $id)
+    {
+        $user = Auth::user();
+        if (!Goals::managesEveryone($user)) {
+            return response()->json(['success' => false, 'message' => 'Not allowed.'], 403);
+        }
+        $deleteRequest = NinetyDayGoalDeleteRequest::with('goal', 'requestedBy')->findOrFail($id);
+        if (!$deleteRequest->isPending()) {
+            return response()->json(['success' => false, 'message' => 'This request was already decided.'], 422);
+        }
+        $data = $request->validate(['status' => 'required|in:approved,rejected', 'admin_remarks' => 'nullable|string|max:500']);
+
+        if ($data['status'] === 'approved' && $deleteRequest->goal) {
+            $goal = $deleteRequest->goal;
+            $goal->checkins()->each(fn ($c) => $c->notes()->delete());
+            $goal->checkins()->delete();
+            $goal->delete();
+        }
+        $deleteRequest->update([
+            'status' => $data['status'], 'decided_by_id' => $user->id, 'decided_at' => now(),
+            'admin_remarks' => $data['admin_remarks'] ?? null,
+        ]);
+        if ($deleteRequest->requestedBy) {
+            $deleteRequest->requestedBy->notify(new NinetyDayGoalDeleteDecision($deleteRequest));
+        }
+
+        return response()->json(['success' => true, 'message' => 'Request ' . $data['status'] . '.']);
     }
 
     // ── comments on a week ───────────────────────────────────────────────

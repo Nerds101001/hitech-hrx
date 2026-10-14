@@ -425,7 +425,7 @@
             <tr class="ndg-rd-row" data-goal="{{ $g->id }}" data-q="{{ strtolower($g->client_name . ' ' . $g->product) }}" data-status="{{ $status }}" data-brand="{{ $g->brand }}">
               <td class="ps-3"><button type="button" class="ndg-rd-expand" data-target="ndgRdExp{{ $g->id }}"><i class="bx bx-chevron-down"></i></button></td>
               <td class="text-muted">{{ $i + 1 }}</td>
-              <td class="fw-semibold text-dark">{{ $g->client_name }}</td>
+              <td class="fw-semibold text-dark">{{ $g->client_name }}@if($g->pendingDeleteRequest)<span class="badge badge-hitech ms-1" style="background:#fee2e2;color:#b42318;font-size:.6rem" title="Removal requested">Removal pending</span>@endif</td>
               <td class="small text-muted">{{ $g->product }}</td>
               <td class="text-end">{{ $fmtL($g->monthly_potential) }}</td>
               <td class="small text-muted">{{ $g->expected_order_date ? $g->expected_order_date->format('d M Y') : '—' }}</td>
@@ -448,6 +448,20 @@
                   <ul class="dropdown-menu dropdown-menu-end">
                     <li><button type="button" class="dropdown-item ndg-rd-expand" data-target="ndgRdExp{{ $g->id }}">View details</button></li>
                     @if($canEdit)<li><button type="button" class="dropdown-item ndg-edit-goal" data-id="{{ $g->id }}" data-product="{{ e($g->product) }}" data-brand="{{ e($g->brand) }}" data-goal="{{ e($g->goal ?: $g->goal_type) }}" data-potential="{{ $g->monthly_potential }}" data-expected="{{ optional($g->expected_order_date)->format('Y-m-d') }}" data-title="{{ e($g->client_name) }}">Edit</button></li>@endif
+                    @if($managesAll)
+                      @if($g->pendingDeleteRequest)
+                        <li><button type="button" class="dropdown-item text-success ndg-decide-delete" data-id="{{ $g->pendingDeleteRequest->id }}" data-status="approved" data-title="{{ e($g->client_name) }}">Approve removal request</button></li>
+                        <li><button type="button" class="dropdown-item text-danger ndg-decide-delete" data-id="{{ $g->pendingDeleteRequest->id }}" data-status="rejected" data-title="{{ e($g->client_name) }}">Reject removal request</button></li>
+                      @else
+                        <li><button type="button" class="dropdown-item text-danger ndg-remove-goal" data-id="{{ $g->id }}" data-title="{{ e($g->client_name) }}">Remove customer</button></li>
+                      @endif
+                    @elseif($canEdit)
+                      @if($g->pendingDeleteRequest)
+                        <li><span class="dropdown-item disabled text-muted">Removal requested</span></li>
+                      @else
+                        <li><button type="button" class="dropdown-item text-danger ndg-request-delete" data-id="{{ $g->id }}" data-title="{{ e($g->client_name) }}">Request removal</button></li>
+                      @endif
+                    @endif
                   </ul>
                 </div>
               </td>
@@ -541,13 +555,15 @@
                     <div class="small mt-1">{{ $ck->comment ?: '—' }}</div>
                     @if($ck->next_action)<div class="small mt-1 text-muted"><b>Next:</b> {{ $ck->next_action }}@if($ck->next_follow_up_date) · {{ $ck->next_follow_up_date->format('d M') }}@endif</div>@endif
                     @foreach($ck->notes as $n)
+                      @php $isAdminNote = \App\Services\NinetyDayGoalService::managesEveryone($n->author); @endphp
                       <div class="small mt-1 pt-1 border-top">
                         @if($canRemoveComment ?? false)<button type="button" class="ndg-note-del" data-id="{{ $n->id }}" title="Remove comment">&times;</button>@endif
+                        @if($isAdminNote)<span class="badge badge-hitech" style="background:#fef3c7;color:#92400e;font-size:.6rem;vertical-align:1px">Admin</span>@endif
                         <b>{{ trim(optional($n->author)->first_name . ' ' . optional($n->author)->last_name) }}:</b> {{ $n->body }}
                       </div>
                     @endforeach
                     @if($canComment ?? false)
-                      <button type="button" class="btn btn-link btn-sm p-0 mt-1 ndg-addnote" data-goal="{{ $g->id }}" data-week="{{ $ck->week_no }}"><i class="bx bx-comment-add"></i> Add comment</button>
+                      <button type="button" class="btn btn-link btn-sm p-0 mt-1 ndg-addnote" data-goal="{{ $g->id }}" data-week="{{ $ck->week_no }}"><i class="bx bx-comment-add"></i> {{ $managesAll ? 'Add admin remark' : 'Add comment' }}</button>
                     @endif
                   </div>
                 @empty
@@ -812,7 +828,9 @@
     checkin: '{{ route('performance.ninety-day-goals.checkin') }}',
     update: '{{ url('performance/ninety-day-goals') }}',
     customers: '{{ route('performance.ninety-day-goals.pipeline-customers') }}',
-    store: '{{ route('performance.ninety-day-goals.store') }}'
+    store: '{{ route('performance.ninety-day-goals.store') }}',
+    deleteRequest: '{{ url('performance/ninety-day-goals') }}',
+    decideDelete: '{{ url('performance/ninety-day-goals/delete-request') }}'
   };
   function post(url, method, body) {
     return fetch(url, { method: method, headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': CSRF }, body: body ? JSON.stringify(body) : undefined })
@@ -837,6 +855,38 @@
       if (!confirm('Remove this comment?')) { return; }
       post(URLS.notes + '/' + del.getAttribute('data-id'), 'DELETE').then(function (j) {
         if (!j.success) { alert(j.message || 'Could not remove it.'); return; }
+        location.reload();
+      }).catch(function () { alert('Request failed. Try again.'); });
+      return;
+    }
+    var rmGoal = e.target.closest ? e.target.closest('.ndg-remove-goal') : null;
+    if (rmGoal) {
+      if (!confirm('Remove "' + (rmGoal.getAttribute('data-title') || 'this customer') + '" from the program? This also removes its weekly history.')) { return; }
+      post(URLS.update + '/' + rmGoal.getAttribute('data-id'), 'DELETE').then(function (j) {
+        if (!j.success) { alert(j.message || 'Could not remove it.'); return; }
+        location.reload();
+      }).catch(function () { alert('Request failed. Try again.'); });
+      return;
+    }
+    var reqDel = e.target.closest ? e.target.closest('.ndg-request-delete') : null;
+    if (reqDel) {
+      var reason = window.prompt('Why should "' + (reqDel.getAttribute('data-title') || 'this customer') + '" be removed? (optional)');
+      if (reason === null) { return; }
+      reqDel.disabled = true;
+      post(URLS.deleteRequest + '/' + reqDel.getAttribute('data-id') + '/delete-request', 'POST', { reason: reason.trim() }).then(function (j) {
+        if (!j.success) { reqDel.disabled = false; alert(j.message || 'Could not send the request.'); return; }
+        location.reload();
+      }).catch(function () { reqDel.disabled = false; alert('Request failed. Try again.'); });
+      return;
+    }
+    var decideDel = e.target.closest ? e.target.closest('.ndg-decide-delete') : null;
+    if (decideDel) {
+      var status = decideDel.getAttribute('data-status');
+      var verb = status === 'approved' ? 'approve (this removes the customer)' : 'reject';
+      if (!confirm('Really ' + verb + ' the removal request for "' + (decideDel.getAttribute('data-title') || 'this customer') + '"?')) { return; }
+      var remarks = window.prompt('Remark for the requester (optional):') || '';
+      post(URLS.decideDelete + '/' + decideDel.getAttribute('data-id'), 'PUT', { status: status, admin_remarks: remarks.trim() }).then(function (j) {
+        if (!j.success) { alert(j.message || 'Could not save that.'); return; }
         location.reload();
       }).catch(function () { alert('Request failed. Try again.'); });
     }
