@@ -22,8 +22,9 @@ use Illuminate\Support\Str;
 class TallyPartyPushCommand extends Command
 {
     protected $signature = 'hrx:tally-push-parties
+                            {--company=hitech : Which configured company to pull (config/services.php tally.companies)}
                             {--gateway-url= : Override services.tally.gateway_url}
-                            {--gateway-company= : Override services.tally.gateway_company}
+                            {--gateway-company= : Override the company name resolved from --company}
                             {--target-url= : Override tally_push.outbound.target_url}
                             {--dry-run : Pull and map only; push nothing}';
 
@@ -44,9 +45,16 @@ class TallyPartyPushCommand extends Command
         // sync-parties sits next to sync on the same endpoint path.
         $targetUrl = str_replace('/tally-push/sync', '/tally-push/sync-parties', $targetBase);
 
+        $companyCode = (string) $this->option('company');
+        $companyName = TallyPushCommand::resolveCompanyName($companyCode, $this->option('gateway-company'));
+        if ($companyName === null) {
+            $this->error("Unknown --company \"{$companyCode}\": not in config/services.php tally.companies and no --gateway-company override given.");
+            return self::FAILURE;
+        }
+
         $gateway = new TallyGateway(
             (string) ($this->option('gateway-url') ?: config('services.tally.gateway_url')),
-            (string) ($this->option('gateway-company') ?: config('services.tally.gateway_company')),
+            $companyName,
             (int) config('services.tally.gateway_timeout', 30),
         );
         try {
@@ -56,7 +64,7 @@ class TallyPartyPushCommand extends Command
             return self::FAILURE;
         }
 
-        $this->line("Pulling the ledger master from {$gateway->baseUrl()}...");
+        $this->line("Pulling the ledger master from {$gateway->baseUrl()} [{$companyCode}]...");
         $t = microtime(true);
         try {
             $ledgers = $gateway->ledgerMaster();
@@ -68,7 +76,7 @@ class TallyPartyPushCommand extends Command
 
         // Only ledgers that have actually invoiced us -- everything else (bank/expense/tax heads, one-off
         // parties, the company's own branches) is real Tally data but not something a customer screen needs.
-        $realCustomerNames = DB::table('tally_invoices')->where('is_branch_transfer', 0)
+        $realCustomerNames = DB::table('tally_invoices')->where('company', $companyCode)->where('is_branch_transfer', 0)
             ->whereNotNull('normalized_name')->distinct()->pluck('normalized_name')->flip();
 
         $parties = [];
@@ -109,7 +117,7 @@ class TallyPartyPushCommand extends Command
             return self::SUCCESS;
         }
 
-        $body = json_encode(['parties' => $parties], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        $body = json_encode(['company' => $companyCode, 'parties' => $parties], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
         $timestamp = (string) time();
         $nonce = Str::random(32);
         $secret = (string) config('tally_push.outbound.secret');

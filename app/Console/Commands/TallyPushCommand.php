@@ -39,8 +39,9 @@ class TallyPushCommand extends Command
                             {--date= : One day to pull and push, YYYY-MM-DD (default: today)}
                             {--from= : First day of a range instead of --date}
                             {--to= : Last day of a range (default: same as --from)}
+                            {--company=hitech : Which configured company to pull (config/services.php tally.companies) -- tags every row pushed}
                             {--gateway-url= : Override services.tally.gateway_url (for testing against the sandbox)}
-                            {--gateway-company= : Override services.tally.gateway_company}
+                            {--gateway-company= : Override the company name resolved from --company (services.tally.companies.<code>.name)}
                             {--target-url= : Override tally_push.outbound.target_url (e.g. to push to localhost while testing)}
                             {--emit-totals : Print a machine-readable "TALLY_TOTALS {json}" line at the end (used by hrx:tally-jobs-poll)}
                             {--dry-run : Pull and map only; push nothing, write nothing}';
@@ -63,6 +64,29 @@ class TallyPushCommand extends Command
         return $scheme === 'https' || ($scheme === 'http' && in_array($host, ['localhost', '127.0.0.1', '::1', '[::1]'], true));
     }
 
+    /**
+     * The Tally company name to read for a given --company code: --gateway-company wins when given (manual
+     * override, e.g. testing against the sandbox under a code that doesn't match it), else
+     * services.tally.companies.<code>.name. 'hitech' additionally falls back to write_gateway_company so every
+     * push command still works unmodified for callers (today's scheduled tasks) that don't pass --company at
+     * all -- see config/services.php tally.companies' own doc comment.
+     */
+    public static function resolveCompanyName(string $code, ?string $override): ?string
+    {
+        if ($override !== null && $override !== '') {
+            return $override;
+        }
+        $configured = (string) config("services.tally.companies.{$code}.name", '');
+        if ($configured !== '') {
+            return $configured;
+        }
+        if ($code === 'hitech') {
+            $fallback = (string) config('services.tally.write_gateway_company', '');
+            return $fallback !== '' ? $fallback : null;
+        }
+        return null;
+    }
+
     public function handle(): int
     {
         [$start, $end] = $this->resolveRange();
@@ -81,9 +105,16 @@ class TallyPushCommand extends Command
             return self::FAILURE;
         }
 
+        $companyCode = (string) $this->option('company');
+        $companyName = self::resolveCompanyName($companyCode, $this->option('gateway-company'));
+        if ($companyName === null) {
+            $this->error("Unknown --company \"{$companyCode}\": not in config/services.php tally.companies and no --gateway-company override given.");
+            return self::FAILURE;
+        }
+
         $gateway = new TallyGateway(
             (string) ($this->option('gateway-url') ?: config('services.tally.gateway_url')),
-            (string) ($this->option('gateway-company') ?: config('services.tally.gateway_company')),
+            $companyName,
             (int) config('services.tally.gateway_timeout', 30),
         );
         try {
@@ -92,9 +123,12 @@ class TallyPushCommand extends Command
             $this->error($e->getMessage());
             return self::FAILURE;
         }
-        $this->line("Gateway: {$gateway->baseUrl()}   company: {$gateway->expectedCompany()}" . ($dry ? '   (dry run: nothing pushed)' : "   target: {$targetUrl}"));
+        $this->line("Gateway: {$gateway->baseUrl()}   company: {$gateway->expectedCompany()} [{$companyCode}]" . ($dry ? '   (dry run: nothing pushed)' : "   target: {$targetUrl}"));
 
-        $totals = ['invoices' => 0, 'invoice_lines' => 0, 'sale_lines' => 0, 'sale_orders' => 0, 'deliveries' => 0, 'receipts' => 0];
+        $totals = [
+            'invoices' => 0, 'invoice_lines' => 0, 'sale_lines' => 0, 'sale_orders' => 0, 'deliveries' => 0, 'receipts' => 0,
+            'purchases' => 0, 'purchase_lines' => 0, 'purchase_orders' => 0, 'payments' => 0,
+        ];
         $daysDone = 0;
         for ($day = $start->copy(); $day->lte($end); $day = $day->copy()->addDay()) {
             $t = microtime(true);
@@ -109,10 +143,14 @@ class TallyPushCommand extends Command
             $payload = $this->mapDay($day, $vouchers);
             $counts = array_map('count', $payload);
             $payload = array_filter($payload);
+            if ($payload !== []) {
+                $payload['company'] = $companyCode;
+            }
 
             if ($dry) {
-                $this->line(sprintf('%s  %5.1fs  vouchers=%-4d invoices=%-3d invoice_lines=%-4d sale_lines=%-4d sale_orders=%-4d deliveries=%-4d receipts=%-3d  (dry run)',
-                    $day->format('Y-m-d D'), $secs, count($vouchers), $counts['invoices'], $counts['invoice_lines'], $counts['sale_lines'], $counts['sale_orders'], $counts['deliveries'], $counts['receipts']));
+                $this->line(sprintf('%s  %5.1fs  vouchers=%-4d inv=%-3d lines=%-4d orders=%-4d deliv=%-4d rcpt=%-3d | purch=%-3d p.lines=%-4d p.orders=%-3d pay=%-3d  (dry run)',
+                    $day->format('Y-m-d D'), $secs, count($vouchers), $counts['invoices'], $counts['sale_lines'], $counts['sale_orders'], $counts['deliveries'], $counts['receipts'],
+                    $counts['purchases'], $counts['purchase_lines'], $counts['purchase_orders'], $counts['payments']));
             } elseif ($payload === []) {
                 $this->line(sprintf('%s  %5.1fs  nothing to push', $day->format('Y-m-d D'), $secs));
             } else {
@@ -124,8 +162,9 @@ class TallyPushCommand extends Command
                 foreach ($counts as $k => $n) {
                     $totals[$k] += $n;
                 }
-                $this->info(sprintf('%s  %5.1fs  invoices=%-3d invoice_lines=%-4d sale_lines=%-4d sale_orders=%-4d deliveries=%-4d receipts=%-3d  -> %s',
-                    $day->format('Y-m-d D'), $secs, $counts['invoices'], $counts['invoice_lines'], $counts['sale_lines'], $counts['sale_orders'], $counts['deliveries'], $counts['receipts'], $message));
+                $this->info(sprintf('%s  %5.1fs  inv=%-3d lines=%-4d orders=%-4d deliv=%-4d rcpt=%-3d | purch=%-3d p.lines=%-4d p.orders=%-3d pay=%-3d  -> %s',
+                    $day->format('Y-m-d D'), $secs, $counts['invoices'], $counts['sale_lines'], $counts['sale_orders'], $counts['deliveries'], $counts['receipts'],
+                    $counts['purchases'], $counts['purchase_lines'], $counts['purchase_orders'], $counts['payments'], $message));
             }
 
             $daysDone++;
@@ -141,8 +180,10 @@ class TallyPushCommand extends Command
 
         $this->newLine();
         $this->line($dry ? 'Dry run complete. Nothing was pushed.' : sprintf(
-            'Done. Pushed %d invoice(s), %d invoice line(s), %d sale line(s), %d sale order line(s), %d delivery line(s), %d receipt(s).',
-            $totals['invoices'], $totals['invoice_lines'], $totals['sale_lines'], $totals['sale_orders'], $totals['deliveries'], $totals['receipts']
+            "Done. Sales: %d invoices, %d invoice lines, %d sale lines, %d order lines, %d deliveries, %d receipts.\n"
+            . '      Purchases: %d bills, %d bill lines, %d order lines, %d payments.',
+            $totals['invoices'], $totals['invoice_lines'], $totals['sale_lines'], $totals['sale_orders'], $totals['deliveries'], $totals['receipts'],
+            $totals['purchases'], $totals['purchase_lines'], $totals['purchase_orders'], $totals['payments']
         ));
 
         // One machine-readable line for hrx:tally-jobs-poll to parse back into the sync job's counts.
@@ -173,24 +214,30 @@ class TallyPushCommand extends Command
         return [$start, $end];
     }
 
-    /** @return array{invoices: array, invoice_lines: array, sale_lines: array, sale_orders: array, deliveries: array, receipts: array} */
+    /** @return array{invoices: array, invoice_lines: array, sale_lines: array, sale_orders: array, deliveries: array, receipts: array, purchases: array, purchase_lines: array, purchase_orders: array, payments: array} */
     private function mapDay(Carbon $day, array $vouchers): array
     {
-        $out = ['invoices' => [], 'invoice_lines' => [], 'sale_lines' => [], 'sale_orders' => [], 'deliveries' => [], 'receipts' => []];
+        $out = [
+            'invoices' => [], 'invoice_lines' => [], 'sale_lines' => [], 'sale_orders' => [], 'deliveries' => [], 'receipts' => [],
+            'purchases' => [], 'purchase_lines' => [], 'purchase_orders' => [], 'payments' => [],
+        ];
         $date = $day->format('Y-m-d');
 
         foreach ($vouchers as $v) {
             if ($v['cancelled']) {
                 continue;
             }
+            // Voucher type names in this company carry a suffix (e.g. "Sales GST - CHN", "Purchase Order - PG",
+            // "Payment - HR"), so classify on the PREFIX. Order matters: "Purchase Order" must be tested before
+            // "Purchase", and "Receipt Note" (goods received) excluded before "Receipt" (money received).
             $type = (string) $v['type'];
             $isSalesOrder = (bool) preg_match('/^Sales\s*Order/i', $type);
             $isSalesBill = !$isSalesOrder && (bool) preg_match('/^Sales\b/i', $type);
-            $isDeliveryNote = !$isSalesOrder && !$isSalesBill && (bool) preg_match('/^Delivery\s*Note/i', $type);
-            // "Receipt Note" (goods received) is a distinct voucher type from "Receipt" (money received) --
-            // excluded explicitly, not just by missing the dash/space, since both start with the word "Receipt".
-            $isReceipt = !$isSalesOrder && !$isSalesBill && !$isDeliveryNote
-                && (bool) preg_match('/^Receipt\b/i', $type) && !preg_match('/^Receipt\s*Note/i', $type);
+            $isPurchaseOrder = (bool) preg_match('/^Purchase\s*Order/i', $type);
+            $isPurchaseBill = !$isPurchaseOrder && (bool) preg_match('/^Purchase\b/i', $type);
+            $isDeliveryNote = (bool) preg_match('/^Delivery\s*Note/i', $type);
+            $isReceipt = (bool) preg_match('/^Receipt\b/i', $type) && !preg_match('/^Receipt\s*Note/i', $type);
+            $isPayment = (bool) preg_match('/^Payment\b/i', $type);
             if ($isReceipt) {
                 $number = (string) $v['number'];
                 $party = (string) $v['party'];
@@ -216,6 +263,32 @@ class TallyPushCommand extends Command
                 ], fn ($val) => $val !== null);
                 continue;
             }
+            if ($isPayment) {
+                $number = (string) $v['number'];
+                $party = (string) $v['party'];
+                // A payment pays money out. The bank/cash leg is the non-party ledger (the biggest one, for a
+                // multi-line expense payment). amount is the party's own line when there's a party, else the bank leg.
+                $bankLedger = null;
+                $bankAmt = 0.0;
+                foreach ($v['ledgers'] ?? [] as $entry) {
+                    $name = trim((string) $entry['name']);
+                    $amt = abs((float) ($entry['amount'] ?? 0));
+                    if ($name !== '' && $name !== trim($party) && $amt >= $bankAmt) {
+                        $bankLedger = $name;
+                        $bankAmt = $amt;
+                    }
+                }
+                $amount = abs((float) ($v['total'] ?? 0)) ?: $bankAmt;
+                $out['payments'][] = array_filter([
+                    'payment_key' => "{$date}|{$type}|{$number}",
+                    'payment_date' => $date, 'payment_no' => $number, 'voucher_type' => $type,
+                    'party_name' => $party ?: null, 'normalized_name' => NameMatcher::normalize($party) ?: null,
+                    'amount' => $amount, 'bank_ledger' => $bankLedger,
+                    'reference' => $v['reference'] ?? null,
+                    '_guid' => (string) ($v['guid'] ?? ''),   // disambiguates same-numbered payments; stripped below
+                ], fn ($val) => $val !== null);
+                continue;
+            }
             if ($isDeliveryNote) {
                 $number = (string) $v['number'];
                 $transport = $v['transport'];
@@ -233,8 +306,57 @@ class TallyPushCommand extends Command
                 }
                 continue;
             }
+            if ($isPurchaseOrder) {
+                $number = (string) $v['number'];
+                $party = (string) $v['party'];
+                $normalized = NameMatcher::normalize($party) ?: null;
+                // Keyed by the voucher GUID: a supplier's PO number isn't unique across suppliers/days, so keying by
+                // number alone would let a later push delete an earlier, unrelated order with the same number.
+                $key = (string) ($v['guid'] ?: "{$date}|{$party}|{$number}");
+                foreach ($v['lines'] as $line) {
+                    $out['purchase_orders'][] = [
+                        'order_key' => $key, 'order_date' => $date, 'order_no' => $number,
+                        'party_name' => $party ?: null, 'normalized_name' => $normalized,
+                        'item_name' => preg_replace('/\s+/', ' ', trim((string) $line['item'])),
+                        'quantity' => $line['qty'], 'unit' => $line['unit'], 'amount' => abs((float) ($line['amount'] ?? 0)),
+                    ];
+                }
+                continue;
+            }
+            if ($isPurchaseBill) {
+                $number = (string) $v['number'];
+                $series = TallyFileReader::series($number);
+                $party = (string) $v['party'];
+                $normalized = NameMatcher::normalize($party) ?: null;
+                // Keyed by the voucher GUID -- the "purchase number" is the SUPPLIER's bill number and repeats across
+                // suppliers and days, so it can't key the row or join the lines to their header.
+                $key = (string) ($v['guid'] ?: "{$date}|{$party}|{$number}");
+                $total = abs((float) ($v['total'] ?? array_sum(array_column($v['lines'], 'amount'))));
+                $out['purchases'][] = [
+                    'purchase_key' => $key, 'purchase_no' => $number, 'series' => $series, 'purchase_date' => $date,
+                    'party_name' => $party ?: null, 'normalized_name' => $normalized, 'amount' => $total,
+                    'extra' => array_filter(['party_gstin' => $v['party_gstin'], 'place_of_supply' => $v['place_of_supply'], 'reference' => $v['reference']]),
+                ];
+                foreach ($v['lines'] as $line) {
+                    $item = preg_replace('/\s+/', ' ', trim((string) $line['item']));
+                    $hsn = $line['hsn'];
+                    $group = ProductGroup::detect($item, $hsn);
+                    $rate = $this->gstRate($line['gst']);
+                    // Purchase inventory amounts come through negative (goods in / supplier credited) -- show the
+                    // value a person reads, positive, like the header total.
+                    $taxable = abs((float) ($line['amount'] ?? 0));
+                    $out['purchase_lines'][] = [
+                        'purchase_key' => $key, 'purchase_no' => $number, 'series' => $series, 'purchase_date' => $date,
+                        'party_name' => $party ?: null, 'normalized_name' => $normalized,
+                        'item_name' => $item, 'product_group' => $group, 'hsn' => $hsn, 'gst_rate' => $rate,
+                        'quantity' => $line['qty'], 'unit' => $line['unit'], 'rate' => $line['rate'], 'rate_unit' => $line['rate_unit'],
+                        'taxable_amount' => $taxable, 'tax_amount' => $rate !== null ? round($taxable * $rate / 100, 2) : null,
+                    ];
+                }
+                continue;
+            }
             if (!$isSalesOrder && !$isSalesBill) {
-                continue;   // journals, purchase orders, etc. -- not what this push carries
+                continue;   // journals, credit/debit notes, stock journals -- not what this push carries
             }
 
             $number = (string) $v['number'];
@@ -279,7 +401,8 @@ class TallyPushCommand extends Command
             }
         }
 
-        $out['receipts'] = $this->uniqueReceiptKeys($out['receipts']);
+        $out['receipts'] = $this->uniqueKeys($out['receipts'], 'receipt_key');
+        $out['payments'] = $this->uniqueKeys($out['payments'], 'payment_key');
 
         return $out;
     }
@@ -295,28 +418,28 @@ class TallyPushCommand extends Command
      * @param  array<int,array<string,mixed>> $receipts
      * @return array<int,array<string,mixed>>
      */
-    private function uniqueReceiptKeys(array $receipts): array
+    private function uniqueKeys(array $rows, string $keyField): array
     {
         $groups = [];
-        foreach ($receipts as $i => $r) {
-            $groups[$r['receipt_key']][] = $i;
+        foreach ($rows as $i => $r) {
+            $groups[$r[$keyField]][] = $i;
         }
         foreach ($groups as $key => $indexes) {
             if (count($indexes) < 2) {
                 continue;
             }
-            usort($indexes, fn ($a, $b) => strcmp((string) ($receipts[$a]['_guid'] ?? ''), (string) ($receipts[$b]['_guid'] ?? '')));
+            usort($indexes, fn ($a, $b) => strcmp((string) ($rows[$a]['_guid'] ?? ''), (string) ($rows[$b]['_guid'] ?? '')));
             foreach (array_slice($indexes, 1) as $n => $i) {
-                $tail = substr(preg_replace('/[^A-Za-z0-9]/', '', (string) ($receipts[$i]['_guid'] ?? '')), -12);
-                $receipts[$i]['receipt_key'] = $key . '#' . ($tail !== '' ? $tail : $n + 2);
+                $tail = substr(preg_replace('/[^A-Za-z0-9]/', '', (string) ($rows[$i]['_guid'] ?? '')), -12);
+                $rows[$i][$keyField] = $key . '#' . ($tail !== '' ? $tail : $n + 2);
             }
         }
-        foreach ($receipts as &$r) {
+        foreach ($rows as &$r) {
             unset($r['_guid']);
         }
         unset($r);
 
-        return $receipts;
+        return $rows;
     }
 
     /** @param array<string,float> $gst head => % (CGST, SGST/UTGST, IGST, Cess, State Cess) */

@@ -360,6 +360,26 @@ Route::middleware([
       Route::get('', [CrmMappingSyncController::class, 'index'])->name('index');
     });
 
+    // Tally Explorer -- browse the raw Tally data synced into HRX (purchases,
+    // purchase orders, payments, the stock-item master, the full ledger master).
+    // Same company-wide, admin/HR/accounts-only gate as Sales Sources below.
+    Route::middleware(['role_or_permission:admin|hr|accounts', 'tally.viewer', \App\Http\Middleware\RelaxSalesSourcesSqlMode::class])->prefix('tally-explorer')->name('tally-explorer.')->group(function () {
+      $tx = \App\Http\Controllers\tenant\TallyExplorerController::class;
+      Route::get('', [$tx, 'index'])->name('index');
+      Route::get('purchases', [$tx, 'purchases'])->name('purchases');
+      Route::get('purchases/detail', [$tx, 'purchaseDetail'])->name('purchases.detail');
+      Route::get('purchases/show', [$tx, 'purchaseShow'])->name('purchases.show');
+      Route::get('items/show', [$tx, 'itemShow'])->name('items.show');
+      Route::get('purchase-orders', [$tx, 'purchaseOrders'])->name('purchase-orders');
+      Route::get('payments', [$tx, 'payments'])->name('payments');
+      Route::get('stock', [$tx, 'stock'])->name('stock');
+      Route::get('ledgers', [$tx, 'ledgers'])->name('ledgers');
+      Route::get('ledgers/show', [$tx, 'ledgerShow'])->name('ledgers.show');
+      Route::get('trend', [$tx, 'trend'])->name('trend');
+      Route::get('trend/export', [$tx, 'trendExport'])->name('trend.export');
+      Route::get('trend/values', [$tx, 'trendValues'])->name('trend.values');
+    });
+
     // Sales Sources -- the manual Sales Report, Setu and the Tally daily
     // exports side by side (read-only). Company-wide sales and receivables,
     // so it is admin/HR/accounts only -- deliberately narrower than the broad

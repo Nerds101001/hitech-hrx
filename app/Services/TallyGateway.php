@@ -372,7 +372,7 @@ class TallyGateway
         return '<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>HRXLedgers</ID></HEADER><BODY><DESC>'
             . '<STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>' . $name . '</SVCURRENTCOMPANY></STATICVARIABLES>'
             . '<TDL><TDLMESSAGE><COLLECTION NAME="HRXLedgers" ISMODIFY="No"><TYPE>Ledger</TYPE>'
-            . '<FETCH>Name, Parent, CreditLimit, PartyGSTIN, IncomeTaxNumber, LedgerContact, LedgerMobile, MailingName</FETCH></COLLECTION></TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>';
+            . '<FETCH>Name, Parent, CreditLimit, PartyGSTIN, IncomeTaxNumber, LedgerContact, LedgerMobile, MailingName, ClosingBalance, LedStateName, CountryName, PinCode, Email, Address</FETCH></COLLECTION></TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>';
     }
 
     public static function stockItemsRequest(string $company): string
@@ -505,6 +505,17 @@ class TallyGateway
                 'gstin' => $na($s($l->PARTYGSTIN)), 'pan' => $na($s($l->INCOMETAXNUMBER)),
                 'contact_person' => $na($s($l->LEDGERCONTACT)), 'contact_mobile' => $na($s($l->LEDGERMOBILE)),
                 'mailing_name' => $na($s($l->MAILINGNAME)),
+                // Sign-flipped the same way credit_limit/stock value are: a debit balance (a debtor owing us) reads positive.
+                'closing_balance' => self::heldValue($s($l->CLOSINGBALANCE)),
+                'state' => $na($s($l->LEDSTATENAME)),
+                'country' => $na($s($l->COUNTRYNAME)),
+                'pincode' => $na($s($l->PINCODE)),
+                'email' => $na($s($l->EMAIL)),
+                // Address is a list of lines; join them. (xpath so the nesting Tally uses doesn't matter.)
+                'address' => (function () use ($l, $s) {
+                    $lines = array_values(array_filter(array_map($s, $l->xpath('.//ADDRESS.LIST/ADDRESS') ?: [])));
+                    return $lines ? implode(', ', $lines) : null;
+                })(),
             ];
         }
         return $out;
@@ -567,6 +578,39 @@ class TallyGateway
             }
         }
         return $out;
+    }
+
+    /**
+     * Resolve a ledger's immediate group UP the group tree to its reporting bucket. Walks to the reserved
+     * "Sundry Debtors" / "Sundry Creditors" group when the chain passes through one (this company files customers
+     * and suppliers in many sub-groups beneath them); otherwise returns the top-of-chain group. Also reports the
+     * nature so an amount's sign can be read correctly (a debtor/asset Dr balance reads positive).
+     *
+     * @param  array<string,string> $groupParent  from groupMaster()
+     * @return array{0:?string,1:bool}  [bucket group name, isLiability]
+     */
+    public static function primaryGroupOf(?string $immediate, array $groupParent): array
+    {
+        $cur = $immediate;
+        $seen = [];
+        $top = $immediate;
+        while (is_string($cur) && $cur !== '' && !isset($seen[$cur])) {
+            if ($cur === 'Sundry Debtors') {
+                return ['Sundry Debtors', false];
+            }
+            if ($cur === 'Sundry Creditors') {
+                return ['Sundry Creditors', true];
+            }
+            $seen[$cur] = true;
+            $top = $cur;
+            $parent = trim($groupParent[$cur] ?? '');
+            if ($parent === '' || strcasecmp($parent, 'Primary') === 0) {
+                break;
+            }
+            $cur = $parent;
+        }
+        $liabilities = ['Current Liabilities', 'Loans (Liability)', 'Capital Account', 'Suspense A/c', 'Branch / Divisions'];
+        return [$top, in_array($top, $liabilities, true)];
     }
 
     /** @return array<int, array<string, mixed>> see billsOutstanding() for the shape. */

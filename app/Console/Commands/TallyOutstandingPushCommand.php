@@ -23,8 +23,9 @@ use Illuminate\Support\Str;
 class TallyOutstandingPushCommand extends Command
 {
     protected $signature = 'hrx:tally-push-outstanding
+                            {--company=hitech : Which configured company to pull (config/services.php tally.companies)}
                             {--gateway-url= : Override services.tally.gateway_url}
-                            {--gateway-company= : Override services.tally.gateway_company}
+                            {--gateway-company= : Override the company name resolved from --company}
                             {--target-url= : Override tally_push.outbound.target_url}
                             {--dry-run : Pull and map only; push nothing}';
 
@@ -44,9 +45,16 @@ class TallyOutstandingPushCommand extends Command
         }
         $targetUrl = str_replace('/tally-push/sync', '/tally-push/sync-outstanding', $targetBase);
 
+        $companyCode = (string) $this->option('company');
+        $companyName = TallyPushCommand::resolveCompanyName($companyCode, $this->option('gateway-company'));
+        if ($companyName === null) {
+            $this->error("Unknown --company \"{$companyCode}\": not in config/services.php tally.companies and no --gateway-company override given.");
+            return self::FAILURE;
+        }
+
         $gateway = new TallyGateway(
             (string) ($this->option('gateway-url') ?: config('services.tally.gateway_url')),
-            (string) ($this->option('gateway-company') ?: config('services.tally.gateway_company')),
+            $companyName,
             (int) config('services.tally.gateway_timeout', 30),
         );
         try {
@@ -80,31 +88,9 @@ class TallyOutstandingPushCommand extends Command
             $this->error('Group pull failed: ' . $e->getMessage());
             return self::FAILURE;
         }
-        $resolve = function (?string $immediate) use ($groupParent): array {
-            $cur = $immediate;
-            $seen = [];
-            $top = $immediate;
-            while (is_string($cur) && $cur !== '' && !isset($seen[$cur])) {
-                if ($cur === 'Sundry Debtors') {
-                    return ['Sundry Debtors', false];       // asset-nature receivable
-                }
-                if ($cur === 'Sundry Creditors') {
-                    return ['Sundry Creditors', true];       // liability-nature payable
-                }
-                $seen[$cur] = true;
-                $top = $cur;
-                $parent = trim($groupParent[$cur] ?? '');
-                if ($parent === '' || strcasecmp($parent, 'Primary') === 0) {
-                    break;
-                }
-                $cur = $parent;
-            }
-            // Neither Sundry group in the chain: keep the top-of-chain group, classify by its known nature.
-            $liabilities = ['Current Liabilities', 'Loans (Liability)', 'Capital Account', 'Suspense A/c', 'Branch / Divisions'];
-            return [$top, in_array($top, $liabilities, true)];
-        };
+        $resolve = fn (?string $immediate): array => TallyGateway::primaryGroupOf($immediate, $groupParent);
 
-        $realCustomers = DB::table('tally_invoices')->where('is_branch_transfer', 0)
+        $realCustomers = DB::table('tally_invoices')->where('company', $companyCode)->where('is_branch_transfer', 0)
             ->whereNotNull('normalized_name')->distinct()->pluck('normalized_name')->flip();
 
         // 2. Bills (the heavy one -- the whole company's bill-wise outstanding in a single export).
@@ -170,7 +156,7 @@ class TallyOutstandingPushCommand extends Command
             return self::SUCCESS;
         }
 
-        $body = json_encode(['outstanding' => $rows], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        $body = json_encode(['company' => $companyCode, 'outstanding' => $rows], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
         $this->line(sprintf('Pushing %s of outstanding...', $this->humanBytes(strlen($body))));
         $apiKey = (string) config('tally_push.outbound.api_key');
         $secret = (string) config('tally_push.outbound.secret');
