@@ -27,9 +27,15 @@ class UserPayrollController extends Controller
             $data = $this->preparePayslipData($id);
             $html = view('tenant.users.payroll.show_ajax', $data)->render();
             return response()->json(['success' => true, 'html' => $html]);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            // \Exception alone doesn't catch \Error -- what "Call to a member
+            // function format()/getInitials() on null" actually throws since PHP 7 --
+            // so a single bad row (e.g. a payslip with a null created_at, confirmed
+            // elsewhere in this app's logs as a recurring pattern) skipped this catch
+            // entirely and surfaced as a raw, unhandled 500 instead of this friendly
+            // response. The real-cause expressions are also null-guarded below.
             \Log::error('Payslip Preview Error: ' . $e->getMessage());
-            return response()->json(['success' => false, 'message' => $e->getMessage()]);
+            return response()->json(['success' => false, 'message' => 'Unable to load this payslip. Please contact HR.']);
         }
     }
 
@@ -42,7 +48,7 @@ class UserPayrollController extends Controller
             $filename = 'payslip-' . str_replace(['/', '\\'], '-', $data['payslip']->code) . '.pdf';
             
             return $pdf->download($filename);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             \Log::error('PDF Generation Error: ' . $e->getMessage());
             return back()->with('error', 'Could not generate PDF. Please contact support.');
         }
