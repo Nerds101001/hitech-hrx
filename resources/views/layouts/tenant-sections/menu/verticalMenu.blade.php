@@ -130,6 +130,8 @@
         // "hideForRoles": links meant for one audience only (e.g. a salesperson's own pages),
         // hidden from these roles even though they pass every other gate.
         $hiddenForUser = function ($m) use ($menuUser) {
+            // An item shown only to named people ("emails"): hidden from everyone else, admins included.
+            if (isset($m->emails) && (!$menuUser || !in_array(strtolower((string) $menuUser->email), array_map('strtolower', (array) $m->emails), true))) return true;
             if (!isset($m->hideForRoles) || !$menuUser) return false;
             $ur = array_map('strtolower', $menuUser->roles->pluck('name')->toArray());
             return (bool) array_intersect($ur, array_map('strtolower', (array) $m->hideForRoles));
