@@ -14,7 +14,13 @@
       @endif
     </span>
   </a>
-  <ul class="dropdown-menu dropdown-menu-end p-0" style="min-width:320px; border-radius:14px; overflow:hidden;">
+  {{-- z-index above the mandatory-policy modal (Bootstrap's default 1055/1050 for the
+       modal/backdrop): this dropdown is the one delegate-exit control that stays
+       visible at EVERY screen width (the navbar strip below hides on phone), so it
+       must reach above that modal too or an admin on a phone with a pending policy
+       has no way back to their own account at all. Bootstrap dropdown-menu is
+       already position:absolute, so z-index alone takes effect here. --}}
+  <ul class="dropdown-menu dropdown-menu-end p-0" style="min-width:320px; border-radius:14px; overflow:hidden; z-index:1100;">
     <li>
       <div class="px-3 py-2" style="background:linear-gradient(135deg,#78350f,#b45309);">
         <div class="text-white fw-bold" style="font-size:13px;"><i class="bx bx-transfer-alt me-1"></i> Delegate Access</div>

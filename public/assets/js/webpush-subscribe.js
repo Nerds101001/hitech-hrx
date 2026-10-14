@@ -83,9 +83,19 @@
     // requiring the bell icon to be found and clicked after one dismissal.
     if (document.getElementById('hrxPushBanner')) return;
 
+    // Never on top of (or even behind, fighting for the same screen space as) the
+    // mandatory policy modal: that blocker's own acknowledge flow reloads the whole
+    // page on every single acknowledgement (see policy_enforcement.blade.php), so
+    // this banner simply gets its own fresh chance to show once no policy modal is
+    // left in the page -- no need to watch for the modal closing mid-session.
+    if (document.getElementById('forcePolicyModal')) return;
+
     const banner = document.createElement('div');
     banner.id = 'hrxPushBanner';
-    banner.style.cssText = 'position:fixed;bottom:24px;right:24px;z-index:99999;background:#fff;' +
+    // z-index kept BELOW the policy modal (1055) as a second safety even though the
+    // check above already keeps the two from appearing together: still comfortably
+    // above ordinary page content (navbar dropdowns ~1000, the sidebar 1035).
+    banner.style.cssText = 'position:fixed;bottom:24px;right:24px;z-index:1040;background:#fff;' +
       'border:1px solid #dee2e6;border-radius:16px;box-shadow:0 8px 28px rgba(0,0,0,.16);' +
       'padding:18px 20px;max-width:320px;font-family:inherit;';
     banner.innerHTML =
