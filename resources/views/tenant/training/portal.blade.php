@@ -287,7 +287,6 @@
 
     // ── Display figures (read-only; nothing here changes what unlocks) ──
     $isSelf = $user->id === auth()->id();
-    $isDone = $user->training_status === 'completed';
 
     // The compulsory phases gate the account - the hero ring is their progress,
     // the same measure as $progressPercentage and the lock banner.
@@ -295,6 +294,14 @@
     $compMods  = $phases->filter(fn($p) => in_array($p->id, $compIds, true))->flatMap(fn($p) => $p->modules);
     $compTotal = $compMods->count();
     $compDone  = $compMods->filter(fn($m) => optional($m->userProgress->first())->status === 'completed')->count();
+    // Real per-module count, never the separate training_status cache column:
+    // that flag gets set to 'completed' both as a side effect of
+    // is_training_required=false at account creation (0 modules attempted
+    // still read "Complete") and by HR's manual approval override (a
+    // partially-done account, e.g. 4 of 11, also read "Complete") - both
+    // confirmed live and silently disagreeing with $compDone/$compTotal
+    // computed right above, which is why this reads directly off them.
+    $isDone = $compTotal > 0 && $compDone >= $compTotal;
 
     // Every module, by where it stands: the cards and the donut.
     $inProgMods = 0; $failedMods = 0; $doneThisMonth = 0; $firstAt = null; $lastDoneAt = null; $events = collect();

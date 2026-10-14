@@ -22,8 +22,7 @@ class TrainingLock
             return null;
         }
         $status = $user->status instanceof \UnitEnum ? $user->status->value : $user->status;
-        if ($status !== UserAccountStatus::ONBOARDING_SUBMITTED->value
-            || !$user->is_training_required || $user->training_status === 'completed') {
+        if ($status !== UserAccountStatus::ONBOARDING_SUBMITTED->value || !$user->is_training_required) {
             return null;
         }
 
@@ -33,7 +32,17 @@ class TrainingLock
         }
         $passed = UserTrainingProgress::where('user_id', $user->id)->whereIn('module_id', $moduleIds)
             ->where('status', 'completed')->distinct('module_id')->count('module_id');
+        $total = $moduleIds->count();
 
-        return ['passed' => $passed, 'total' => $moduleIds->count()];
+        // Real count only, never training_status: that column is set to 'completed'
+        // as a side effect elsewhere (is_training_required toggled off, or HR's
+        // approveTraining() override) regardless of how many modules were actually
+        // passed, which used to hide this very banner from an account that was
+        // still genuinely held.
+        if ($passed >= $total) {
+            return null;
+        }
+
+        return ['passed' => $passed, 'total' => $total];
     }
 }
