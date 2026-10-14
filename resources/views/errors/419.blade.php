@@ -22,7 +22,7 @@
     <div class="error-glass-card animate__animated animate__fadeInUp">
       {{-- Timeout Clock Icon --}}
       <div class="mb-4 text-warning opacity-75">
-          <i class="bx bx-time-five" style="font-size: 80px;"></i>
+          <i class="bx bx-time-five error-icon-lg"></i>
       </div>
       
       <h1 class="error-h1">419</h1>
