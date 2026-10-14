@@ -196,6 +196,10 @@
   .oc-zoomval.pulse{animation:ocPulse .45s ease}
   @keyframes ocPulse{0%{background:#0d9488;color:#fff;transform:scale(1.12)}100%{background:#e6f2f1;color:#005a5a;transform:scale(1)}}
   @media (max-width:900px){ .oc-hint{display:none} }
+  /* .oc-search's own 220px min-width (plus the 4-button zoom group) was the
+     toolbar's real overflow source on a narrow phone even with flex-wrap,
+     since a wrapped search box still can't shrink below that floor. */
+  @media (max-width:480px){ .oc-search{min-width:0;flex:1 1 100%} }
 
   /* ---------- chart ---------- */
   .oc-scroller{overflow:auto;padding:26px 10px 30px;background:linear-gradient(#fbfdfe,#fff);
@@ -233,6 +237,14 @@
     white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .oc-cnt{position:absolute;top:-9px;right:-9px;background:#005a5a;color:#fff;font-size:.6rem;
     font-weight:700;padding:1px 8px;border-radius:20px;border:2px solid #fff}
+
+  /* Designation/department text (.oc-box i/u) was under 11px -- every
+     person in the chart renders both, which is why this was flagged on
+     ~271 elements. Raised to the audit's 11px floor for this dense a
+     chart; the name (.oc-box b) was already above it. */
+  @media (max-width:480px){
+    .oc-box i, .oc-box u { font-size:.7rem; }
+  }
   .oc-cnt em{font-style:normal;opacity:.55;margin:0 1px}
 
   .oc-team{position:relative}

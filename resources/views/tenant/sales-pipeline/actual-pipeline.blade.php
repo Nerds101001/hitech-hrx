@@ -96,6 +96,16 @@
         .sales-filter .form-control,
         .sales-filter .btn { height:36px; border-radius:9px; font-size:0.8rem; }
         .sales-filter .btn { display:inline-flex; align-items:center; gap:4px; }
+
+        /* This form has no phone breakpoint at all -- every field keeps its
+           hardcoded style="width:Npx" (170-200px) and just wraps at that
+           fixed width instead of stacking full-width. */
+        @media (max-width: 480px) {
+            .sales-filter .form-select,
+            .sales-filter .form-control {
+                width: 100% !important;
+            }
+        }
     </style>
     <div class="card border-0 shadow-sm rounded-3 mb-3">
         <div class="card-body py-2 px-3">

@@ -28,7 +28,13 @@
     /* One card, three flush panels: the outer wrapper owns the rounded
        corners, border and shadow; banner, type row and brand row are flush
        panels inside it, not separate boxes with gaps between them. */
-    .vault-header-card { background: white; border-radius: 16px; border: 1px solid #eef2f4; box-shadow: 0 1px 2px rgba(0,0,0,0.02); overflow: hidden; margin-bottom: 2rem; }
+    /* overflow:hidden here (for the flush-panel rounded corners) was also
+       clipping the brand dropdown's popup at the card's edge instead of
+       letting it float above the content. Round the first/last child
+       directly instead, so the parent no longer needs to clip overflow. */
+    .vault-header-card { background: white; border-radius: 16px; border: 1px solid #eef2f4; box-shadow: 0 1px 2px rgba(0,0,0,0.02); margin-bottom: 2rem; }
+    .vault-header-card > :first-child { border-radius: 16px 16px 0 0; }
+    .vault-header-card > :last-child { border-radius: 0 0 16px 16px; }
     .library-banner { background: linear-gradient(120deg, var(--hitech-primary), var(--hitech-dark)); padding: 26px 28px; color: white; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; }
     /* A global heading-color reset elsewhere applies directly to h1
        elements — inheriting .library-banner's white doesn't beat that,
@@ -45,7 +51,13 @@
        banner. Scoped, not global: only this banner needs an actual solid
        white pill. */
     .banner-btns .btn-white { background: #fff !important; color: #1e293b !important; border-color: #fff !important; }
-    .nav-row { border-top: 1px solid #eef2f4; }
+    .nav-row { border-top: 1px solid #eef2f4; flex-wrap: wrap; row-gap: 10px; }
+    .nav-row > .d-flex.align-items-center:first-child { flex-wrap: wrap; row-gap: 8px; }
+    /* Base rule had wrap only on .brand-row's own nav-filters; the type-row
+       (All Files/SDS/TDS/...) never got it, so above ~767.98px (where the
+       one existing media query stops applying) the heading + all 7 tabs
+       stayed on one unbroken line and got cut off. */
+    .nav-filters { flex-wrap: wrap; }
 
     /* Phone-only brand dropdown — hidden on desktop, where the filter-tab
        row is the real picker. */
@@ -117,12 +129,18 @@
     .product-card { background: white; border: 1px solid #eef2f4; border-radius: 16px; height: 100%; display: flex; flex-direction: column; overflow: hidden; transition: all 0.2s; position: relative; cursor: grab; }
     .product-card.dragging { opacity: 0.5; border: 2px dashed #ccc; }
     .product-card:hover { transform: translateY(-3px); box-shadow: 0 10px 24px rgba(0,0,0,0.06); border-color: #d1d9e0; }
-    .card-main-content { padding: 20px 16px 14px; flex-grow: 1; }
+    /* Reserve the top-right corner (badge width + clearance) so the title
+       never runs underneath it; .product-title-area had no CSS of its own
+       at all (only the markup's .overflow-hidden utility), so the flex
+       item sized to its text content instead of being bounded, and
+       text-truncate had nothing to truncate against. */
+    .card-main-content { padding: 20px 86px 14px 16px; flex-grow: 1; }
     .product-header { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 14px; }
     .product-icon-box { width: 38px; height: 38px; flex-shrink: 0; background: #fff8f8; border: 1px solid #ffebee; border-radius: 9px; display: flex; align-items: center; justify-content: center; }
+    .product-title-area { flex: 1; min-width: 0; }
     .product-title { font-weight: 800; color: #333; font-size: 0.88rem; margin-bottom: 3px; line-height: 1.25; }
     .product-subtitle { font-size: 0.68rem; color: #aaa; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; }
-    .card-top-badge { position: absolute; right: 13px; top: 13px; font-size: 0.6rem; font-weight: 900; color: var(--hitech-primary); background: var(--hitech-primary-light); padding: 3px 10px; border-radius: 6px; z-index: 1; letter-spacing: 0.6px; }
+    .card-top-badge { position: absolute; right: 13px; top: 13px; max-width: 70px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.6rem; font-weight: 900; color: var(--hitech-primary); background: var(--hitech-primary-light); padding: 3px 10px; border-radius: 6px; z-index: 1; letter-spacing: 0.6px; }
     .card-summary { font-size: 0.72rem; color: #666; line-height: 1.55; margin: 0 0 14px; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; font-style: italic; min-height: 68px; }
     .action-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
     .action-btn { border: 1px solid #f0f2f5; border-radius: 9px; padding: 8px 2px; text-align: center; text-decoration: none; transition: all 0.2s; display: flex; flex-direction: column; align-items: center; gap: 3px; }

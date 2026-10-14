@@ -205,6 +205,16 @@
   .usp-role-strip { flex-direction: column; }
   .usp-role-plus { justify-content: center; }
 }
+
+/* These badge/meta/sub-label classes repeat per permission row/module --
+   the main source of the 294 sub-12px elements flagged on this page. */
+@media (max-width: 480px) {
+  .usp-emp-role, .usp-role-kicker, .usp-role-sub, .usp-src,
+  .usp-state-pill, .usp-source-badge, .usp-tag, .usp-headline-sub,
+  .usp-eff-meta, .usp-eff-badge, .usp-recon-table thead th {
+    font-size: .75rem;
+  }
+}
 </style>
 
 <div class="usp-page">

@@ -45,7 +45,7 @@
          which year) stays visible, while every action collapses into a single
          menu. A manager previously saw up to eight controls side by side, which
          wrapped onto a second line and pushed into the page title. --}}
-    <div class="d-flex gap-2 align-items-center sp-toolbar">
+    <div class="d-flex gap-2 align-items-center flex-wrap sp-toolbar">
 
         {{-- ── View context ────────────────────────────────────────────── --}}
         @include('tenant.partials.manager-view-switch', ['mvRoute' => 'sales-visits.pipeline.index', 'mvMemberParam' => 'sp'])
@@ -218,7 +218,21 @@
             .sales-filter > [name="per"] { flex-grow:.85; }
             .sales-filter > .btn { flex:0 0 auto; }
         }
-    
+
+        /* Below 1200px every field reverts to its hardcoded style="width:
+           Npx" (200/130/190/180/150/180/200/105px) and just wraps at that
+           fixed size instead of stacking -- on phone that's still 9 fields
+           individually too narrow to use comfortably. Force full-width. */
+        @media (max-width: 480px) {
+            .sales-filter > .form-select,
+            .sales-filter > .form-control,
+            .sales-filter > select,
+            .sales-filter > input {
+                width: 100% !important;
+                flex: 1 1 100%;
+            }
+        }
+
 /* A negative sale is a credit note, not a typo - show it red so it reads as
    money going the other way, and name it on hover. */
 .excel-input.is-credit-note, .is-credit-note { color: #dc3545 !important; font-weight: 600; }

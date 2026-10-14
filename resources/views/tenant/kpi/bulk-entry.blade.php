@@ -27,7 +27,11 @@
     .kpi-chip input:checked + span { background:#0f766e; border-color:#0f766e; color:#fff; }
     .kpi-chip span:hover { border-color:#0f766e; }
 
-    table.bk { width:100%; border-collapse:collapse; font-size:13px; }
+    /* width:100% forced every KPI column to squeeze rather than scroll, which
+       is what caused elements to run past the right edge once there were
+       more than a couple of KPI columns selected -- min-content lets the
+       table grow to its real width and the wrapper below scrolls it. */
+    table.bk { width:100%; min-width:max-content; border-collapse:collapse; font-size:13px; }
     table.bk thead th { background:#0f2848; color:#fff; font-weight:600; font-size:11.5px; text-align:left;
         padding:9px 12px; position:sticky; top:0; z-index:2; white-space:nowrap; }
     table.bk thead th.kpi-col { text-align:center; background:#0f766e; }
@@ -40,6 +44,26 @@
     .bk-cell.filled input { background:#f0fdf4; border-color:#86efac; }
     .bk-na { color:#cbd5e1; font-size:11px; }
     .bk-empty { padding:36px; text-align:center; color:#94a3b8; }
+
+    /* Employee column stays visible while scrolling through KPI columns,
+       matching the sticky-column convention already used on /attendance's
+       Monthly Registry table. */
+    table.bk thead th:nth-child(2),
+    table.bk tbody td:nth-child(2) {
+        position: sticky; left: 0; z-index: 1; background: #fff;
+    }
+    table.bk thead th:nth-child(2) { z-index: 3; background: #0f2848; }
+
+    @media (max-width: 480px) {
+        /* The 33 reported tiny inputs were a fixed 96px width with the
+           Bootstrap form-control-sm density baked in at every breakpoint --
+           no min-height/font-size/padding override existed for touch. */
+        .bk-cell input {
+            min-height: 48px;
+            font-size: 1rem;
+            padding: 6px 8px;
+        }
+    }
 </style>
 
 <div class="bk-page">
@@ -131,7 +155,7 @@
                 <input type="hidden" name="templates[]" value="{{ $tid }}">
             @endforeach
 
-            <div style="max-height:62vh; overflow:auto;">
+            <div style="max-height:62vh; overflow:auto;" class="table-responsive">
                 <table class="bk">
                     <thead>
                         <tr>

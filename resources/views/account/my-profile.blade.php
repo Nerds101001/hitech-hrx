@@ -32,6 +32,14 @@
     @vite(['resources/assets/vendor/scss/pages/page-user-view.scss', 'resources/assets/css/employee-view.css', 'resources/assets/vendor/scss/pages/hitech-portal.scss'])
 
     <style>
+        /* 62 of the ~65 under-12px inline font-size occurrences on this page
+           share the .smallest class (field-box labels, badges) -- an inline
+           style always beats a class selector, so only !important here
+           overrides it without touching every individual element. */
+        @media (max-width: 480px) {
+            .smallest { font-size: 11px !important; }
+        }
+
         /* =================== TAB NAVIGATION =================== */
         .rosemary-nav-tabs-wrapper {
             background-color: #F8FAFC;

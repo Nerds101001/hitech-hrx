@@ -56,6 +56,13 @@
              display:inline-flex; align-items:center; justify-content:center;
              color:#0f766e; background:#fff; transition:all .15s; }
   .al-view:hover { background:#0d7377; border-color:#0d7377; color:#fff; }
+
+  /* These repeat per log row -- the 70 sub-12px elements flagged here. */
+  @media (max-width: 480px) {
+    .al-stat .lbl, .al-table thead th, .al-mail, .al-ev, .al-chip {
+      font-size: .75rem;
+    }
+  }
 </style>
 
 <div class="container-fluid py-4">

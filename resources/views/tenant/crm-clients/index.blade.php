@@ -125,6 +125,18 @@
         margin-top: 0.5rem;
     }
     .sync-log p { margin-bottom: 2px; }
+
+    /* These plus the per-row inline 0.55-0.7rem spans (header, role badge,
+       avatar initials) account for the 152 sub-12px elements flagged here. */
+    @media (max-width: 480px) {
+        .stage-badge, .role-pill, .emp-avatar,
+        [style*="font-size:0.55rem"], [style*="font-size: 0.55rem"],
+        [style*="font-size:0.6rem"], [style*="font-size: 0.6rem"],
+        [style*="font-size:0.65rem"], [style*="font-size: 0.65rem"],
+        [style*="font-size:0.7rem"], [style*="font-size: 0.7rem"] {
+            font-size: .75rem !important;
+        }
+    }
 </style>
 @endsection
 

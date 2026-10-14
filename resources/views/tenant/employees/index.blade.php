@@ -546,7 +546,7 @@
                     default => 'bg-info text-dark'
                 };
               @endphp
-              <span class="badge {{ $statusClass }} rounded-pill px-3 py-1 shadow-xs fw-bold" style="font-size: 0.6rem; letter-spacing: 0.03em;">{{ $displayLabel }}</span>
+              <span class="badge {{ $statusClass }} rounded-pill px-3 py-1 shadow-xs fw-bold" style="font-size: 0.75rem; letter-spacing: 0.03em;">{{ $displayLabel }}</span>
             </div>
 
             {{-- Avatar Section (Centered) --}}
@@ -868,7 +868,7 @@
         ? '<div class="bg-success bg-opacity-10 text-success rounded-circle d-flex align-items-center justify-content-center mx-auto" style="width: 32px; height: 32px;"><i class="bx bx-check fs-5"></i></div>' 
         : '<div class="bg-danger bg-opacity-10 text-danger rounded-circle d-flex align-items-center justify-content-center mx-auto" style="width: 32px; height: 32px;"><i class="bx bx-error fs-5"></i></div>';
 
-      const errorTags = item.errors.map(err => `<span class="badge bg-danger rounded-pill me-1" style="font-size: 0.65rem;">${err}</span>`).join('');
+      const errorTags = item.errors.map(err => `<span class="badge bg-danger rounded-pill me-1" style="font-size: 0.75rem;">${err}</span>`).join('');
 
       row.innerHTML = `
         <td class="ps-8 text-center">${statusIcon}</td>

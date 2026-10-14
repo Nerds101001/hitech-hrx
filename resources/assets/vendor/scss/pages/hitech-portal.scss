@@ -1920,6 +1920,17 @@ div.dtr-modal div.dtr-modal-content {
     padding: 0 !important;
 }
 
+/* .btn-icon is shared app-wide (e.g. the per-row delete icon on Sales
+   Report/Pipeline, hundreds of rows each) at a fixed 36x36px -- under the
+   48px tap-target floor. Phone-only, so desktop's denser row height is
+   untouched everywhere else this class is already used. */
+@media (max-width: 480px) {
+    .btn-icon {
+        width: 48px !important;
+        height: 48px !important;
+    }
+}
+
 .form-control-hitech, .hitech-input, .form-control {
     border-radius: 15px !important;
     padding: 0.75rem 1.25rem !important;
@@ -4831,6 +4842,25 @@ input:checked + .ios-slider:before { transform: translateX(28px) !important; }
     margin: 0;
 
     > .table { margin-bottom: 0; }
+}
+
+/* Scroll-hint shadow: app-wide, every .table-responsive gets this, not just
+   one page. Several phone-width audits flagged a column (e.g. Status)
+   "hidden" with no visual cue that the table scrolls further right --
+   a plain overflow-x:auto box gives no indication content continues past
+   the edge. Classic two-gradient trick: an opaque fade that only shows
+   while there's more to scroll (local background scrolls with content,
+   so it disappears once you reach that edge), plus a thin shadow that
+   always sits at the edge (scroll background, fixed relative to the box). */
+.table-responsive {
+    background:
+        linear-gradient(to right, var(--bs-body-bg, #fff) 0%, rgba(255,255,255,0) 100%) left center,
+        linear-gradient(to left, var(--bs-body-bg, #fff) 0%, rgba(255,255,255,0) 100%) right center,
+        linear-gradient(to right, rgba(0,0,0,.1), rgba(0,0,0,0)) left center,
+        linear-gradient(to left, rgba(0,0,0,.1), rgba(0,0,0,0)) right center;
+    background-repeat: no-repeat;
+    background-size: 20px 100%, 20px 100%, 10px 100%, 10px 100%;
+    background-attachment: local, local, scroll, scroll;
 }
 
 /* Toolbar directly above a table inside a card: search + count + action */

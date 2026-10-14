@@ -115,6 +115,17 @@
     font-size: 0.78rem;
     color: #8A90A2;
   }
+
+  /* The capacity-footer text and status badge are inline style="font-size:
+     0.65rem" (~10.4px) with no class to target -- !important on the same
+     property, scoped by the ancestor the table itself already uses, is
+     enough to win over an inline style without !important. */
+  @media (max-width: 480px) {
+    [style*="font-size: 0.65rem"],
+    [style*="font-size:0.65rem"] {
+      font-size: 11px !important;
+    }
+  }
 </style>
 @endsection
 

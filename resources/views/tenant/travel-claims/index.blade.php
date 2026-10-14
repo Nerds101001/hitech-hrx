@@ -13,6 +13,11 @@
     font-size: .7rem; text-transform: uppercase; letter-spacing: .04em;
     font-weight: 700; color: #64748b; white-space: nowrap;
 }
+@media (max-width: 480px) {
+    .tc-h { font-size: .75rem; }
+    /* The 10-column header text is already above 11px except the badge
+       below, which is the actual sub-12px offender on this page. */
+}
 table.table > thead > tr > th { padding: .6rem; }
 table.table > tbody > tr > td { vertical-align: middle; font-size: .86rem; padding: .55rem .6rem; }
 table.table > tbody > tr:hover { background: #f1f5f9; }
@@ -127,7 +132,7 @@ table.table > thead > tr > th { background: #f8fafc; border-bottom: 1px solid #e
                                 {{-- A total with no day-rows behind it means the lines were lost.
                                      Say so, rather than showing money that opens to an empty grid. --}}
                                 @if($claim->total_amount > 0 && $claim->items->isEmpty())
-                                    <div><span class="badge bg-label-danger mt-1" style="font-size:.62rem;"
+                                    <div><span class="badge bg-label-danger mt-1" style="font-size:.75rem;"
                                           title="This claim has a total but no daily rows - the entries need filling in again.">
                                         <i class="bx bx-error"></i> lines missing</span></div>
                                 @endif

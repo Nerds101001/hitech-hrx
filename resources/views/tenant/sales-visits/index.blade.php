@@ -169,7 +169,7 @@
 
   {{-- ===== Hero Header ===== --}}
   <div class="sv-hero mb-4">
-    <div class="d-flex justify-content-between align-items-center" style="position:relative; z-index:2;">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2" style="position:relative; z-index:2;">
       <div>
         <h1 class="sv-hero-title">📍 Sales Field Visits & Trials</h1>
         <p class="sv-hero-subtitle">Track, schedule and manage all client visits, product trials and service calls in one place.</p>

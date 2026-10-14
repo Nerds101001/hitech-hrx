@@ -9,7 +9,7 @@
 }
 .kb-page{padding:20px 24px;}
 .kb-topbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:20px;}
-.kb-page-title{font-size:1.35rem;font-weight:800;color:var(--sc-navy);margin:0;flex:1;}
+.kb-page-title{font-size:1.35rem;font-weight:800;color:var(--sc-navy);margin:0;flex:1;min-width:0;}
 
 /* Card */
 .kb-card{background:#fff;border-radius:12px;box-shadow:0 2px 12px rgba(0,0,0,.09);margin-bottom:32px;overflow:hidden;}
@@ -72,6 +72,29 @@ td.tc input{width:100%;border:none;background:transparent;text-align:right;font-
 td.ac{text-align:right;padding-right:8px!important;font-size:11.5px;color:#374151;}
 
 tr.kpi-gap td{height:4px;background:#f8fafc;border:none;}
+
+/* Measured: the title wrapped to 3 lines because it shared one unwrapped
+   flex row with the Fill/Import Targets buttons (and, for managers, a
+   member picker) with no min-width floor -- it kept shrinking instead of
+   those controls dropping to their own line. Give it the row to itself on
+   phone. Also: ~4,000 table cells inherited an 11.5px/10.5px baseline with
+   no phone override anywhere in this file -- raised to a readable 14px/
+   13px floor here rather than redesigning to one-card-at-a-time. */
+@media (max-width: 480px) {
+    .kb-page-title { flex: 1 1 100%; }
+    table.kb-table,
+    table.kb-table th,
+    table.kb-table th.kpi-h,
+    .rl,
+    td.sb,
+    td.tc input,
+    td.ac {
+        font-size: 13px;
+    }
+    table.kb-table th {
+        font-size: 12px;
+    }
+}
 /* Target achievement backgrounds (actual vs that target) */
 td.ach-green{background:#dcfce7!important;}
 td.ach-yellow{background:#fef9c3!important;}

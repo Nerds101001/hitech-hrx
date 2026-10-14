@@ -75,6 +75,20 @@ td.v input, td.v-ann input, td.v-qtr input {
 }
 td.v input:focus, td.v-ann input:focus, td.v-qtr input:focus { background:#fef9c3; }
 
+/* The scroll wrapper and sticky name/label columns already exist here; what
+   was missing was readable sizing -- every value cell was capped at
+   58-88px wide with 11.5px/10px text and no phone override, well under a
+   48px tap target for all ~5,100 inputs. */
+@media (max-width: 480px) {
+    td.v, td.v-qtr { min-width:60px; }
+    td.v-ann { min-width:76px; }
+    td.v input, td.v-ann input, td.v-qtr input {
+        min-height:48px; font-size:14px;
+    }
+    td.td-lbl { font-size:12px; }
+    td.td-sp { font-size:13px; }
+}
+
 /* filled state */
 td.filled       { background:#f0fdf4; }
 td.filled input { color:#166534; font-weight:600; }
