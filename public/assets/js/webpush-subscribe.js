@@ -77,57 +77,103 @@
     return Notification.permission; // 'default' | 'granted' | 'denied'
   }
 
+  var DISMISS_KEY = 'hrx_push_banner_dismissed_until';
+  var DISMISS_DAYS = 30;
+  var BODY_PAD_CLASS = 'hrx-push-banner-open';
+
+  /** Was "Not now" clicked within the last DISMISS_DAYS? Fails open (shows the
+   *  banner) if localStorage is unavailable (private browsing, blocked, etc.) --
+   *  the banner itself is not essential, so "ask again" is the safe default. */
+  function recentlyDismissed() {
+    try {
+      var until = parseInt(localStorage.getItem(DISMISS_KEY) || '0', 10);
+      return until > Date.now();
+    } catch (e) {
+      return false;
+    }
+  }
+  function rememberDismissal() {
+    try {
+      localStorage.setItem(DISMISS_KEY, String(Date.now() + DISMISS_DAYS * 24 * 60 * 60 * 1000));
+    } catch (e) { /* storage unavailable: just doesn't persist this time */ }
+  }
+
   function showBanner(vapidPublicKey, csrfToken) {
-    // Deliberately no "remember dismissal" -- this asks again on every page
-    // load/login as long as permission is still undecided, rather than
-    // requiring the bell icon to be found and clicked after one dismissal.
-    if (document.getElementById('hrxPushBanner')) return;
+    // Remembered for 30 days once dismissed, not asked again on every single
+    // page load -- still short enough that someone who changes their mind
+    // gets asked again on their own, without needing to go find the bell icon.
+    if (document.getElementById('hrxPushBanner') || recentlyDismissed()) return;
 
-    // Never on top of (or even behind, fighting for the same screen space as) the
-    // mandatory policy modal: that blocker's own acknowledge flow reloads the whole
-    // page on every single acknowledgement (see policy_enforcement.blade.php), so
-    // this banner simply gets its own fresh chance to show once no policy modal is
-    // left in the page -- no need to watch for the modal closing mid-session.
-    if (document.getElementById('forcePolicyModal')) return;
+    // Never on top of (or even behind, fighting for the same screen space as) ANY
+    // open modal, not just the mandatory policy one -- any Bootstrap modal in this
+    // app carries the 'show' class while visible.
+    if (document.querySelector('.modal.show')) return;
 
-    const banner = document.createElement('div');
+    var isPhone = window.matchMedia('(max-width: 480px)').matches;
+
+    var banner = document.createElement('div');
     banner.id = 'hrxPushBanner';
-    // z-index kept BELOW the policy modal (1055) as a second safety even though the
-    // check above already keeps the two from appearing together: still comfortably
-    // above ordinary page content (navbar dropdowns ~1000, the sidebar 1035).
-    banner.style.cssText = 'position:fixed;bottom:24px;right:24px;z-index:1040;background:#fff;' +
-      'border:1px solid #dee2e6;border-radius:16px;box-shadow:0 8px 28px rgba(0,0,0,.16);' +
-      'padding:18px 20px;max-width:320px;font-family:inherit;';
-    banner.innerHTML =
-      '<div style="display:flex;align-items:flex-start;gap:12px;">' +
-        '<div style="flex-shrink:0;width:38px;height:38px;border-radius:10px;background:#f0fdfb;' +
-             'display:flex;align-items:center;justify-content:center;">' +
-          '<i class="bx bx-bell-plus" style="font-size:20px;color:#005a5a;"></i>' +
-        '</div>' +
-        '<div style="flex:1;min-width:0;">' +
-          '<div style="font-weight:700;font-size:14px;color:#1e293b;">Stay notified</div>' +
-          '<div style="font-size:12.5px;color:#64748b;margin:4px 0 12px;line-height:1.4;">' +
-            'Get instant browser alerts for new tasks and approvals -- even when HRX isn\'t open.' +
+    // z-index kept BELOW every modal (1050/1055 in this app's Bootstrap) as a second
+    // safety even though the check above already keeps them from appearing
+    // together: still comfortably above ordinary page content (navbar dropdowns
+    // ~1000, the sidebar 1035).
+    var baseStyle = 'position:fixed;z-index:1040;background:#fff;border:1px solid #dee2e6;' +
+      'box-shadow:0 8px 28px rgba(0,0,0,.16);font-family:inherit;box-sizing:border-box;';
+    banner.style.cssText = isPhone
+      // A slim, <=64px strip pinned to the bottom edge on a phone, not the same
+      // floating card shrunk down -- the card's own padding/icon/two-line copy
+      // made it taller and narrower-feeling than a banner should be on a phone.
+      ? baseStyle + 'left:0;right:0;bottom:0;border-radius:0;padding:8px 12px;' +
+        'padding-bottom:calc(8px + env(safe-area-inset-bottom, 0px));'
+      : baseStyle + 'bottom:24px;right:24px;border-radius:16px;padding:18px 20px;max-width:320px;';
+
+    banner.innerHTML = isPhone
+      ? '<div style="display:flex;align-items:center;gap:10px;">' +
+          '<i class="bx bx-bell-plus" style="font-size:22px;color:#005a5a;flex-shrink:0;"></i>' +
+          '<div style="flex:1;min-width:0;font-size:12.5px;font-weight:700;color:#1e293b;">Stay notified</div>' +
+          '<button id="hrxPushBannerEnable" style="min-height:48px;min-width:48px;background:linear-gradient(135deg,#005a5a,#008080);' +
+            'color:#fff;border:none;border-radius:999px;padding:0 16px;font-size:12.5px;font-weight:700;flex-shrink:0;">Enable</button>' +
+          '<button id="hrxPushBannerDismiss" aria-label="Dismiss" style="min-height:48px;min-width:48px;background:transparent;' +
+            'color:#94a3b8;border:none;font-size:20px;flex-shrink:0;">&times;</button>' +
+        '</div>'
+      : '<div style="display:flex;align-items:flex-start;gap:12px;">' +
+          '<div style="flex-shrink:0;width:38px;height:38px;border-radius:10px;background:#f0fdfb;' +
+               'display:flex;align-items:center;justify-content:center;">' +
+            '<i class="bx bx-bell-plus" style="font-size:20px;color:#005a5a;"></i>' +
           '</div>' +
-          '<div style="display:flex;gap:8px;">' +
-            '<button id="hrxPushBannerEnable" style="background:linear-gradient(135deg,#005a5a,#008080);' +
-              'color:#fff;border:none;border-radius:50px;padding:7px 18px;font-size:12.5px;font-weight:700;cursor:pointer;">' +
-              'Enable</button>' +
-            '<button id="hrxPushBannerDismiss" style="background:transparent;color:#94a3b8;border:none;' +
-              'font-size:12.5px;cursor:pointer;">Not now</button>' +
+          '<div style="flex:1;min-width:0;">' +
+            '<div style="font-weight:700;font-size:14px;color:#1e293b;">Stay notified</div>' +
+            '<div style="font-size:12.5px;color:#64748b;margin:4px 0 12px;line-height:1.4;">' +
+              'Get instant browser alerts for new tasks and approvals -- even when HRX isn\'t open.' +
+            '</div>' +
+            '<div style="display:flex;gap:8px;">' +
+              '<button id="hrxPushBannerEnable" style="min-height:44px;background:linear-gradient(135deg,#005a5a,#008080);' +
+                'color:#fff;border:none;border-radius:50px;padding:7px 18px;font-size:12.5px;font-weight:700;cursor:pointer;">' +
+                'Enable</button>' +
+              '<button id="hrxPushBannerDismiss" style="min-height:44px;background:transparent;color:#94a3b8;border:none;' +
+                'font-size:12.5px;cursor:pointer;">Not now</button>' +
+            '</div>' +
           '</div>' +
-        '</div>' +
-      '</div>';
+        '</div>';
     document.body.appendChild(banner);
+    // Reserve space at the bottom of the page so this fixed banner never sits on
+    // top of (and hides) whatever's already at the bottom of the viewport.
+    document.body.classList.add(BODY_PAD_CLASS);
+
+    function close() {
+      banner.remove();
+      document.body.classList.remove(BODY_PAD_CLASS);
+    }
 
     document.getElementById('hrxPushBannerDismiss').addEventListener('click', function () {
-      banner.remove();
+      rememberDismissal();
+      close();
     });
     document.getElementById('hrxPushBannerEnable').addEventListener('click', function () {
-      const btn = document.getElementById('hrxPushBannerEnable');
+      var btn = document.getElementById('hrxPushBannerEnable');
       btn.textContent = 'Enabling...';
       subscribe(vapidPublicKey, csrfToken).then(function () {
-        banner.remove();
+        close();
       }).catch(function (err) {
         alert('Could not enable notifications: ' + err.message);
         btn.textContent = 'Enable';

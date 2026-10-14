@@ -203,16 +203,13 @@ class PolicyEnforcementMobileTest extends TestCase
 
     public function test_the_push_notification_banner_defers_while_a_policy_is_pending(): void
     {
-        // Can't execute the browser JS from PHPUnit, so this asserts on the actual source
-        // that ships to the browser -- the static file under public/, not a copy of it.
+        // The check is now "any open modal" (see PushBannerGlobalRulesTest for the full
+        // coverage of that generalisation) -- #forcePolicyModal, carrying Bootstrap's
+        // 'show' class while visible, is one instance of that general rule.
         $js = file_get_contents(public_path('assets/js/webpush-subscribe.js'));
 
         $this->assertNotFalse($js, 'the live webpush-subscribe.js file must exist and be readable');
-        $this->assertMatchesRegularExpression(
-            "/if\s*\(document\.getElementById\('forcePolicyModal'\)\)\s*return;/",
-            $js,
-            'showBanner() must bail out while the mandatory-policy modal exists in the page'
-        );
+        $this->assertStringContainsString("document.querySelector('.modal.show')", $js, "showBanner() must bail out while any modal, including the policy one, is open");
         $this->assertStringContainsString('z-index:1040', $js, 'banner z-index kept below the modal as a second safety');
         $this->assertStringNotContainsString('z-index:99999', $js);
     }
