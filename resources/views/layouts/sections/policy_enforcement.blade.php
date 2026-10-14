@@ -8,9 +8,9 @@
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
     <div class="modal fade" id="forcePolicyModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1">
-        <div class="modal-dialog modal-xl modal-dialog-centered">
-            <div class="modal-content" style="height: 85vh;">
-                <div class="modal-header bg-danger">
+        <div class="modal-dialog modal-xl modal-dialog-centered policy-modal-dialog">
+            <div class="modal-content policy-modal-content">
+                <div class="modal-header bg-danger policy-modal-header">
                     <h5 class="modal-title text-white">
                         <i class="bx bx-error-circle me-2"></i> Mandatory Company Policy
                     </h5>
@@ -19,17 +19,27 @@
                     </div>
                 </div>
                 <div class="modal-body p-0 d-flex flex-column">
-                    <div class="p-3 bg-lighter border-bottom">
+                    <div class="p-3 bg-lighter border-bottom policy-modal-desc">
                         <strong>{{ $currentPolicy->title }}</strong>: Please scroll through and read the policy below. You must acknowledge it to proceed.
+                        <a id="policyOpenNewTab" href="#" target="_blank" rel="noopener" class="d-none d-md-inline ms-2">
+                            <i class="bx bx-link-external"></i> Open in a new tab
+                        </a>
                     </div>
-                    
+
                     <!-- PDF Viewer -->
-                    <div class="flex-grow-1 bg-dark">
+                    <div class="flex-grow-1 bg-dark policy-modal-viewer">
                         <iframe id="policyIframe" src="" width="100%" height="100%" style="border: none;"></iframe>
                     </div>
 
+                    <!-- Mobile fallback: a direct link, since some phone browsers refuse to show a PDF inside an iframe at all -->
+                    <div class="d-md-none text-center p-2 border-top" id="policyMobileOpenWrap">
+                        <a id="policyMobileOpen" href="#" target="_blank" rel="noopener" class="btn btn-outline-primary btn-sm">
+                            <i class="bx bx-link-external me-1"></i> Can't see the document? Open it in a new tab
+                        </a>
+                    </div>
+
                     <!-- Footer Controls -->
-                    <div class="p-3 bg-white border-top">
+                    <div class="p-3 bg-white border-top policy-modal-footer">
                         <div class="form-check mb-3">
                             <input class="form-check-input" type="checkbox" id="forceConfirmCheckbox">
                             <label class="form-check-label fw-bold" for="forceConfirmCheckbox">
@@ -80,11 +90,22 @@
 
             modal.show();
 
-            // Load PDF URL
+            // Load PDF URL. Phone browsers (Android Chrome chief among them) have no
+            // built-in PDF renderer for an iframe pointed straight at a PDF: instead of
+            // the document they show a bare "PDF / Open" card with nothing readable
+            // behind it -- which is what was reported. Desktop Chrome/Firefox/Edge DO
+            // render a direct PDF link fine, so only phones are routed through Google's
+            // viewer wrapper, which renders the pages as images inside the iframe.
+            const isNarrow = window.matchMedia('(max-width: 767px)').matches;
             fetch(`/hr-policies/embed-url/${policyId}`)
                 .then(response => response.json())
                 .then(data => {
-                    if(data.url) iframe.src = data.url;
+                    if (!data.url) return;
+                    document.getElementById('policyOpenNewTab').href = data.url;
+                    document.getElementById('policyMobileOpen').href = data.url;
+                    iframe.src = isNarrow
+                        ? 'https://docs.google.com/gview?embedded=true&url=' + encodeURIComponent(data.url)
+                        : data.url;
                 });
 
             checkbox.addEventListener('change', function() {
@@ -127,6 +148,48 @@
         .modal-xl { max-width: 80% !important; }
         @media (min-width: 1200px) {
             .modal-xl { max-width: 70% !important; }
+        }
+        /* Phones: the modal must fit the viewport edge-to-edge, with the PDF
+           getting almost all of the height -- the header/description/footer
+           chrome below used fixed desktop padding that left barely any room
+           for the document itself, and .modal-xl's % based max-width did
+           nothing once Bootstrap's own mobile margin rules took over. */
+        @media (max-width: 767.98px) {
+            #forcePolicyModal .policy-modal-dialog {
+                max-width: 100% !important;
+                width: 100%;
+                height: 100%;
+                margin: 0;
+            }
+            #forcePolicyModal .policy-modal-content {
+                height: 100vh;
+                height: 100dvh; /* actual visible height once the browser's own address-bar chrome is excluded */
+                border-radius: 0;
+            }
+            /* The real bug: .modal-content clips its own rounded corners (overflow:
+               hidden), so once it was pinned to a fixed height anything its flex
+               children overflowed -- the checkbox, the acknowledge button -- was
+               simply cut off with no scrollbar and no way to reach it. .modal-body
+               must scroll on its own, and as a flex *child* it needs min-height: 0
+               or it refuses to shrink below its content and overflow-y never
+               kicks in (the standard flexbox trap). The iframe also had height:
+               100% of a flex-grow parent -- an undefined height once that parent
+               can scroll -- so it gets a real, fixed height instead. */
+            #forcePolicyModal .modal-body {
+                min-height: 0;
+                overflow-y: auto;
+                -webkit-overflow-scrolling: touch;
+            }
+            #forcePolicyModal .policy-modal-viewer {
+                flex: 0 0 55vh;
+                min-height: 280px;
+            }
+            #forcePolicyModal .policy-modal-header { padding: .75rem 1rem; }
+            #forcePolicyModal .policy-modal-header .modal-title { font-size: 1rem; }
+            #forcePolicyModal .policy-modal-desc { padding: .5rem .75rem !important; font-size: .8125rem; }
+            #forcePolicyModal .policy-modal-footer { padding: .75rem !important; }
+            #forcePolicyModal .policy-modal-footer .form-check-label { font-size: .8125rem; }
+            #forcePolicyModal #forceSignBtn { padding-top: .6rem; padding-bottom: .6rem; font-size: .875rem; }
         }
     </style>
 @endif
