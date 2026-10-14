@@ -61,15 +61,29 @@
     if (typeof $.fn !== 'undefined' && typeof $.fn.dataTable !== 'undefined') {
         $.fn.dataTable.ext.errMode = 'none';
         $(document).on('error.dt', function (e, settings, techNote, message) {
-            if (typeof Swal !== 'undefined') {
+            // This used to fire "Secure Session Expired" for literally ANY AJAX
+            // failure -- a 404 from a routing bug, a genuine 500, a network
+            // blip, all got the same false "your session timed out" message,
+            // which sent people chasing a session/CSRF problem that didn't
+            // exist (confirmed case: my-assets' getListAjax 404ing into a
+            // catch-all route). Only an actual 401/419 IS a session/CSRF
+            // expiry; everything else gets its own honest message and a
+            // retry that reloads just the table, not the whole page.
+            var status = settings && settings.jqXHR ? settings.jqXHR.status : null;
+            var isSessionExpiry = status === 401 || status === 419;
+
+            if (typeof Swal === 'undefined') {
+                console.warn('DataTables Error:', message);
+                return;
+            }
+
+            if (isSessionExpiry) {
                 Swal.fire({
                     icon: 'warning',
                     title: 'Secure Session Expired',
                     text: 'Your connection has timed out. Please reload to generate a new security token.',
                     confirmButtonText: '<i class="bx bx-refresh"></i> Reload Session',
-                    customClass: {
-                        confirmButton: 'btn btn-primary shadow-sm'
-                    },
+                    customClass: { confirmButton: 'btn btn-primary shadow-sm' },
                     buttonsStyling: false
                 }).then((result) => {
                     if (result.isConfirmed) {
@@ -77,7 +91,23 @@
                     }
                 });
             } else {
-                console.warn('DataTables Error:', message);
+                console.warn('DataTables Error:', status, message);
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Could not load this data',
+                    text: 'Something went wrong loading this table. You can try again, or contact support if it keeps happening.',
+                    confirmButtonText: '<i class="bx bx-refresh"></i> Try again',
+                    customClass: { confirmButton: 'btn btn-primary shadow-sm' },
+                    buttonsStyling: false
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        try {
+                            new $.fn.dataTable.Api(settings).ajax.reload(null, false);
+                        } catch (err) {
+                            window.location.reload();
+                        }
+                    }
+                });
             }
         });
     }

@@ -40,7 +40,12 @@ class MyAssetsController extends Controller
 
     public function show($id)
     {
-        $asset = \App\Models\Asset::with(['category', 'assignedUser', 'maintenanceRecords'])
+        // 'maintenanceRecords' is NOT eager-loaded: Asset::maintenanceRecords() is
+        // commented out in the model (no AssetMaintenance model or table exists in
+        // this codebase), so asking for it here threw a "class not found" error on
+        // every single asset view -- fixed alongside the route-ordering bug that
+        // was making GET my-assets/getListAjax 404 into {id}="getListAjax" first.
+        $asset = \App\Models\Asset::with(['category', 'assignedUser'])
             ->where('assigned_to', auth()->id())
             ->findOrFail($id);
 
@@ -90,8 +95,12 @@ class MyAssetsController extends Controller
                 
                 return '<span class="badge bg-label-success">Valid</span>';
             })
-            ->make(true)
-            ->toJson();
+            // ->make(true) already returns a finished JsonResponse (that's yajra
+            // DataTables' terminal call); the extra ->toJson() chained after it was
+            // calling a method JsonResponse doesn't have, which fataled this whole
+            // endpoint -- invisibly, since the route-ordering bug above meant real
+            // traffic never reached this far until now.
+            ->make(true);
     }
 
     public function requestMaintenance(Request $request, $id)
