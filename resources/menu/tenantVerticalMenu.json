@@ -1139,6 +1139,16 @@
                     ]
                 },
                 {
+                    "url": "/tally-explorer/trend",
+                    "name": "Tally Explorer",
+                    "slug": "tally-explorer.trend",
+                    "roles": [
+                        "admin",
+                        "hr",
+                        "accounts"
+                    ]
+                },
+                {
                     "url": "/user/tally-push/admin/connection",
                     "name": "Tally Push",
                     "slug": "user.tally-push.admin.connection",

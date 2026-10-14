@@ -68,6 +68,31 @@ return [
     // fails with a clear "not configured" error until someone deliberately points it at a real company.
     'write_gateway_url' => env('TALLY_WRITE_GATEWAY_URL', ''),
     'write_gateway_company' => env('TALLY_WRITE_GATEWAY_COMPANY', ''),
+
+    // The companies the push commands (hrx:tally-push and its sibling master-sync commands) know how to pull.
+    // Each one is kept as its own tagged slice of the tally_* tables (see the 2026_10_14_000000 migration's
+    // company column) rather than a separate database -- Tally itself can have several companies open at once
+    // (TallyGateway::companies()/assertCompany() already read whichever is named per-request), so no separate
+    // Tally instance or manual company-switching is needed to pull both.
+    //
+    // 'code' (the array key) is what every push command's --company option and every tally_* row's `company`
+    // column store -- short and stable, never rename one once data has been pushed under it. 'name' must be
+    // the EXACT string Tally shows under Gateway of Tally > F3 (Company) / "List of Companies" -- copy it
+    // character for character, including the parenthetical date range Tally appends.
+    //
+    // write_gateway_company above still works unmodified as the default when a command's --company is omitted
+    // (back-compat for the scheduled tasks until deployment/office-pc/*.ps1 are updated to pass --company
+    // explicitly), so adding a company here never changes what today's unmodified cron pushes.
+    'companies' => [
+      'hitech' => [
+        'name' => env('TALLY_COMPANY_HITECH_NAME', env('TALLY_WRITE_GATEWAY_COMPANY', '')),
+        'label' => env('TALLY_COMPANY_HITECH_LABEL', 'Hi Tech'),
+      ],
+      'kif' => [
+        'name' => env('TALLY_COMPANY_KIF_NAME', ''),
+        'label' => env('TALLY_COMPANY_KIF_LABEL', 'Keep It Fresh'),
+      ],
+    ],
   ],
 
   // Google Maps key for Live Location, Timeline, SOS map and client

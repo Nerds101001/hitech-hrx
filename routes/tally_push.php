@@ -23,6 +23,9 @@ Route::middleware(['api', 'tally_push.signed', 'throttle:tally_push'])
         Route::post('tally-push/sync-parties', [TallyPushController::class, 'syncParties'])->name('api.tally_push.sync_parties');
         // Bill-wise outstanding (receivables) as a full-table replace -- a snapshot, like sync-parties.
         Route::post('tally-push/sync-outstanding', [TallyPushController::class, 'syncOutstanding'])->name('api.tally_push.sync_outstanding');
+        // Master snapshots: the stock-item master and the full ledger master.
+        Route::post('tally-push/sync-stock', [TallyPushController::class, 'syncStock'])->name('api.tally_push.sync_stock');
+        Route::post('tally-push/sync-ledgers', [TallyPushController::class, 'syncLedgers'])->name('api.tally_push.sync_ledgers');
         // Read-only: the customer names the party sync is narrowed to. Signed like the posts (the signature covers an empty body).
         Route::get('tally-push/customer-names', [TallyPushController::class, 'customerNames'])->name('api.tally_push.customer_names');
 

@@ -44,6 +44,11 @@ class TallyPushController extends Controller
         // from this list, not that the puller failed to send it.
         try {
             $data = $request->validate([
+                // The company every row in THIS request belongs to (one push run pulls from exactly one Tally
+                // company, see hrx:tally-push --company) -- not per-row, since a single request is already
+                // single-company. Defaults to 'hitech' so a caller that predates multi-company support (an
+                // unmodified scheduled task) keeps working exactly as before.
+                'company' => ['sometimes', 'string', 'max:20'],
                 'invoices' => ['sometimes', 'array'],
                 'invoices.*.invoice_no' => ['required_with:invoices', 'string', 'max:60'],
                 'invoices.*.series' => ['nullable', 'string', 'max:20'],
@@ -138,6 +143,56 @@ class TallyPushController extends Controller
                 'receipts.*.amount' => ['nullable', 'numeric'],
                 'receipts.*.bank_ledger' => ['nullable', 'string'],
                 'receipts.*.reference' => ['nullable', 'string', 'max:120'],
+
+                'purchases' => ['sometimes', 'array'],
+                'purchases.*.purchase_key' => ['required_with:purchases', 'string', 'max:80'],
+                'purchases.*.purchase_no' => ['required_with:purchases', 'string', 'max:60'],
+                'purchases.*.purchase_date' => ['required_with:purchases', 'date'],
+                'purchases.*.series' => ['nullable', 'string', 'max:20'],
+                'purchases.*.party_name' => ['nullable', 'string'],
+                'purchases.*.normalized_name' => ['nullable', 'string'],
+                'purchases.*.amount' => ['nullable', 'numeric'],
+                'purchases.*.extra' => ['nullable', 'array'],
+
+                'purchase_lines' => ['sometimes', 'array'],
+                'purchase_lines.*.purchase_key' => ['required_with:purchase_lines', 'string', 'max:80'],
+                'purchase_lines.*.purchase_no' => ['required_with:purchase_lines', 'string', 'max:60'],
+                'purchase_lines.*.purchase_date' => ['nullable', 'date'],
+                'purchase_lines.*.series' => ['nullable', 'string', 'max:20'],
+                'purchase_lines.*.party_name' => ['nullable', 'string'],
+                'purchase_lines.*.normalized_name' => ['nullable', 'string'],
+                'purchase_lines.*.item_name' => ['nullable', 'string', 'max:500'],
+                'purchase_lines.*.product_group' => ['nullable', 'string', 'max:60'],
+                'purchase_lines.*.hsn' => ['nullable', 'string', 'max:16'],
+                'purchase_lines.*.gst_rate' => ['nullable', 'numeric'],
+                'purchase_lines.*.quantity' => ['nullable', 'numeric'],
+                'purchase_lines.*.unit' => ['nullable', 'string', 'max:20'],
+                'purchase_lines.*.rate' => ['nullable', 'numeric'],
+                'purchase_lines.*.rate_unit' => ['nullable', 'string', 'max:20'],
+                'purchase_lines.*.taxable_amount' => ['nullable', 'numeric'],
+                'purchase_lines.*.tax_amount' => ['nullable', 'numeric'],
+
+                'purchase_orders' => ['sometimes', 'array'],
+                'purchase_orders.*.order_key' => ['required_with:purchase_orders', 'string', 'max:80'],
+                'purchase_orders.*.order_no' => ['required_with:purchase_orders', 'string', 'max:60'],
+                'purchase_orders.*.order_date' => ['required_with:purchase_orders', 'date'],
+                'purchase_orders.*.party_name' => ['nullable', 'string'],
+                'purchase_orders.*.normalized_name' => ['nullable', 'string'],
+                'purchase_orders.*.item_name' => ['nullable', 'string', 'max:500'],
+                'purchase_orders.*.quantity' => ['nullable', 'numeric'],
+                'purchase_orders.*.unit' => ['nullable', 'string', 'max:20'],
+                'purchase_orders.*.amount' => ['nullable', 'numeric'],
+
+                'payments' => ['sometimes', 'array'],
+                'payments.*.payment_key' => ['required_with:payments', 'string', 'max:120'],
+                'payments.*.payment_date' => ['required_with:payments', 'date'],
+                'payments.*.payment_no' => ['nullable', 'string', 'max:60'],
+                'payments.*.voucher_type' => ['nullable', 'string', 'max:80'],
+                'payments.*.party_name' => ['nullable', 'string'],
+                'payments.*.normalized_name' => ['nullable', 'string'],
+                'payments.*.amount' => ['nullable', 'numeric'],
+                'payments.*.bank_ledger' => ['nullable', 'string'],
+                'payments.*.reference' => ['nullable', 'string'],
             ]);
         } catch (\Illuminate\Validation\ValidationException $e) {
             DB::table('tally_push_runs')->where('id', $run)->update([
@@ -147,9 +202,10 @@ class TallyPushController extends Controller
         }
 
         $counts = [];
+        $company = (string) ($data['company'] ?? 'hitech');
 
         try {
-            DB::transaction(function () use ($data, &$counts) {
+            DB::transaction(function () use ($data, &$counts, $company) {
                 // Tally's XML gateway doesn't carry the short customer "party code" the daily-file import puts
                 // on tally_invoices/tally_sale_orders/tally_outstanding (checked: not the ledger's MasterId,
                 // AlterId, Alias, nor anywhere on the voucher itself -- it comes from whatever custom report
@@ -159,7 +215,7 @@ class TallyPushController extends Controller
                 // from or mis-group in those views -- not just look cosmetically incomplete. Fix: look up the
                 // code the file import already recorded for the same normalized customer name, and use that
                 // when the puller didn't send one itself.
-                $codeLookup = $this->resolvePartyCodes(array_merge(
+                $codeLookup = $this->resolvePartyCodes($company, array_merge(
                     array_column($data['invoices'] ?? [], 'normalized_name'),
                     array_column($data['sale_orders'] ?? [], 'normalized_name'),
                     array_column($data['invoice_lines'] ?? [], 'normalized_name'),
@@ -177,11 +233,11 @@ class TallyPushController extends Controller
                         // every figure -- which is exactly what hid an entire day's data on a server with no file-import history.
                         $code = $r['party_code'] ?? $codeLookup[$r['normalized_name'] ?? ''] ?? '0';
                         $codeByInvoiceNo[$r['invoice_no']] = $code;
-                        $rows[] = $this->invoiceRow(array_merge($r, ['party_code' => $code]), $now);
+                        $rows[] = $this->invoiceRow(array_merge($r, ['party_code' => $code]), $company, $now);
                     }
                     DB::table('tally_invoices')->upsert(
                         $rows,
-                        ['invoice_no'],
+                        ['company', 'invoice_no'],
                         ['series', 'invoice_date', 'party_code', 'party_name', 'normalized_name', 'salesperson', 'amount',
                             'lr_no', 'transporter', 'transporter_phone', 'destination', 'po_number', 'is_branch_transfer', 'extra', 'updated_at']
                     );
@@ -193,30 +249,49 @@ class TallyPushController extends Controller
                 // normalized name -- so invoice_lines/sale_lines still resolve a code even when pushed without
                 // an accompanying invoices section, matching what invoices/sale_orders already do.
                 if (!empty($data['invoice_lines'])) {
-                    $counts['invoice_lines'] = $this->replaceByKey('tally_invoice_lines', 'invoice_no', $data['invoice_lines'],
+                    $counts['invoice_lines'] = $this->replaceByKey('tally_invoice_lines', 'invoice_no', $company, $data['invoice_lines'],
                         fn ($r) => $this->invoiceLineRow(array_merge($r, ['party_code' =>
-                            $codeByInvoiceNo[$r['invoice_no']] ?? $r['party_code'] ?? $codeLookup[$r['normalized_name'] ?? ''] ?? '0'])));
+                            $codeByInvoiceNo[$r['invoice_no']] ?? $r['party_code'] ?? $codeLookup[$r['normalized_name'] ?? ''] ?? '0']), $company));
                 }
 
                 if (!empty($data['sale_lines'])) {
-                    $counts['sale_lines'] = $this->replaceByKey('tally_sale_lines', 'invoice_no', $data['sale_lines'],
+                    $counts['sale_lines'] = $this->replaceByKey('tally_sale_lines', 'invoice_no', $company, $data['sale_lines'],
                         fn ($r) => $this->saleLineRow(array_merge($r, ['party_code' =>
-                            $codeByInvoiceNo[$r['invoice_no']] ?? $r['party_code'] ?? $codeLookup[$r['normalized_name'] ?? ''] ?? '0'])));
+                            $codeByInvoiceNo[$r['invoice_no']] ?? $r['party_code'] ?? $codeLookup[$r['normalized_name'] ?? ''] ?? '0']), $company));
                 }
 
                 if (!empty($data['sale_orders'])) {
-                    $counts['sale_orders'] = $this->replaceByKey('tally_sale_orders', 'order_no', $data['sale_orders'],
-                        fn ($r) => $this->saleOrderRow(array_merge($r, ['party_code' => $r['party_code'] ?? $codeLookup[$r['normalized_name'] ?? ''] ?? '0'])));
+                    $counts['sale_orders'] = $this->replaceByKey('tally_sale_orders', 'order_no', $company, $data['sale_orders'],
+                        fn ($r) => $this->saleOrderRow(array_merge($r, ['party_code' => $r['party_code'] ?? $codeLookup[$r['normalized_name'] ?? ''] ?? '0']), $company));
                 }
 
                 if (!empty($data['deliveries'])) {
-                    $counts['deliveries'] = $this->replaceByKey('tally_deliveries', 'delivery_no', $data['deliveries'],
-                        fn ($r) => $this->deliveryRow($r));
+                    $counts['deliveries'] = $this->replaceByKey('tally_deliveries', 'delivery_no', $company, $data['deliveries'],
+                        fn ($r) => $this->deliveryRow($r, $company));
                 }
 
                 if (!empty($data['receipts'])) {
-                    $counts['receipts'] = $this->replaceByKey('tally_receipts', 'receipt_key', $data['receipts'],
-                        fn ($r) => $this->receiptRow(array_merge($r, ['party_code' => $codeLookup[$r['normalized_name'] ?? ''] ?? '0'])));
+                    $counts['receipts'] = $this->replaceByKey('tally_receipts', 'receipt_key', $company, $data['receipts'],
+                        fn ($r) => $this->receiptRow(array_merge($r, ['party_code' => $codeLookup[$r['normalized_name'] ?? ''] ?? '0']), $company));
+                }
+
+                // Purchase side + payments -- no party_code resolution (that code is a customer-only concept from
+                // the sales file import); supplier/expense rows are keyed by normalized_name where it matters.
+                if (!empty($data['purchases'])) {
+                    $counts['purchases'] = $this->replaceByKey('tally_purchases', 'purchase_key', $company, $data['purchases'],
+                        fn ($r) => $this->purchaseRow($r, $company));
+                }
+                if (!empty($data['purchase_lines'])) {
+                    $counts['purchase_lines'] = $this->replaceByKey('tally_purchase_lines', 'purchase_key', $company, $data['purchase_lines'],
+                        fn ($r) => $this->purchaseLineRow($r, $company));
+                }
+                if (!empty($data['purchase_orders'])) {
+                    $counts['purchase_orders'] = $this->replaceByKey('tally_purchase_orders', 'order_key', $company, $data['purchase_orders'],
+                        fn ($r) => $this->purchaseOrderRow($r, $company));
+                }
+                if (!empty($data['payments'])) {
+                    $counts['payments'] = $this->replaceByKey('tally_payments', 'payment_key', $company, $data['payments'],
+                        fn ($r) => $this->paymentRow($r, $company));
                 }
             });
         } catch (\Throwable $e) {
@@ -258,7 +333,7 @@ class TallyPushController extends Controller
      * won't be in the result -- callers fall back to whatever the puller sent (usually null), which is an
      * honest gap, not a wrong guess.
      */
-    private function resolvePartyCodes(array $normalizedNames): array
+    private function resolvePartyCodes(string $company, array $normalizedNames): array
     {
         $normalizedNames = array_values(array_unique(array_filter($normalizedNames, fn ($n) => is_string($n) && $n !== '')));
         if ($normalizedNames === []) {
@@ -266,6 +341,7 @@ class TallyPushController extends Controller
         }
         return DB::table('tally_invoices')
             ->select('normalized_name', 'party_code', 'invoice_date')
+            ->where('company', $company)
             ->whereIn('normalized_name', $normalizedNames)
             ->whereNotNull('party_code')
             ->where('party_code', '!=', '')
@@ -281,20 +357,24 @@ class TallyPushController extends Controller
      * $rows fresh -- an upsert-by-replace for tables with no DB-level unique constraint on $keyColumn. Scoped
      * to exactly the keys in this push, so a partial push never touches rows for a key it didn't mention.
      */
-    private function replaceByKey(string $table, string $keyColumn, array $rows, \Closure $mapRow): int
+    private function replaceByKey(string $table, string $keyColumn, string $company, array $rows, \Closure $mapRow): int
     {
         $mapped = array_map($mapRow, $rows);
         $keys = array_values(array_unique(array_column($mapped, $keyColumn)));
-        DB::table($table)->whereIn($keyColumn, $keys)->delete();
+        // Scoped to this company too, not just the key: the key columns here (invoice_no, delivery_no, ...) are
+        // only unique WITHIN a company (see the 2026_10_14_120000 migration's doc comment) -- an unscoped delete
+        // would let company B's push wipe company A's rows whenever their keys happened to coincide.
+        DB::table($table)->where('company', $company)->whereIn($keyColumn, $keys)->delete();
         foreach (array_chunk($mapped, 500) as $chunk) {
             DB::table($table)->insert($chunk);
         }
         return count($mapped);
     }
 
-    private function invoiceRow(array $r, \Illuminate\Support\Carbon $now): array
+    private function invoiceRow(array $r, string $company, \Illuminate\Support\Carbon $now): array
     {
         return [
+            'company' => $company,
             'invoice_no' => $r['invoice_no'],
             'series' => $r['series'] ?? null,
             'invoice_date' => $r['invoice_date'],
@@ -314,9 +394,10 @@ class TallyPushController extends Controller
         ];
     }
 
-    private function invoiceLineRow(array $r): array
+    private function invoiceLineRow(array $r, string $company): array
     {
         return [
+            'company' => $company,
             'invoice_no' => $r['invoice_no'],
             'invoice_date' => $r['invoice_date'] ?? null,
             'item_name' => $r['item_name'] ?? null,
@@ -331,9 +412,10 @@ class TallyPushController extends Controller
         ];
     }
 
-    private function saleLineRow(array $r): array
+    private function saleLineRow(array $r, string $company): array
     {
         return [
+            'company' => $company,
             'invoice_no' => $r['invoice_no'],
             'series' => $r['series'] ?? null,
             'invoice_date' => $r['invoice_date'] ?? null,
@@ -358,9 +440,10 @@ class TallyPushController extends Controller
         ];
     }
 
-    private function saleOrderRow(array $r): array
+    private function saleOrderRow(array $r, string $company): array
     {
         return [
+            'company' => $company,
             'order_date' => $r['order_date'],
             'order_no' => $r['order_no'],
             'status' => $r['status'] ?? null,
@@ -373,9 +456,10 @@ class TallyPushController extends Controller
         ];
     }
 
-    private function deliveryRow(array $r): array
+    private function deliveryRow(array $r, string $company): array
     {
         return [
+            'company' => $company,
             'delivery_date' => $r['delivery_date'],
             'delivery_no' => $r['delivery_no'],
             'order_no' => $r['order_no'] ?? null,
@@ -396,9 +480,10 @@ class TallyPushController extends Controller
         ];
     }
 
-    private function receiptRow(array $r): array
+    private function receiptRow(array $r, string $company): array
     {
         return [
+            'company' => $company,
             'receipt_key' => $r['receipt_key'],
             'receipt_date' => $r['receipt_date'],
             'receipt_no' => $r['receipt_no'],
@@ -406,6 +491,76 @@ class TallyPushController extends Controller
             'party_name' => $r['party_name'] ?? null,
             'normalized_name' => $r['normalized_name'] ?? null,
             'party_code' => $r['party_code'] ?? null,
+            'amount' => $r['amount'] ?? 0,
+            'bank_ledger' => $r['bank_ledger'] ?? null,
+            'reference' => $r['reference'] ?? null,
+        ];
+    }
+
+    private function purchaseRow(array $r, string $company): array
+    {
+        return [
+            'company' => $company,
+            'purchase_key' => $r['purchase_key'],
+            'purchase_no' => $r['purchase_no'],
+            'series' => $r['series'] ?? null,
+            'purchase_date' => $r['purchase_date'] ?? null,
+            'party_name' => $r['party_name'] ?? null,
+            'normalized_name' => $r['normalized_name'] ?? null,
+            'amount' => $r['amount'] ?? 0,
+            'extra' => isset($r['extra']) ? json_encode($r['extra']) : null,
+        ];
+    }
+
+    private function purchaseLineRow(array $r, string $company): array
+    {
+        return [
+            'company' => $company,
+            'purchase_key' => $r['purchase_key'],
+            'purchase_no' => $r['purchase_no'],
+            'series' => $r['series'] ?? null,
+            'purchase_date' => $r['purchase_date'] ?? null,
+            'party_name' => $r['party_name'] ?? null,
+            'normalized_name' => $r['normalized_name'] ?? null,
+            'item_name' => $r['item_name'] ?? null,
+            'product_group' => $r['product_group'] ?? null,
+            'hsn' => $r['hsn'] ?? null,
+            'gst_rate' => $r['gst_rate'] ?? null,
+            'quantity' => $r['quantity'] ?? null,
+            'unit' => $r['unit'] ?? null,
+            'rate' => $r['rate'] ?? null,
+            'rate_unit' => $r['rate_unit'] ?? null,
+            'taxable_amount' => $r['taxable_amount'] ?? 0,
+            'tax_amount' => $r['tax_amount'] ?? null,
+        ];
+    }
+
+    private function purchaseOrderRow(array $r, string $company): array
+    {
+        return [
+            'company' => $company,
+            'order_key' => $r['order_key'],
+            'order_date' => $r['order_date'],
+            'order_no' => $r['order_no'],
+            'party_name' => $r['party_name'] ?? null,
+            'normalized_name' => $r['normalized_name'] ?? null,
+            'item_name' => $r['item_name'] ?? null,
+            'quantity' => $r['quantity'] ?? null,
+            'unit' => $r['unit'] ?? null,
+            'amount' => $r['amount'] ?? 0,
+        ];
+    }
+
+    private function paymentRow(array $r, string $company): array
+    {
+        return [
+            'company' => $company,
+            'payment_key' => $r['payment_key'],
+            'payment_date' => $r['payment_date'],
+            'payment_no' => $r['payment_no'] ?? null,
+            'voucher_type' => $r['voucher_type'] ?? null,
+            'party_name' => $r['party_name'] ?? null,
+            'normalized_name' => $r['normalized_name'] ?? null,
             'amount' => $r['amount'] ?? 0,
             'bank_ledger' => $r['bank_ledger'] ?? null,
             'reference' => $r['reference'] ?? null,
@@ -435,6 +590,7 @@ class TallyPushController extends Controller
     public function syncParties(Request $request): JsonResponse
     {
         $data = $request->validate([
+            'company' => ['sometimes', 'string', 'max:20'],
             'parties' => ['required', 'array', 'min:1'],
             'parties.*.normalized_name' => ['required', 'string'],
             'parties.*.party_name' => ['nullable', 'string'],
@@ -445,18 +601,23 @@ class TallyPushController extends Controller
             'parties.*.contact_person' => ['nullable', 'string'],
             'parties.*.contact_mobile' => ['nullable', 'string'],
         ]);
+        $company = (string) ($data['company'] ?? 'hitech');
 
         // Guard: refuse a suspiciously small replacement (a partial/failed pull) from wiping a good table.
-        $current = DB::table('tally_parties')->count();
+        // Scoped to THIS company's existing rows -- comparing against every company's combined count would let
+        // a genuinely full pull of a small company (e.g. KIF, with far fewer parties than Hi Tech) be wrongly
+        // refused as "partial" once a second company's rows are in the same table.
+        $current = DB::table('tally_parties')->where('company', $company)->count();
         if ($current > 50 && count($data['parties']) < $current * 0.5) {
             return response()->json([
                 'ok' => false,
-                'error' => "Refusing: this push has only " . count($data['parties']) . " parties, well under the {$current} already on file. Looks like a partial pull, not a genuine full refresh.",
+                'error' => "Refusing: this push has only " . count($data['parties']) . " parties, well under the {$current} already on file for \"{$company}\". Looks like a partial pull, not a genuine full refresh.",
             ], 422);
         }
 
         $now = now();
         $rows = array_map(fn ($r) => [
+            'company' => $company,
             'normalized_name' => $r['normalized_name'],
             'party_name' => $r['party_name'] ?? null,
             'ledger_group' => $r['ledger_group'] ?? null,
@@ -468,8 +629,10 @@ class TallyPushController extends Controller
             'synced_at' => $now,
         ], $data['parties']);
 
-        DB::transaction(function () use ($rows) {
-            DB::table('tally_parties')->delete();
+        DB::transaction(function () use ($rows, $company) {
+            // Scoped to this company only -- an unscoped delete() would also wipe every OTHER company's parties
+            // on every sync, since this is a full-table-replace endpoint by design.
+            DB::table('tally_parties')->where('company', $company)->delete();
             foreach (array_chunk($rows, 500) as $chunk) {
                 DB::table('tally_parties')->insert($chunk);
             }
@@ -488,15 +651,18 @@ class TallyPushController extends Controller
     public function syncOutstanding(Request $request): JsonResponse
     {
         $data = $request->validate([
+            'company' => ['sometimes', 'string', 'max:20'],
             'outstanding' => ['required', 'array', 'min:1'],
         ]);
+        $company = (string) ($data['company'] ?? 'hitech');
 
         // Guard: refuse a suspiciously small replacement (a partial/failed pull) from wiping a good table.
-        $current = DB::table('tally_outstanding')->count();
+        // Scoped to this company's existing rows -- see syncParties()'s identical guard for why.
+        $current = DB::table('tally_outstanding')->where('company', $company)->count();
         if ($current > 50 && count($data['outstanding']) < $current * 0.5) {
             return response()->json([
                 'ok' => false,
-                'error' => 'Refusing: this push has only ' . count($data['outstanding']) . " bills, well under the {$current} already on file. Looks like a partial pull, not a genuine full refresh.",
+                'error' => 'Refusing: this push has only ' . count($data['outstanding']) . " bills, well under the {$current} already on file for \"{$company}\". Looks like a partial pull, not a genuine full refresh.",
             ], 422);
         }
 
@@ -505,6 +671,7 @@ class TallyPushController extends Controller
             return $v === '' ? null : mb_substr($v, 0, $max);
         };
         $rows = array_map(fn ($r) => [
+            'company' => $company,
             'bill_ref' => $clean($r['bill_ref'] ?? null, 60),
             'bill_date' => $clean($r['bill_date'] ?? null, 10),
             'party_code' => $clean($r['party_code'] ?? null, 20),
@@ -516,10 +683,104 @@ class TallyPushController extends Controller
                 ? max(0, min(65535, (int) $r['credit_days'])) : null,
         ], array_values($data['outstanding']));
 
-        DB::transaction(function () use ($rows) {
-            DB::table('tally_outstanding')->delete();
+        DB::transaction(function () use ($rows, $company) {
+            // Scoped to this company only -- see syncParties()'s identical note.
+            DB::table('tally_outstanding')->where('company', $company)->delete();
             foreach (array_chunk($rows, 1000) as $chunk) {
                 DB::table('tally_outstanding')->insert($chunk);
+            }
+        });
+
+        return response()->json(['ok' => true, 'count' => count($rows)]);
+    }
+
+    /** Stock-item master, full-table replace (hrx:tally-push-stock). Loose validation + defensive cast, like syncOutstanding. */
+    public function syncStock(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'company' => ['sometimes', 'string', 'max:20'],
+            'stock_items' => ['required', 'array', 'min:1'],
+        ]);
+        $company = (string) ($data['company'] ?? 'hitech');
+
+        $current = DB::table('tally_stock_items')->where('company', $company)->count();
+        if ($current > 50 && count($data['stock_items']) < $current * 0.5) {
+            return response()->json(['ok' => false, 'error' => 'Refusing: ' . count($data['stock_items']) . " items, well under the {$current} on file for \"{$company}\" -- looks like a partial pull."], 422);
+        }
+
+        $num = fn ($v) => is_numeric($v) ? (float) $v : null;
+        $str = fn ($v, $m) => is_scalar($v) && trim((string) $v) !== '' ? mb_substr(trim((string) $v), 0, $m) : null;
+        $now = now();
+        $rows = array_map(fn ($r) => [
+            'company' => $company,
+            'name' => $str($r['name'] ?? null, 500) ?? '',
+            'stock_group' => $str($r['stock_group'] ?? null, 255),
+            'category' => $str($r['category'] ?? null, 255),
+            'base_unit' => $str($r['base_unit'] ?? null, 20),
+            'opening_qty' => $num($r['opening_qty'] ?? null),
+            'opening_value' => $num($r['opening_value'] ?? null),
+            'closing_qty' => $num($r['closing_qty'] ?? null),
+            'closing_unit' => $str($r['closing_unit'] ?? null, 20),
+            'closing_value' => $num($r['closing_value'] ?? null),
+            'closing_rate' => $num($r['closing_rate'] ?? null),
+            'closing_rate_unit' => $str($r['closing_rate_unit'] ?? null, 20),
+            'hsn' => $str($r['hsn'] ?? null, 16),
+            'gst_rate' => $num($r['gst_rate'] ?? null),
+            'synced_at' => $now,
+        ], array_values($data['stock_items']));
+
+        DB::transaction(function () use ($rows, $company) {
+            DB::table('tally_stock_items')->where('company', $company)->delete();
+            foreach (array_chunk($rows, 1000) as $chunk) {
+                DB::table('tally_stock_items')->insert($chunk);
+            }
+        });
+
+        return response()->json(['ok' => true, 'count' => count($rows)]);
+    }
+
+    /** Full ledger master, full-table replace (hrx:tally-push-ledgers). */
+    public function syncLedgers(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'company' => ['sometimes', 'string', 'max:20'],
+            'ledgers' => ['required', 'array', 'min:1'],
+        ]);
+        $company = (string) ($data['company'] ?? 'hitech');
+
+        $current = DB::table('tally_ledgers')->where('company', $company)->count();
+        if ($current > 50 && count($data['ledgers']) < $current * 0.5) {
+            return response()->json(['ok' => false, 'error' => 'Refusing: ' . count($data['ledgers']) . " ledgers, well under the {$current} on file for \"{$company}\" -- looks like a partial pull."], 422);
+        }
+
+        $num = fn ($v) => is_numeric($v) ? (float) $v : null;
+        $str = fn ($v, $m) => is_scalar($v) && trim((string) $v) !== '' ? mb_substr(trim((string) $v), 0, $m) : null;
+        $now = now();
+        $rows = array_map(fn ($r) => [
+            'company' => $company,
+            'name' => $str($r['name'] ?? null, 255) ?? '',
+            'normalized_name' => $str($r['normalized_name'] ?? null, 255),
+            'ledger_group' => $str($r['ledger_group'] ?? null, 120),
+            'primary_group' => $str($r['primary_group'] ?? null, 120),
+            'closing_balance' => $num($r['closing_balance'] ?? null),
+            'credit_limit' => $num($r['credit_limit'] ?? null),
+            'gstin' => $str($r['gstin'] ?? null, 20),
+            'pan' => $str($r['pan'] ?? null, 20),
+            'contact_person' => $str($r['contact_person'] ?? null, 255),
+            'contact_mobile' => $str($r['contact_mobile'] ?? null, 255),
+            'state' => $str($r['state'] ?? null, 60),
+            'country' => $str($r['country'] ?? null, 60),
+            'pincode' => $str($r['pincode'] ?? null, 16),
+            'mailing_name' => $str($r['mailing_name'] ?? null, 255),
+            'email' => $str($r['email'] ?? null, 255),
+            'address' => is_scalar($r['address'] ?? null) ? trim((string) $r['address']) : null,
+            'synced_at' => $now,
+        ], array_values($data['ledgers']));
+
+        DB::transaction(function () use ($rows, $company) {
+            DB::table('tally_ledgers')->where('company', $company)->delete();
+            foreach (array_chunk($rows, 1000) as $chunk) {
+                DB::table('tally_ledgers')->insert($chunk);
             }
         });
 
