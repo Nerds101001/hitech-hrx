@@ -6,27 +6,45 @@
   wherever TALLY_PUSH_TARGET_URL points (currently the live server). Read-only on Tally. Re-running a
   month is safe -- it replaces, never duplicates.
 
-  Non-interactive too:
+  Non-interactive too (defaults to Hi Tech; add -Company kif for the other one):
      powershell -File backfill-tally.ps1 -Month 2026-05
      powershell -File backfill-tally.ps1 -From 2026-04-01 -To 2026-06-30
      powershell -File backfill-tally.ps1 -FullYear
+     powershell -File backfill-tally.ps1 -Company kif -FullYear
 #>
 param(
   [string]$Month = "",       # "YYYY-MM" : sync that whole month
   [string]$From  = "",       # or an explicit range (chunked into <=31-day pieces automatically)
   [string]$To    = "",
   [switch]$FullYear,         # the current financial year so far
-  [switch]$DryRun            # pull and show counts, send nothing
+  [switch]$DryRun,           # pull and show counts, send nothing
+  [ValidateSet('hitech', 'kif')]
+  [string]$Company = ""      # which company (config/services.php tally.companies); interactive mode asks if omitted
 )
 
 $ErrorActionPreference = 'Stop'
 $php     = "C:\laragon\bin\php\php-8.3.30-Win32-vs16-x64\php.exe"
 $appDir  = "D:\liveserver"
 $gateway = "http://192.168.2.195:9080"
-$company = "HI TECH INTERNATIONAL- (From 1 Apr 2025)"
+# Just labels for the menu -- the actual Tally company name lives in config/services.php (tally.companies),
+# read from .env, so this list only ever needs a new label here, never the exact Tally name.
+$companyLabels = @{ hitech = 'Hi Tech'; kif = 'Keep It Fresh' }
 
 if (-not (Test-Path $php))    { Write-Host "PHP not found at $php" -ForegroundColor Red; exit 1 }
 if (-not (Test-Path $appDir)) { Write-Host "App folder not found at $appDir" -ForegroundColor Red; exit 1 }
+
+if (-not $Company) {
+  if ($Month -or $From -or $FullYear) {
+    $Company = 'hitech'   # a non-interactive caller that didn't say -Company gets the old default, unchanged
+  } else {
+    Write-Host ""
+    Write-Host "Which company?" -ForegroundColor Gray
+    Write-Host "   1. Hi Tech"
+    Write-Host "   2. Keep It Fresh (KIF)"
+    $pick = Read-Host "Enter a number"
+    $Company = if ($pick -eq '2') { 'kif' } else { 'hitech' }
+  }
+}
 
 # Where are we pushing to? (read it from .env so the menu can show it)
 $target = (Select-String -Path (Join-Path $appDir '.env') -Pattern '^TALLY_PUSH_TARGET_URL=(.+)$' |
@@ -42,17 +60,17 @@ function Sync-Range([datetime]$from, [datetime]$to) {
   if ($to -gt (Get-Date).Date) { $to = (Get-Date).Date }
   if ($from -gt $to) { Write-Host "Nothing to do: $($from.ToString('yyyy-MM-dd')) is after $($to.ToString('yyyy-MM-dd'))." -ForegroundColor Yellow; return }
   Write-Host ""
-  Write-Host ("Syncing {0} -> {1}   to   {2}" -f $from.ToString('yyyy-MM-dd'), $to.ToString('yyyy-MM-dd'), $target) -ForegroundColor Cyan
+  Write-Host ("Syncing {0}: {1} -> {2}   to   {3}" -f $companyLabels[$Company], $from.ToString('yyyy-MM-dd'), $to.ToString('yyyy-MM-dd'), $target) -ForegroundColor Cyan
   Push-Location $appDir
   try {
     $chunkStart = $from
     while ($chunkStart -le $to) {
       $chunkEnd = $chunkStart.AddDays(30)
       if ($chunkEnd -gt $to) { $chunkEnd = $to }
-      $args = @('artisan','hrx:tally-push',
+      $args = @('artisan','hrx:tally-push', "--company=$Company",
                 "--from=$($chunkStart.ToString('yyyy-MM-dd'))",
                 "--to=$($chunkEnd.ToString('yyyy-MM-dd'))",
-                "--gateway-url=$gateway", "--gateway-company=$company")
+                "--gateway-url=$gateway")
       if ($DryRun) { $args += '--dry-run' }
       & $php @args
       if ($LASTEXITCODE -ne 0) {
@@ -89,7 +107,7 @@ while ($true) {
 
   Write-Host ""
   Write-Host "============================================================" -ForegroundColor DarkCyan
-  Write-Host "  Tally -> live sync      pushing to: $target" -ForegroundColor White
+  Write-Host ("  Tally -> live sync      company: {0}      pushing to: {1}" -f $companyLabels[$Company], $target) -ForegroundColor White
   Write-Host "============================================================" -ForegroundColor DarkCyan
   Write-Host "  Pick a month to sync to the live server:" -ForegroundColor Gray
   for ($i = 0; $i -lt $months.Count; $i++) {
