@@ -44,7 +44,12 @@
     .ta-panel-body { padding: 8px 18px 16px; flex: 1; }
     /* a body that fills the card and scrolls inside it, instead of setting the row height */
     .ta-fill { position: relative; min-height: 210px; padding: 0; }
-    .ta-fill > .ta-scroll { position: absolute; inset: 0; overflow-y: auto; padding: 0 18px 12px; }
+    .ta-fill > .ta-scroll { position: absolute; inset: 0; overflow-y: auto; overflow-x: auto; padding: 0 18px 12px; }
+    /* Tables inside .ta-panel-body with no .ta-fill wrapper (e.g. Modules
+       Requiring Attention) have no scroll box of their own at all -
+       without this, their nowrap <th>s push the panel/page wider than the
+       viewport on phone instead of just scrolling within the card. */
+    .ta-panel-body > .ta-table-scroll { overflow-x: auto; }
     .ta-center { display: flex; align-items: center; }
     .ta-center > * { flex: 1; }
 
@@ -375,6 +380,7 @@
                     @if($canManage ?? false)<a href="{{ route('training.manage.index') }}" class="ta-panel-link">View All →</a>@endif
                 </div>
                 <div class="ta-panel-body">
+                    <div class="ta-table-scroll">
                     <table class="ta-table">
                         <thead><tr><th>#</th><th>Module Name</th><th>Failed</th><th>Avg. Score</th><th>Status</th></tr></thead>
                         <tbody>
@@ -391,6 +397,7 @@
                             @endforelse
                         </tbody>
                     </table>
+                    </div>
                 </div>
             </div>
         </div>

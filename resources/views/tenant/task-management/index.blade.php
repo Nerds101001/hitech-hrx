@@ -180,6 +180,30 @@
   #vt_thread .chat-bubble a{color:inherit;text-decoration:underline;}
   #vt_thread .chat-time{font-size:.65rem;color:#94a3b8;margin:2px 4px 0;}
 
+  /* Phone (<=480px): the 4-tab segmented control (.hitech-segmented-control,
+     shared/hitech-portal.scss) is display:inline-flex with no wrap/scroll,
+     so 4 uppercase pill buttons plus badges force the page wider than the
+     viewport on every role identically. Scrolls as its own strip instead. */
+  @media (max-width: 480px) {
+    #tmTabs {
+      display: flex;
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      max-width: 100%;
+    }
+    #tmTabs .js-tm-tab {
+      flex-shrink: 0;
+    }
+    /* Each tab's own filter row is plain Bootstrap col-lg-*/col-md-6 with no
+       phone breakpoint, so fields render as squeezed fractional columns
+       instead of stacking - force every filter field full-width here. */
+    #taskFilterCard .row.g-4 > [class*="col-"],
+    #tmTabsContent .row.g-4 > [class*="col-"] {
+      flex: 0 0 100%;
+      max-width: 100%;
+    }
+  }
 </style>
 @endsection
 

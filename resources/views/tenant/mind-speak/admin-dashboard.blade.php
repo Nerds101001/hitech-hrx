@@ -143,13 +143,19 @@
      Colours come from the portal theme (--hitech-*), not from a palette
      invented for this page: one teal accent throughout, the theme's soft
      background and the theme's border. */
+  /* auto-fit + a real minmax floor, not a fixed repeat(7): the old fixed
+     7-column grid gave a 1366px laptop the exact same column width as a
+     1920px desktop (no breakpoint existed between 1200px and desktop),
+     which is why "COMPETITOR INSIGHTS" / "360 FEEDBACK" collided on
+     laptop too, not just on phone. 150px is the floor each .ms-stat needs
+     (28px icon + gap + padding + the shortest label) before its own
+     ellipsis takes over instead of visibly overlapping its neighbour. */
   .ms-stat-strip {
     display: grid;
-    grid-template-columns: repeat(7, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
     gap: 0.65rem;
     margin-bottom: 1.25rem;
   }
-  @media (max-width: 1199px) { .ms-stat-strip { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
   @media (max-width: 575px)  { .ms-stat-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
   .ms-stat {
     background: #fff;
@@ -374,8 +380,13 @@
         </div>
 
         <div class="col-12 col-md-2">
-          <div class="d-flex gap-2">
-            <button type="submit" class="btn btn-filter w-100 fw-bold">
+          {{-- This cell is only ~1/6 of the row (col-md-2); Filter plus two
+               fixed 40px icon buttons never fit un-wrapped at laptop width,
+               which is why Export got pushed off-screen there. flex-wrap +
+               Filter on its own full-width row fixes it without touching
+               the row's other 5 filter cells. --}}
+          <div class="d-flex gap-2 flex-wrap">
+            <button type="submit" class="btn btn-filter fw-bold" style="flex: 1 1 100%;">
               <i class="bx bx-filter-alt me-1"></i> Filter
             </button>
             <a href="{{ route('mind-speak.index') }}" class="btn btn-outline-secondary d-flex align-items-center justify-content-center" style="border-radius: 9px; height: 40px; width: 40px; min-width: 40px; padding: 0; flex-shrink: 0;" title="Reset Filters">

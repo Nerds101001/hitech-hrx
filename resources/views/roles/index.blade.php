@@ -37,7 +37,7 @@
 .rp-shell-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; margin-bottom: 1.5rem; }
 .rp-shell-title { font-size: 1.5rem; font-weight: 800; color: #1e293b; margin-bottom: .2rem; }
 .rp-shell-sub { color: #64748b; font-size: .88rem; margin: 0; }
-.rp-shell-stats { display: flex; align-items: center; gap: .75rem; }
+.rp-shell-stats { display: flex; align-items: center; flex-wrap: wrap; gap: .75rem; }
 .rp-stat-pill { display: flex; align-items: center; gap: 8px; background: #fff; border: 1px solid var(--hitech-border); border-radius: 14px; padding: .55rem 1rem; }
 .rp-stat-pill i { font-size: 1.1rem; color: #127464; }
 .rp-stat-pill-value { font-weight: 800; color: #1e293b; font-size: .95rem; line-height: 1; }
@@ -261,6 +261,19 @@
   .rp-role-col { display: none; }
   .rp-toolbar-inner { flex-direction: column; align-items: stretch; }
   .rp-admin-toggle { margin-left: 0; }
+}
+
+/* Phone: the 250/240/170px minmax() floors above guarantee overflow under
+   ~360-390px no matter how much .rp-panel-wrap's own padding shrinks, so
+   collapse those grids to a single column instead of trying to fit two. */
+@media (max-width: 480px) {
+  .rp-detail-col .hitech-card,
+  .rp-panel-wrap { padding: 1rem; }
+  .rp-perm-grid,
+  .rp-reach-grid,
+  .rp-tile-grid-channels { grid-template-columns: 1fr; }
+  .rp-mod-detail td { padding-left: 14px; }
+  .rp-stat-pill { padding: .5rem .75rem; }
 }
 </style>
 

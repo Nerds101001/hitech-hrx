@@ -26,6 +26,24 @@
 
     .empty-state { padding: 80px 20px; text-align: center; }
     .empty-icon { font-size: 4rem; color: #cbd5e1; margin-bottom: 20px; }
+
+    /* Phone (<=480px): the hero's fixed 50px side padding plus a
+       non-wrapping header row, and the 3-pill filter strip (d-inline-flex,
+       no wrap) below it, both force the page wider than the viewport. */
+    @media (max-width: 480px) {
+        .training-header {
+            padding: 24px;
+        }
+        .training-header.d-flex {
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+        .nav.glass-nav {
+            flex-wrap: wrap;
+            display: flex !important;
+            width: 100%;
+        }
+    }
 </style>
 @endsection
 

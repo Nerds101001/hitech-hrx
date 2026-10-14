@@ -39,6 +39,14 @@
   #dashTaskWidget .dtw-tab:hover:not(.active){color:#0d5c56;}
   #dashTaskWidget .dtw-tab-count{display:inline-flex;align-items:center;justify-content:center;min-width:15px;height:15px;padding:0 3px;border-radius:999px;font-size:.6rem;font-weight:700;background:rgba(100,116,139,.15);color:#475569;}
   #dashTaskWidget .dtw-tab.active .dtw-tab-count{background:rgba(255,255,255,.28);color:#fff;}
+
+  /* Measured contributing to the dashboard's 393/444px overflow: 4
+     non-shrinking, non-wrapping tab pills (.dtw-tabs flex-shrink:0, each
+     .dtw-tab white-space:nowrap) forced wider than the card at phone width.
+     Scrolls within the card instead of pushing the card/page wider. */
+  @media (max-width: 480px) {
+    #dashTaskWidget .dtw-tabs{max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;}
+  }
   #dashTaskWidget .dash-task-pane{flex:1 1 auto;max-height:280px;overflow-y:auto;}
   #dashTaskWidget .dash-task-row{display:flex;align-items:center;gap:12px;padding:12px 2px;border-bottom:1px solid #f1f5f9;}
   #dashTaskWidget .dash-task-row:last-child{border-bottom:none;}

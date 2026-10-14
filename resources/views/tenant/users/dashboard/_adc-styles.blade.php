@@ -221,8 +221,12 @@
     .adc-hero-title{font-size:1.12rem;}
     .adc-hero-sub{font-size:.8rem;}
     .adc-card{padding:14px 13px 12px;border-radius:15px;}
-    .adc-card-head{margin-bottom:10px;}
-    .adc-card-title{font-size:.92rem;}
+    /* Sales Target card (admin + sales/production manager dashboards):
+       neither the title nor the adc-seg (Bingo/Kingo/Super K) segmented
+       control could shrink or wrap, so the control's right edge was cut
+       off the card at phone width once both sat side by side. */
+    .adc-card-head{margin-bottom:10px;flex-wrap:wrap;gap:6px;}
+    .adc-card-title{font-size:.92rem;min-width:0;}
     .adc-kpi{padding:12px 11px;border-radius:13px;}
     .adc-kpi-value{font-size:1.3rem;}
     .adc-kpi-icon{width:32px;height:32px;font-size:1rem;border-radius:9px;}

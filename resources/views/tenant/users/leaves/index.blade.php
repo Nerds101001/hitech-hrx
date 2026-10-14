@@ -36,9 +36,9 @@
 <div class="container-xxl flex-grow-1 container-p-y">
     
     {{-- PAGE HEADER --}}
-    <div class="d-flex justify-content-between align-items-center mb-4">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
         <h5 class="mb-0 fw-bold">Leave Management</h5>
-        <div class="d-flex gap-2">
+        <div class="d-flex flex-wrap gap-2">
             <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#hitechApplyLeaveModal">
                 <i class="bx bx-plus-circle me-1"></i> Apply for Leave
             </button>
