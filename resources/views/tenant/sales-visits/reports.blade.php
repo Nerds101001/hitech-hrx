@@ -58,6 +58,15 @@
     }
     .date-filter-form .btn-filter:hover { transform: translateY(-1px); color: #0f766e; }
 
+    /* Measured 398px: the hero's own 2.5rem/2rem (40/32px) padding, plus
+       two hardcoded 160px date inputs inside it, together exceeded a
+       390px viewport even though the filter form itself already wraps. */
+    @media (max-width: 480px) {
+        .rpt-hero { padding: 1.25rem 1rem; }
+        .date-filter-form { width: 100%; }
+        .date-filter-form input[type=date] { width: 100%; flex: 1 1 130px; }
+    }
+
     /* ── KPI Cards ─────────────────────────────────────────── */
     .kpi-card {
         border-radius: 1rem;

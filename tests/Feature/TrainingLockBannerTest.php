@@ -89,7 +89,17 @@ class TrainingLockBannerTest extends TestCase
 
     public function test_no_banner_once_training_is_done_or_for_active_people(): void
     {
-        $this->assertNull(TrainingLock::progressFor($this->person(UserAccountStatus::ONBOARDING_SUBMITTED->value, true, 'completed')));
+        // Real completion, not the training_status flag: that flag used to short-circuit
+        // this check on its own, so someone marked 'completed' with ZERO modules actually
+        // passed still read as "no banner" -- the exact false "Training Complete" bug this
+        // was built to prevent.
+        $done = $this->person(UserAccountStatus::ONBOARDING_SUBMITTED->value, true, 'completed');
+        $this->assertNotNull(TrainingLock::progressFor($done), 'the flag alone must not suppress the banner for someone who has not actually passed anything');
+        foreach (TrainingModule::where('phase_id', $this->phaseId)->get() as $m) {
+            UserTrainingProgress::create(['user_id' => $done->id, 'module_id' => $m->id, 'status' => 'completed', 'assessment_score' => 90, 'completed_at' => now()]);
+        }
+        $this->assertNull(TrainingLock::progressFor($done->fresh()), 'genuinely finishing every required module does clear it');
+
         $active = $this->person(UserAccountStatus::ACTIVE->value, false, null);
         $this->assertNull(TrainingLock::progressFor($active));
         $this->assertStringNotContainsString(self::TEXT, $this->actingAs($active)->get('/user/dashboard')->getContent());

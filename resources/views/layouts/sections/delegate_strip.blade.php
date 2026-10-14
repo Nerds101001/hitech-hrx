@@ -52,7 +52,12 @@
   <style>
     /* Amber, matching the navbar Delegate Access hub — the one colour in the
        app that means "you are not yourself right now". */
-    .hrx-delegate-wrap { align-items: center; min-width: 0; }
+    /* position:relative + a z-index above the mandatory-policy modal (Bootstrap's
+       default 1055/1050 for the modal/backdrop) so Exit stays reachable even while
+       that modal is blocking the page -- without this, a statically-positioned
+       element has no stacking order of its own and a fixed-position modal simply
+       paints over it regardless of z-index (z-index does nothing on position:static). */
+    .hrx-delegate-wrap { align-items: center; min-width: 0; position: relative; z-index: 1100; }
 
     .hrx-delegate-strip {
       display: inline-flex;

@@ -864,6 +864,24 @@ class User extends Authenticatable implements JWTSubject, AuditableContract
       return round(($completedModules / $required->count()) * 100);
     }
 
+    /**
+     * The single source of truth for "has this person actually finished their
+     * compulsory training" -- every module in the required phases genuinely
+     * passed, from real UserTrainingProgress rows. NEVER read training_status
+     * for this: that column is a separate, independently-written cache that
+     * gets set to 'completed' as a side effect of is_training_required being
+     * false at account creation (meaning 0 modules attempted still reads
+     * "Complete"), and again by HR's manual approveTraining() override
+     * (meaning a partially-done account, e.g. 4 of 11 modules, can also read
+     * "Complete") -- both confirmed live, both silently disagreeing with the
+     * real per-module count everywhere that trusted training_status instead
+     * of this method.
+     */
+    public function isCompulsoryTrainingComplete(): bool
+    {
+        return $this->getTrainingProgressPercentage() >= 100;
+    }
+
     public function hrPolicyAcknowledgments()
     {
         return $this->hasMany(HRPolicyAcknowledgment::class);

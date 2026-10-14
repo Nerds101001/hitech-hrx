@@ -1192,6 +1192,7 @@ Route::middleware([
         Route::post('hr-policies/acknowledge/{id}', [HRPolicyController::class, 'acknowledge'])->name('hr-policies.acknowledge');
         Route::get('hr-policies/view/{id}', [HRPolicyController::class, 'view'])->name('hr-policies.view');
         Route::get('hr-policies/embed-url/{id}', [HRPolicyController::class, 'getEmbedUrl'])->name('hr-policies.embed-url');
+        Route::get('hr-policies/stream/{id}', [HRPolicyController::class, 'stream'])->name('hr-policies.stream')->whereNumber('id');
 
         // AI Training — reverted to the original admin/hr + orphaned-permission
         // gate at the user's explicit request (no live access changes without
@@ -1237,10 +1238,17 @@ Route::middleware([
         });
 
         // My Assets
+        // getListAjax MUST come before the {id} catch-all, or the router matches
+        // GET my-assets/getListAjax against {id} first (id="getListAjax") and
+        // MyAssetsController::show() 404s on it -- which DataTables' error.dt
+        // handler then mislabels as "Secure Session Expired" for every user,
+        // every time. The asset-management group (above) and the uniform-
+        // requests group's own comment already document this exact trap;
+        // this group reintroduced it. Catch-all routes always go last.
         Route::prefix('my-assets')->name('myAssets.')->group(function () {
           Route::get('', [MyAssetsController::class, 'index'])->name('index');
-          Route::get('{id}', [MyAssetsController::class, 'show'])->name('show');
           Route::get('getListAjax', [MyAssetsController::class, 'getListAjax'])->name('getListAjax');
+          Route::get('{id}', [MyAssetsController::class, 'show'])->name('show');
           Route::post('request-maintenance/{id}', [MyAssetsController::class, 'requestMaintenance'])->name('requestMaintenance');
         });
 

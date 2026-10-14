@@ -159,6 +159,21 @@ class LeaverHandoverPageTest extends TestCase
         $this->actingAs($this->admin)->get('/sales-visits/leaver-handover/99999999')->assertNotFound();
     }
 
+    public function test_the_sidebar_link_is_only_for_the_named_person(): void
+    {
+        $named = User::where('email', 'ai@rustx.com')->first();
+        $this->assertNotNull($named, 'needs the real ai@rustx.com account in the local database');
+        config(['handover.viewer_emails' => ['ai@rustx.com']]);
+
+        $page = '/sales-visits/delete-requests';   // any Sales page that carries the sidebar, open to Admin/HR
+        $theirs = $this->actingAs($named)->get($page)->assertOk()->getContent();
+        $this->assertStringContainsString('/sales-visits/leaver-handover', $theirs, 'ai@rustx.com sees the link');
+
+        $otherAdmin = $this->person('active', 'admin');
+        $others = $this->actingAs($otherAdmin)->get($page)->assertOk()->getContent();
+        $this->assertStringNotContainsString('/sales-visits/leaver-handover', $others, 'another admin does not see it');
+    }
+
     public function test_a_bad_request_is_explained_not_applied(): void
     {
         $r = $this->actingAs($this->admin)->postJson('/sales-visits/leaver-handover/preview', ['leaver_id' => $this->leaver->id, 'month' => '2031-04']);

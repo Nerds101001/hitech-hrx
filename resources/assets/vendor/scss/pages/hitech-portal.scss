@@ -1666,6 +1666,24 @@ div.dtr-modal div.dtr-modal-content {
     padding-bottom: 1.5rem !important;
 }
 
+/* Laptop stays exactly as above (unchanged). On a phone, that same 1.5rem
+   (24px) gutter -- forced !important, applying to every page's outer
+   container regardless of viewport -- was itself a large share of the
+   24-40px-per-side waste reported: a 360px-wide screen lost 48px (over 13%
+   of its width) to this rule alone before any inner card padding even
+   started. 12-16px matches the Android app-feel guidance. */
+@media (max-width: 480px) {
+    .container-xxl,
+    .container-fluid {
+        padding-left: 14px !important;
+        padding-right: 14px !important;
+    }
+    .container-p-y {
+        padding-top: 14px !important;
+        padding-bottom: 14px !important;
+    }
+}
+
 /* Unified Action Icon Styling (Slate to Primary Teal).
    This used to be three separate, conflicting .icon-sophisticated rules
    scattered through this file (one with !important width/height/margin that
@@ -2761,6 +2779,84 @@ div.dtr-modal div.dtr-modal-content {
 }
 
 /* =============================================
+   GLOBAL MODAL RESPONSIVENESS (phone) -- every Bootstrap modal in the app
+   (Add/Edit/Import forms, Apply Leave, Outdoor Duty, Assign Task, document
+   review, Attachment View, Salary Breakdown, confirm-delete, and the many
+   others not individually listed) becomes a full-screen sheet: header, a
+   scrolling body, and a sticky footer, on 100dvh (not 100vh, so the
+   browser's own address-bar chrome never hides the footer).
+
+   Uses the SAME property (height, not a separate max-height) as any modal
+   with its own more specific phone rule already in this file (e.g.
+   #forcePolicyModal's .policy-modal-content) -- CSS specificity then
+   naturally lets that modal's own, more specific rule win, with no :not()
+   exclusion needed and no risk of this generic rule fighting it.
+
+   Deliberately generic (plain .modal-dialog / .modal-content / .modal-body
+   / .modal-footer, not scoped to any particular modal's id or class): this
+   is what reaches the long, explicitly-named list of forms above without
+   editing each one of their view files individually, and automatically
+   covers any modal not named there too. A modal that genuinely needs a
+   different phone layout can still add its own id-scoped override, which
+   will win over this one the same way #forcePolicyModal's already does. */
+@media (max-width: 480px) {
+    .modal-dialog:not(.modal-sm) {
+        width: 100%;
+        max-width: 100%;
+        height: 100%;
+        margin: 0;
+        box-sizing: border-box;
+    }
+    .modal-dialog:not(.modal-sm) .modal-content {
+        height: 100vh;
+        height: 100dvh;
+        border-radius: 0;
+        display: flex;
+        flex-direction: column;
+        max-width: 100%;
+        box-sizing: border-box;
+        overflow-x: hidden;
+    }
+    .modal-dialog:not(.modal-sm) .modal-header {
+        flex: 0 0 auto;
+        padding: 14px 16px;
+    }
+    .modal-dialog:not(.modal-sm) .modal-body {
+        flex: 1 1 auto;
+        overflow-y: auto;
+        overflow-x: hidden;
+        min-height: 0;
+        -webkit-overflow-scrolling: touch;
+        padding: 14px 16px;
+    }
+    .modal-dialog:not(.modal-sm) .modal-footer {
+        flex: 0 0 auto;
+        position: sticky;
+        bottom: 0;
+        // Inherits whatever background this modal's own content already uses
+        // (Bootstrap 5 sets --bs-modal-bg on .modal-content) rather than
+        // forcing white, so a footer that was deliberately colour-coded
+        // (e.g. a destructive confirm action) keeps its own look.
+        background-color: var(--bs-modal-bg, #fff);
+        padding: 12px 16px;
+        padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+    }
+}
+
+/* =============================================
+   STAY NOTIFIED BANNER (webpush-subscribe.js) -- reserves room at the
+   bottom of the page so the fixed banner never sits over page content.
+   ============================================= */
+.hrx-push-banner-open {
+    padding-bottom: 170px; // desktop/tablet: the floating card's own height + its 24px offset
+}
+@media (max-width: 480px) {
+    .hrx-push-banner-open {
+        padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px)); // the phone strip's own max height
+    }
+}
+
+/* =============================================
    HITECH ERROR PAGES (403, 404, etc.)
    ============================================= */
 .hitech-error-page {
@@ -2770,7 +2866,10 @@ div.dtr-modal div.dtr-modal-content {
     justify-content: center;
     overflow: hidden;
     position: relative;
-    padding: 2rem;
+    // 2rem (32px) of padding ate ~18% of a 360px-wide screen on its own, on
+    // top of the card's own padding below -- clamp() instead of a fixed
+    // value, down to a real 12-16px floor on a phone.
+    padding: clamp(0.75rem, 4vw, 2rem);
 }
 
 .error-glass-card {
@@ -2778,17 +2877,25 @@ div.dtr-modal div.dtr-modal-content {
     backdrop-filter: blur(20px);
     border: 1px solid rgba(255, 255, 255, 0.4);
     border-radius: 40px;
-    padding: 4rem 3rem;
+    // Fixed "4rem 3rem" (64px/48px) padding alone was 96px of a 360px-wide
+    // screen - over a quarter of it gone before the actual message even
+    // starts. Scales down to 1.25rem/1rem at the low end instead.
+    padding: clamp(1.25rem, 6vw, 4rem) clamp(1rem, 5vw, 3rem);
     max-width: 650px;
     width: 100%;
     text-align: center;
     box-shadow: 0 40px 100px rgba(0, 77, 77, 0.1);
     position: relative;
     z-index: 10;
+    box-sizing: border-box;
 }
 
 .error-h1 {
-    font-size: 8rem;
+    // Was a fixed 8rem (128px): on a 360px phone three digits at that size,
+    // with -5px letter-spacing on top, run close to the card's own usable
+    // width. clamp() keeps it dramatic on a laptop and legible on a phone
+    // without a second, separate phone-only rule to keep in sync.
+    font-size: clamp(3.5rem, 18vw, 8rem);
     font-weight: 900;
     line-height: 1;
     margin-bottom: 1.5rem;
@@ -2796,22 +2903,31 @@ div.dtr-modal div.dtr-modal-content {
     -webkit-background-clip: text;
     background-clip: text;
     -webkit-text-fill-color: transparent;
-    letter-spacing: -5px;
+    letter-spacing: clamp(-2px, -1vw, -5px);
     animation: pulseError 2.5s infinite alternate;
 }
 
 .error-title-h4 {
     color: #1e293b;
     font-weight: 800;
-    font-size: 1.75rem;
+    font-size: clamp(1.15rem, 4.5vw, 1.75rem);
     margin-bottom: 1rem;
+    overflow-wrap: break-word;
 }
 
 .error-p {
     color: #64748b;
-    font-size: 1rem;
+    font-size: clamp(0.875rem, 3vw, 1rem);
     line-height: 1.6;
     margin-bottom: 2.5rem;
+    overflow-wrap: break-word;
+}
+
+// A large decorative icon above the message (419's clock, etc.) used to be a
+// fixed inline font-size, which on a phone could run as wide as the digits
+// above it. Apply this class instead of an inline style to get it scaled here.
+.error-icon-lg {
+    font-size: clamp(48px, 14vw, 80px);
 }
 
 .btn-hitech-error {

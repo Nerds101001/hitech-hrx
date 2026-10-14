@@ -86,6 +86,18 @@ class AdminRoleGuard
         // their own task. TaskController checks Task::canBeViewedBy().
         'tasks/*/attachment',
         'task-updates/*/attachment',
+
+        // Same self-service pattern as my-tasks above, added later and missed
+        // off this list each time: each page scopes itself to the signed-in
+        // user's own records (MyHolidaysController::index() via
+        // Holiday::forUser(), EmployeeLifecycleController::myNotices(), and
+        // MyAssetsController's own queries all filter to auth()->id()), so an
+        // ordinary employee was silently bounced to the dashboard on their
+        // own holiday calendar, their own warnings/complaints, and their own
+        // assets instead of seeing the page the sidebar links them to.
+        'my-holidays',
+        'my-warnings-complaints',
+        'my-assets',
     ];
 
     public function handle(Request $request, Closure $next): Response

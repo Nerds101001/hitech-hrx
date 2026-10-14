@@ -822,13 +822,13 @@ class TrainingController extends Controller
                 );
             }
         } else {
-            // Check if ALL modules across all phases are completed for this user
-            $totalModules = TrainingModule::count();
-            $completedModulesCount = UserTrainingProgress::where('user_id', $user->id)
-                ->where('status', 'completed')
-                ->count();
-            
-            if ($completedModulesCount >= $totalModules) {
+            // Was the compulsory set finished? Scoped to config('training.onboarding_phase_ids'),
+            // the same set every other completion check in this app uses -- this used to count
+            // EVERY module in the whole system (including optional phases like CRM / Learn @
+            // Hi Tech), a fourth, broader definition of "complete" than anywhere else, which
+            // needed finishing literally everything (not just the compulsory phases) to ever
+            // fire. User::isCompulsoryTrainingComplete() is the one source of truth now.
+            if ($user->isCompulsoryTrainingComplete()) {
                 $user->update(['training_status' => 'completed']);
             }
         }
@@ -1115,14 +1115,23 @@ class TrainingController extends Controller
             'current_phase'  => $currentPhase,
             'current_module' => $latest?->module?->title,
             'status'         => $user->training_status ?? 'in_progress',
-            // One classification for the pill, the filter and the sort.
-            // Completed: all compulsory modules passed (or training marked done);
-            // In progress: any training activity at all; Not started: none.
-            'state'          => ($user->training_status === 'completed' || ($totalModules > 0 && $completedCount >= $totalModules)) ? 'completed'
+            // One classification for the pill, the filter and the sort. Driven only
+            // by the real per-module count ($completedCount is already scoped to
+            // $requiredIds, the compulsory set, and $totalModules = count of that
+            // same set), never training_status: that column gets set to 'completed'
+            // both as a side effect of is_training_required=false at account
+            // creation (0 modules attempted still reads "Complete") and by HR's
+            // manual approveTraining() override (a partially-done account, e.g. 4 of
+            // 11 modules, also reads "Complete") -- both confirmed live, both
+            // silently disagreeing with the real count this now reads instead.
+            // Completed: all compulsory modules passed; In progress: any training
+            // activity at all; Not started: none.
+            'state'          => ($totalModules > 0 && $completedCount >= $totalModules) ? 'completed'
                                 : ($started ? 'in_progress' : 'not_started'),
-            // Account locked until training is passed (TrainingLock).
+            // Account locked until training is passed (TrainingLock) -- same reason,
+            // real count instead of the stale flag.
             'held'           => $status === \App\Enums\UserAccountStatus::ONBOARDING_SUBMITTED->value
-                                && $user->is_training_required && $user->training_status !== 'completed',
+                                && $user->is_training_required && !($totalModules > 0 && $completedCount >= $totalModules),
             'failed_count'   => $progress->where('status', 'failed')->count(),
             'low_score'      => $avgScore > 0 && $avgScore < self::LOW_SCORE,
             'started'        => $started,

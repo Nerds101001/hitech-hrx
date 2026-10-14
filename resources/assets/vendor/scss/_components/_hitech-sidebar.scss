@@ -576,7 +576,7 @@ $border-color: rgba(0, 0, 0, 0.05);
 }
 
 // Short laptop windows (e.g. 1291x671, 1366x768-class): the sidebar is
-// shared across every page via layouts/sections/menu/verticalMenu.blade.php,
+// shared across every page via layouts/tenant-sections/menu/verticalMenu.blade.php,
 // so unlike the per-page dashboard fix, one change here reaches the whole
 // app at once. Same breakpoint as the dashboard's own short-viewport
 // compacting, for consistency.

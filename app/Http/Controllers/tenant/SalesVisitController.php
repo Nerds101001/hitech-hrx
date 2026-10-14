@@ -350,9 +350,14 @@ class SalesVisitController extends Controller
         $user = Auth::user();
 
         // Departments allowed to access Client Master
-        // Sales dept IDs: 2 (Sales Department), 26 (Sales)
+        // Sales dept IDs: 2 (Sales Department, legacy), 30 (Sales -- the department
+        // actual current sales reps are in; the comment here used to say "26 (Sales)"
+        // but department 26 is Lab Department, not Sales -- a confirmed mixup that
+        // 403'd ordinary Sales employees (e.g. Jasvinder, dept 30) while Sales
+        // MANAGERS kept working because they pass the separate hasRole('manager')
+        // check below regardless of department. 30 added, the wrong 26 removed.
         // Customer Care: 10, New Biz: 13
-        $salesDeptIds   = [2, 26];
+        $salesDeptIds   = [2, 30];
         // The combined "Customer Care + New Biz" department counts as both.
         $comboDeptIds   = \App\Models\Department::withTrashed()
             ->where('name', 'like', '%Customer Care + New Biz%')->pluck('id')->all();

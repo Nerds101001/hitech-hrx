@@ -2460,7 +2460,16 @@ class EmployeeController extends Controller
         'created_by_id'          => $authenticatedUser->id,
         'password'               => bcrypt($plainPassword),
         'is_training_required'   => $isTrainingRequired,
-        'training_status'        => $isTrainingRequired ? 'not_started' : 'completed',
+        // Never 'completed' here: that used to mark an exempt (or simply
+        // not-yet-decided -- $isTrainingRequired defaults to false whenever
+        // the request omits the field at all, e.g. any creation path other
+        // than the onboarding-invite modal) account as fully trained before
+        // they had ever attempted a single module. Readers that actually
+        // need "is training genuinely done" now use
+        // User::isCompulsoryTrainingComplete() / the real per-module count,
+        // never this column, so this no longer needs to lie to make the
+        // pages read sensibly for an exempt person.
+        'training_status'        => 'not_started',
       ]);
 
       // Assign Role (optional)

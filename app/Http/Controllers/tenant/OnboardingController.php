@@ -199,12 +199,14 @@ class OnboardingController extends Controller
             $user->onboarding_rejected_sections = null;
             
             // Keep the is_training_required flag set during candidate invitation.
-            // If training is NOT required, set the training_status to 'completed'.
-            if (!$user->is_training_required) {
-                $user->training_status = 'completed';
-            } else {
-                $user->training_status = 'not_started';
-            }
+            // training_status is never set to 'completed' here, whether or not
+            // training is required: this column used to be a side-effect flag
+            // that readers across the app trusted at face value as "fully
+            // trained," which falsely marked an account "Training Complete"
+            // before any module was ever attempted. Readers that need the real
+            // answer now use User::isCompulsoryTrainingComplete() / the actual
+            // per-module count instead of this column.
+            $user->training_status = 'not_started';
             $user->save();
 
             DB::commit();

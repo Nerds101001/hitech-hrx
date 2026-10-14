@@ -4439,7 +4439,9 @@
                     $('#modalTaskDescription').val('');
                     $('#modalTaskDueDate').val('');
                     $('#modalTaskType').val('open');
-                    $('.modal-title-hitech').text('Define Key Result Area (KRA)');
+                    // Scoped, for the same reason as openAddKpi() above: a bare class
+                    // selector here clobbers every other modal's title sharing this class.
+                    $('#modalAddTask .modal-title-hitech').text('Define Key Result Area (KRA)');
                     $('#addTaskForm button[type="submit"]').html('Publish KRA <i class="bx bx-check-circle ms-1"></i>');
                 };
 
@@ -4450,7 +4452,7 @@
                     $('#modalTaskDescription').val(description);
                     $('#modalTaskDueDate').val(dueDate);
                     $('#modalTaskType').val(type);
-                    $('.modal-title-hitech').text('Refine KRA Details');
+                    $('#modalAddTask .modal-title-hitech').text('Refine KRA Details');
                     $('#addTaskForm button[type="submit"]').html('Update KRA <i class="bx bx-check-circle ms-1"></i>');
                     bootstrap.Modal.getOrCreateInstance(document.getElementById('modalAddTask')).show();
                 };
@@ -4493,8 +4495,16 @@
 
                 $('#modalKpiCategory').val(category);
 
-                $('.modal-title-hitech').text(id ? `Refine ${category} Details` : `Define Strategic ${category}`);
-                $('.btn-hitech-modal-submit').html(id ? `Update ${category} <i class="bx bx-check-circle ms-1"></i>` : `Deploy ${category} <i class="bx bx-rocket ms-1"></i>`);
+                // Scoped to THIS modal only. A bare class selector here used to update
+                // every element sharing .modal-title-hitech / .btn-hitech-modal-submit on
+                // the whole page -- seven other modals (Manage Document, Terminate
+                // Employee, Allot Device, Confirm/Extend Probation, Publish KRA) use the
+                // same classes, so opening this KPI modal once silently overwrote their
+                // titles/buttons too (left stale once this modal closed, since Bootstrap
+                // keeps closed modals in the DOM rather than destroying them) -- that's
+                // what put "Define Strategic KPI" / "Deploy KPI" on the document form.
+                $('#modalAddKpi .modal-title-hitech').text(id ? `Refine ${category} Details` : `Define Strategic ${category}`);
+                $('#modalAddKpi .btn-hitech-modal-submit').html(id ? `Update ${category} <i class="bx bx-check-circle ms-1"></i>` : `Deploy ${category} <i class="bx bx-rocket ms-1"></i>`);
 
                 bootstrap.Modal.getOrCreateInstance(document.getElementById('modalAddKpi')).show();
             };

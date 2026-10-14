@@ -18,7 +18,12 @@
                 </div>
             </div>
             <div class="payslip-id-side text-end">
-                <div class="premium-badge mb-2">PAYSLIP {{ $payslip->created_at->format('F Y') }}</div>
+                {{-- created_at is nullable on this table; a null here fataled this whole
+                     page with "Call to a member function format() on null" for any
+                     payslip row written without it set (this exact failure pattern --
+                     a null date fed straight into ->format() in a Blade view -- already
+                     recurs elsewhere in this app's logs, e.g. travel-claims). --}}
+                <div class="premium-badge mb-2">PAYSLIP {{ ($payslip->created_at ?? $payslip->updated_at)?->format('F Y') ?? 'N/A' }}</div>
                 <h5 class="fw-bold text-dark mb-0">#{{ $payslip->code }}</h5>
                 <div class="mt-2">
                     <span class="badge bg-label-success rounded-pill px-3">
@@ -36,10 +41,10 @@
                 <label class="info-label">EMPLOYEE PROFILE</label>
                 <div class="d-flex align-items-center mt-2">
                     <div class="avatar avatar-md me-3">
-                        <span class="avatar-initial rounded-circle bg-teal text-white">{{ $user->getInitials() }}</span>
+                        <span class="avatar-initial rounded-circle bg-teal text-white">{{ $user?->getInitials() ?? '?' }}</span>
                     </div>
                     <div>
-                        <h6 class="fw-bold mb-0 text-dark">{{ $user->full_name }}</h6>
+                        <h6 class="fw-bold mb-0 text-dark">{{ $user?->full_name ?? 'N/A' }}</h6>
                         <div class="text-muted extra-small mt-1">ID: {{ $compliance['computer_id'] }}</div>
                         <div class="text-muted extra-small">Joined: {{ $compliance['joining_date'] }}</div>
                     </div>

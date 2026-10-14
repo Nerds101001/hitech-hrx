@@ -192,6 +192,25 @@
       .attendance-tabbar { padding-bottom: .5rem; }
       .attendance-tabactions { padding-left: .75rem; }
   }
+
+  /* Unlike the filter row (which already scrolls on its own, see
+     .attendance-filterbar below) and the two tables (already wrapped in
+     .table-responsive / overflow:auto), this tab+action bar never got the
+     same horizontal-scroll-box treatment: its tabs and action buttons are
+     all flex:0 0 auto / nowrap, so at phone width their combined min-content
+     width leaked into the page's own scrollWidth instead of staying
+     contained. Same established pattern applied here too. */
+  @media (max-width: 480px) {
+      .attendance-tabbar {
+          flex-wrap: nowrap !important;
+          overflow-x: auto;
+          -webkit-overflow-scrolling: touch;
+      }
+      .attendance-tabbar .nav-tabs,
+      .attendance-tabactions {
+          flex-shrink: 0;
+      }
+  }
 </style>
 @endsection
 
