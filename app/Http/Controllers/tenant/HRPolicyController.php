@@ -213,6 +213,37 @@ class HRPolicyController extends Controller
     }
 
     /**
+     * The PDF bytes, same-origin. The mandatory-policy popup's phone reader (PDF.js)
+     * fetches the document itself in the browser to render it at a real, legible
+     * size -- but a browser fetch() against R2's own signed URL is blocked by CORS
+     * (confirmed: R2 sends no Access-Control-Allow-Origin header), where the
+     * existing <iframe src="..."> / "open in a new tab" uses are fine because a
+     * plain navigation isn't subject to CORS. Streaming it through our own route
+     * sidesteps that and never exposes the raw bucket URL to the client at all,
+     * which is a stricter access model than the signed-URL ones above, not a
+     * looser one.
+     */
+    public function stream($id)
+    {
+        $policy = HRPolicy::findOrFail($id);
+        $disk = Storage::disk('r2');
+        abort_unless($disk->exists($policy->file_path), 404);
+
+        return response()->stream(function () use ($disk, $policy) {
+            $stream = $disk->readStream($policy->file_path);
+            fpassthru($stream);
+            if (is_resource($stream)) {
+                fclose($stream);
+            }
+        }, 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'inline; filename="' . basename($policy->file_path) . '"',
+            'Cache-Control' => 'private, max-age=0, must-revalidate',
+            'X-Content-Type-Options' => 'nosniff',
+        ]);
+    }
+
+    /**
      * Display acknowledgments for a specific policy.
      */
     public function acknowledgments($id)

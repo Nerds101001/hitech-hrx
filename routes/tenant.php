@@ -1172,6 +1172,7 @@ Route::middleware([
         Route::post('hr-policies/acknowledge/{id}', [HRPolicyController::class, 'acknowledge'])->name('hr-policies.acknowledge');
         Route::get('hr-policies/view/{id}', [HRPolicyController::class, 'view'])->name('hr-policies.view');
         Route::get('hr-policies/embed-url/{id}', [HRPolicyController::class, 'getEmbedUrl'])->name('hr-policies.embed-url');
+        Route::get('hr-policies/stream/{id}', [HRPolicyController::class, 'stream'])->name('hr-policies.stream')->whereNumber('id');
 
         // AI Training — reverted to the original admin/hr + orphaned-permission
         // gate at the user's explicit request (no live access changes without
