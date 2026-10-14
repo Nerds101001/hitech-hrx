@@ -149,6 +149,16 @@
         @media (min-width: 1200px) {
             .modal-xl { max-width: 70% !important; }
         }
+        /* Desktop/tablet: restores the modal's original fixed height. It used to be an
+           inline style="height: 85vh" on .modal-content; moving that into this class
+           was accidentally left with no non-mobile rule, so .modal-body (and the PDF
+           viewer inside it, via flex-grow) had nothing to size against and collapsed
+           toward the iframe's ~150px browser default instead of filling the modal. */
+        @media (min-width: 768px) {
+            #forcePolicyModal .policy-modal-content {
+                height: 85vh;
+            }
+        }
         /* Phones: the modal must fit the viewport edge-to-edge, with the PDF
            getting almost all of the height -- the header/description/footer
            chrome below used fixed desktop padding that left barely any room

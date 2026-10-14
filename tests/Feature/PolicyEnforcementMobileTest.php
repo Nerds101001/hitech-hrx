@@ -64,6 +64,25 @@ class PolicyEnforcementMobileTest extends TestCase
         $this->assertStringContainsString('docs.google.com/gview', $html, 'phones get the renderable viewer wrapper, not a raw PDF link');
     }
 
+    public function test_desktop_still_gets_a_real_modal_height(): void
+    {
+        // Regression: the fixed height used to be an inline style="height: 85vh" on
+        // .modal-content; moving it into a class dropped it entirely for anyone NOT on
+        // a phone, so modal-body (and the PDF viewer inside it, sized via flex-grow)
+        // had nothing to size against and collapsed toward the iframe's tiny browser
+        // default. Desktop/tablet (min-width: 768px) must still get a real height.
+        $user = $this->activeUser();
+        $this->pendingPolicy();
+
+        $html = $this->actingAs($user)->get('/user/dashboard')->assertOk()->getContent();
+
+        $this->assertMatchesRegularExpression(
+            '/@media\s*\(min-width:\s*768px\)\s*\{\s*#forcePolicyModal\s*\.policy-modal-content\s*\{[^}]*height:\s*85vh/',
+            $html,
+            'desktop/tablet keeps a real modal height outside the phone-only media query'
+        );
+    }
+
     public function test_the_modal_body_can_actually_scroll_on_a_phone(): void
     {
         $user = $this->activeUser();
