@@ -13,6 +13,11 @@
       $tabs['programs']  = ['Programs', 'bx-list-ul', route('performance.ninety-day-goals.programs.index')];
       if ($navMgr) {
           $tabs['new'] = ['New Program', 'bx-plus-circle', route('performance.ninety-day-goals.programs.create')];
+          $pendingDeleteCount = \App\Models\NinetyDayGoalDeleteRequest::where('status', 'pending')->count();
+          $tabs['delete-requests'] = [
+              'Removal Requests' . ($pendingDeleteCount ? " ({$pendingDeleteCount})" : ''),
+              'bx-trash', route('performance.ninety-day-goals.delete-requests.index'),
+          ];
       }
   } else {
       if ($navSale) {

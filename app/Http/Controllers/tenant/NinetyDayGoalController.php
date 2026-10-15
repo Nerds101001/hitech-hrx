@@ -1620,6 +1620,30 @@ class NinetyDayGoalController extends Controller
         return response()->json(['success' => true, 'message' => 'Request ' . $data['status'] . '.']);
     }
 
+    /** Every removal request in one place, admin/HR only — Pending first so nothing sits unseen. */
+    public function deleteRequestsIndex(Request $request)
+    {
+        $user = Auth::user();
+        if (!Goals::managesEveryone($user)) {
+            abort(403, 'Only admin/HR review removal requests.');
+        }
+        $tab = in_array($request->get('tab'), ['approved', 'rejected'], true) ? $request->get('tab') : 'pending';
+
+        $requests = NinetyDayGoalDeleteRequest::with('goal.round.user', 'requestedBy', 'decidedBy')
+            ->where('status', $tab)
+            ->orderByDesc($tab === 'pending' ? 'created_at' : 'decided_at')
+            ->paginate(25)->withQueryString();
+
+        $counts = NinetyDayGoalDeleteRequest::selectRaw('status, COUNT(*) c')->groupBy('status')->pluck('c', 'status');
+
+        return view('tenant.performance.ninety-day-goals.delete-requests', [
+            'navTab'   => 'delete-requests',
+            'requests' => $requests,
+            'tab'      => $tab,
+            'counts'   => $counts,
+        ]);
+    }
+
     // ── comments on a week ───────────────────────────────────────────────
 
     /** The salesperson or an admin/manager adds a comment to one week of a goal. */
