@@ -82,7 +82,9 @@ class MyTasksController extends Controller
         return [
             'all'       => $tasks,
             'overdue'   => $tasks->filter(fn ($t) => $t->is_overdue)->values(),
-            'completed' => $tasks->filter(fn ($t) => $t->is_completed)->values(),
+            // Last submitted first here - once a task is done, what matters
+            // is what you just finished, not its old due date/priority.
+            'completed' => $tasks->filter(fn ($t) => $t->is_completed)->sortByDesc('completed_at')->values(),
             'pending'   => $tasks->filter(fn ($t) => !$t->is_completed && !$t->is_overdue && $t->due_date && $t->due_date->isToday())->values(),
             'upcoming'  => $tasks->filter(fn ($t) => !$t->is_completed && !$t->is_overdue && (!$t->due_date || $t->due_date->isFuture()))->values(),
             'watching'  => $watching,

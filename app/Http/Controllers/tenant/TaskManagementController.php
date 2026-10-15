@@ -117,6 +117,12 @@ class TaskManagementController extends Controller
                 default      => $query->where('tasks.status', $request->status)
                     ->whereNotIn('tasks.status', Task::CLOSED_STATUSES),
             };
+            // Once it's done, priority/due date no longer say anything
+            // useful - what was just submitted belongs on top instead. Only
+            // when nobody clicked a column header to sort it some other way.
+            if ($request->status === 'completed' && !$sortSql && $sort !== 'due') {
+                $query->reorder()->orderByDesc('tasks.completed_at')->orderByDesc('tasks.id');
+            }
         }
 
         if ($request->filled('priority')) {
