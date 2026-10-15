@@ -80,6 +80,7 @@
         <th class="ndg-mx-l" data-col="no" style="left:0">#</th><th class="ndg-mx-l ndg-ell" data-col="cust" style="left:40px">Customer</th><th class="ndg-ell">Product</th><th class="ndg-ell">Salesperson</th><th>Target ₹L</th><th>Expected</th>
         @for($w = 0; $w < $weeks; $w++)<th>W{{ $w + 1 }}</th>@endfor
         <th style="text-align:right">Actual ₹L</th><th>Ach.%</th><th style="text-align:left">Status</th><th style="text-align:left">Last Comment</th>
+        @if($canManage ?? false)<th>Actions</th>@endif
       </tr></thead>
       <tbody>
       @forelse($paged as $i => $r)
@@ -140,9 +141,20 @@
                       data-customer="{{ $r->goal->client_name }}" data-history="{{ json_encode($hist) }}" title="View the full history{{ $nComments ? ' (' . $nComments . ' comment' . ($nComments === 1 ? '' : 's') . ')' : '' }}">History{{ $nComments ? ' (' . $nComments . ')' : '' }}</span>
             @endif
           </td>
+          @if($canManage ?? false)
+            <td class="text-nowrap">
+              <div class="dropdown">
+                <button class="btn btn-sm btn-icon" data-bs-toggle="dropdown"><i class="bx bx-dots-vertical-rounded"></i></button>
+                <ul class="dropdown-menu dropdown-menu-end">
+                  <li><button type="button" class="dropdown-item ndg-ct-edit" data-id="{{ $r->goal->id }}" data-product="{{ e($r->goal->product) }}" data-brand="{{ e($r->goal->brand) }}" data-goal="{{ e($r->goal->goal ?: $r->goal->goal_type) }}" data-potential="{{ $r->goal->monthly_potential }}" data-expected="{{ optional($r->goal->expected_order_date)->format('Y-m-d') }}" data-title="{{ e($r->goal->client_name) }}">Edit</button></li>
+                  <li><button type="button" class="dropdown-item text-danger ndg-ct-remove" data-id="{{ $r->goal->id }}" data-title="{{ e($r->goal->client_name) }}">Remove customer</button></li>
+                </ul>
+              </div>
+            </td>
+          @endif
         </tr>
       @empty
-        <tr><td colspan="{{ 9 + $weeks }}" class="text-center text-muted p-5">
+        <tr><td colspan="{{ 9 + $weeks + ($canManage ?? false ? 1 : 0) }}" class="text-center text-muted p-5">
           No customers have been added to this program yet — {{ $participants }} {{ \Illuminate\Support\Str::plural('participant', $participants) }} enrolled, none have added a target customer.
         </td></tr>
       @endforelse
@@ -153,6 +165,82 @@
 </div>
 
 @once
+@if($canManage ?? false)
+{{-- Edit a customer's target / Remove it outright — admin/HR only, same endpoints the
+     per-person round page uses (PUT/DELETE /ninety-day-goals/{id}). --}}
+<div class="modal fade" id="ndgCtEditModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Edit <span class="ndg-ct-edit-title"></span></h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" name="goal_id">
+        <div class="mb-3"><label class="form-label">Product</label><input type="text" name="product" class="form-control" maxlength="255"></div>
+        <div class="mb-3"><label class="form-label">Brand</label><input type="text" name="brand" class="form-control" maxlength="100"></div>
+        <div class="mb-3"><label class="form-label">Goal</label><input type="text" name="goal" class="form-control" maxlength="255"></div>
+        <div class="mb-3"><label class="form-label">Target (₹ Lakh)</label><input type="number" step="0.01" min="0" name="monthly_potential" class="form-control"></div>
+        <div class="mb-3"><label class="form-label">Expected Order Date</label><input type="date" name="expected_order_date" class="form-control"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-hitech-cancel rounded-pill px-4" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn-hitech rounded-pill px-4" id="ndgCtSaveGoal">Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+(function () {
+  var CSRF = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+  var BASE = '{{ url('performance/ninety-day-goals') }}';
+  function post(url, method, body) {
+    return fetch(url, { method: method, headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': CSRF }, body: body ? JSON.stringify(body) : undefined })
+      .then(function (r) { return r.json(); });
+  }
+  document.addEventListener('click', function (e) {
+    var edit = e.target.closest ? e.target.closest('.ndg-ct-edit') : null;
+    if (edit) {
+      var modalEl = document.getElementById('ndgCtEditModal');
+      modalEl.querySelector('[name=goal_id]').value = edit.dataset.id;
+      modalEl.querySelector('[name=product]').value = edit.dataset.product || '';
+      modalEl.querySelector('[name=brand]').value = edit.dataset.brand || '';
+      modalEl.querySelector('[name=goal]').value = edit.dataset.goal || '';
+      modalEl.querySelector('[name=monthly_potential]').value = edit.dataset.potential || '';
+      modalEl.querySelector('[name=expected_order_date]').value = edit.dataset.expected || '';
+      modalEl.querySelector('.ndg-ct-edit-title').textContent = edit.dataset.title || '';
+      new bootstrap.Modal(modalEl).show();
+      return;
+    }
+    var rm = e.target.closest ? e.target.closest('.ndg-ct-remove') : null;
+    if (rm) {
+      if (!confirm('Remove "' + (rm.dataset.title || 'this customer') + '" from the program? This also removes its weekly history.')) { return; }
+      post(BASE + '/' + rm.dataset.id, 'DELETE').then(function (j) {
+        if (!j.success) { alert(j.message || 'Could not remove it.'); return; }
+        location.reload();
+      }).catch(function () { alert('Request failed. Try again.'); });
+    }
+  });
+  var saveBtn = document.getElementById('ndgCtSaveGoal');
+  if (saveBtn) {
+    saveBtn.addEventListener('click', function () {
+      var modalEl = document.getElementById('ndgCtEditModal');
+      var id = modalEl.querySelector('[name=goal_id]').value;
+      post(BASE + '/' + id, 'PUT', {
+        product: modalEl.querySelector('[name=product]').value,
+        brand: modalEl.querySelector('[name=brand]').value,
+        goal: modalEl.querySelector('[name=goal]').value,
+        monthly_potential: parseFloat(modalEl.querySelector('[name=monthly_potential]').value || '0'),
+        expected_order_date: modalEl.querySelector('[name=expected_order_date]').value || null,
+      }).then(function (j) {
+        if (j.success) { location.reload(); return; }
+        alert(j.message || 'Could not save.');
+      });
+    });
+  }
+})();
+</script>
+@endif
 {{-- One customer's whole timeline: every week's status, the salesperson's comment and next
      step, and comments from their lead or admin. --}}
 <div class="modal fade" id="ndgHistModal" tabindex="-1" aria-hidden="true">
