@@ -97,6 +97,7 @@ return Application::configure(basePath: dirname(__DIR__))
       'telephony.restricted' => \App\Http\Middleware\RestrictTelephonyAccess::class,
       'tally_push.signed' => \App\Http\Middleware\VerifyTallyPushSignature::class,
       'tally.viewer' => \App\Http\Middleware\RestrictTallyAccess::class,
+      'handover.viewer' => \App\Http\Middleware\RestrictHandoverAccess::class,
     ]);
   })
   ->withExceptions(function (Exceptions $exceptions) {

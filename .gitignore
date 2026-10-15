@@ -117,6 +117,7 @@ vite.config.js.timestamp-*
 /storage/app/mind_speaks/
 /storage/app/wfh_approvals/
 /storage/app/public/task-attachments/
+/storage/app/public/sales-trial-images/
 /storage/deploy-backups/
 /storage/app/htmlpurifier/
 

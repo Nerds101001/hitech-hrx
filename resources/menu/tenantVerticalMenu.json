@@ -1129,6 +1129,15 @@
                     ]
                 },
                 {
+                    "url": "/sales-visits/leaver-handover",
+                    "name": "Leaver Handover",
+                    "slug": "sales-visits.leaver-handover.index",
+                    "roles": [
+                        "admin",
+                        "hr"
+                    ]
+                },
+                {
                     "url": "/sales-sources",
                     "name": "Sales Sources",
                     "slug": "sales-sources.index",

@@ -980,7 +980,7 @@ Route::middleware([
             Route::post('/sales-report/resolve-setu/{salespersonId}', [\App\Http\Controllers\tenant\SalesPipelineController::class, 'resolveSetu'])->name('pipeline.resolve-setu');
 
             // Hand a leaver's customers to a replacement from a chosen month (hidden: named viewers who are Admin / HR).
-            Route::prefix('leaver-handover')->name('leaver-handover.')->group(function () {   // hidden: the controller admits only config('handover.viewer_emails')
+            Route::middleware(['handover.viewer'])->prefix('leaver-handover')->name('leaver-handover.')->group(function () {   // RestrictHandoverAccess: config('handover.viewer_emails') + Admin/HR
                 Route::get('/', [\App\Http\Controllers\tenant\LeaverHandoverController::class, 'index'])->name('index');
                 Route::post('/preview', [\App\Http\Controllers\tenant\LeaverHandoverController::class, 'preview'])->name('preview');
                 Route::post('/apply', [\App\Http\Controllers\tenant\LeaverHandoverController::class, 'apply'])->name('apply');

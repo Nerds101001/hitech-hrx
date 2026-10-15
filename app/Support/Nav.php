@@ -241,6 +241,15 @@ class Nav
                 continue;
             }
 
+            // Leaver Handover is limited to the emails in config('handover.viewer_emails')
+            // who are also Admin/HR; same reasoning as above.
+            if ($m === 'handover.viewer') {
+                if (!\App\Http\Middleware\RestrictHandoverAccess::permits($user)) {
+                    return false;
+                }
+                continue;
+            }
+
             if (str_starts_with($m, 'can:')) {
                 $ability = explode(',', substr($m, 4))[0];
                 if (!Gate::forUser($user)->allows($ability)) {
