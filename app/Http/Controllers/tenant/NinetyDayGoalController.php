@@ -14,6 +14,7 @@ use App\Models\Task;
 use App\Models\User;
 use App\Notifications\NinetyDayGoal\NinetyDayGoalDeleteDecision;
 use App\Notifications\NinetyDayGoal\NinetyDayGoalDeleteRequested;
+use App\Notifications\NinetyDayGoal\NinetyDayGoalNoteAdded;
 use App\Notifications\NinetyDayGoal\ProgramInvite;
 use App\Notifications\NinetyDayGoal\WeekReminder;
 use App\Services\NinetyDayGoalService as Goals;
@@ -1665,6 +1666,10 @@ class NinetyDayGoalController extends Controller
         $note = Goals::addNote($user, $goal, (int) $data['week_no'], $data['body']);
         if (!$note) {
             return response()->json(['success' => false, 'message' => 'That week has not started yet.'], 422);
+        }
+        // Someone other than the goal's own owner replied (their lead, admin/HR) — let them know.
+        if ((int) $goal->user_id !== (int) $user->id && $goal->user) {
+            $goal->user->notify(new NinetyDayGoalNoteAdded($goal, $user, (int) $data['week_no'], $note->body));
         }
 
         return response()->json(['success' => true, 'note' => [
