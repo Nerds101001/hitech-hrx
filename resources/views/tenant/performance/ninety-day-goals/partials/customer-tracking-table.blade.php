@@ -97,7 +97,7 @@
                   'comment' => $c->comment,
                   'next' => $c->next_action ? $c->next_action . ($c->next_follow_up_date ? ' (' . $c->next_follow_up_date->format('d M') . ')' : '') : null,
                   'late' => (bool) $c->is_late,
-                  'notes' => $c->notes->map(fn ($n) => ['by' => $who($n->author), 'body' => $n->body])->values()->all(),
+                  'notes' => $c->notes->map(fn ($n) => ['by' => $who($n->author), 'body' => $n->body, 'is_admin' => \App\Services\NinetyDayGoalService::managesEveryone($n->author)])->values()->all(),
               ])->values();
           $last = null;
           foreach ($hist->reverse() as $h) {
@@ -138,7 +138,7 @@
             @endif
             @if($hist->isNotEmpty())
               <span role="button" tabindex="0" class="ndg-hist-btn text-primary ms-1" style="font-size:.66rem;text-decoration:underline;cursor:pointer"
-                      data-customer="{{ $r->goal->client_name }}" data-history="{{ json_encode($hist) }}" title="View the full history{{ $nComments ? ' (' . $nComments . ' comment' . ($nComments === 1 ? '' : 's') . ')' : '' }}">History{{ $nComments ? ' (' . $nComments . ')' : '' }}</span>
+                      data-customer="{{ $r->goal->client_name }}" data-goal="{{ $r->goal->id }}" data-history="{{ json_encode($hist) }}" title="View the full history{{ $nComments ? ' (' . $nComments . ' comment' . ($nComments === 1 ? '' : 's') . ')' : '' }}">History{{ $nComments ? ' (' . $nComments . ')' : '' }}</span>
             @endif
           </td>
           @if($canManage ?? false)
@@ -256,26 +256,54 @@
   </div>
 </div>
 <script>
-document.addEventListener('click', function (e) {
-  var btn = e.target.closest ? e.target.closest('.ndg-hist-btn') : null;
-  if (!btn) { return; }
+(function () {
+  var CAN_MANAGE = @json($canManage ?? false);
+  var CSRF_EL = document.querySelector('meta[name="csrf-token"]');
+  var NOTES_URL = '{{ url('performance/ninety-day-goals/notes') }}';
   var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); };
-  var weeks = [];
-  try { weeks = JSON.parse(btn.getAttribute('data-history') || '[]'); } catch (err) { weeks = []; }
-  document.getElementById('ndgHistTitle').textContent = 'Weekly history · ' + btn.getAttribute('data-customer');
-  var html = weeks.length ? '' : '<div class="text-muted">Nothing submitted yet.</div>';
-  weeks.forEach(function (w) {
-    html += '<div class="border-bottom py-2">'
-      + '<div class="d-flex align-items-center gap-2 mb-1"><b>W' + w.week + '</b><span class="text-muted small">' + esc(w.due) + '</span>'
-      + (w.status ? '<span class="badge bg-label-secondary">' + esc(w.status) + '</span>' : '<span class="text-muted small">not submitted</span>')
-      + (w.late ? '<span class="badge bg-label-warning">late</span>' : '') + '</div>'
-      + (w.comment ? '<div class="small">' + esc(w.comment) + '</div>' : '')
-      + (w.next ? '<div class="small text-muted"><b>Next:</b> ' + esc(w.next) + '</div>' : '')
-      + (w.notes || []).map(function (n) { return '<div class="small mt-1 ps-2 border-start"><b>' + esc(n.by) + ':</b> ' + esc(n.body) + '</div>'; }).join('')
-      + '</div>';
+
+  function renderHist(btn) {
+    var weeks = [];
+    try { weeks = JSON.parse(btn.getAttribute('data-history') || '[]'); } catch (err) { weeks = []; }
+    document.getElementById('ndgHistTitle').textContent = 'Weekly history · ' + btn.getAttribute('data-customer');
+    var html = weeks.length ? '' : '<div class="text-muted">Nothing submitted yet.</div>';
+    weeks.forEach(function (w) {
+      html += '<div class="border-bottom py-2">'
+        + '<div class="d-flex align-items-center gap-2 mb-1"><b>W' + w.week + '</b><span class="text-muted small">' + esc(w.due) + '</span>'
+        + (w.status ? '<span class="badge bg-label-secondary">' + esc(w.status) + '</span>' : '<span class="text-muted small">not submitted</span>')
+        + (w.late ? '<span class="badge bg-label-warning">late</span>' : '') + '</div>'
+        + (w.comment ? '<div class="small">' + esc(w.comment) + '</div>' : '')
+        + (w.next ? '<div class="small text-muted"><b>Next:</b> ' + esc(w.next) + '</div>' : '')
+        + (w.notes || []).map(function (n) {
+            return '<div class="small mt-1 ps-2 border-start">' + (n.is_admin ? '<span class="badge badge-hitech me-1" style="background:#fef3c7;color:#92400e;font-size:.6rem">Admin</span>' : '')
+              + '<b>' + esc(n.by) + ':</b> ' + esc(n.body) + '</div>';
+          }).join('')
+        + (CAN_MANAGE ? '<button type="button" class="btn btn-link btn-sm p-0 mt-1 ndg-hist-reply" data-goal="' + btn.getAttribute('data-goal') + '" data-week="' + w.week + '"><i class="bx bx-comment-add"></i> Reply</button>' : '')
+        + '</div>';
+    });
+    document.getElementById('ndgHistBody').innerHTML = html;
+    if (window.bootstrap && window.bootstrap.Modal) { window.bootstrap.Modal.getOrCreateInstance(document.getElementById('ndgHistModal')).show(); }
+  }
+
+  document.addEventListener('click', function (e) {
+    var btn = e.target.closest ? e.target.closest('.ndg-hist-btn') : null;
+    if (btn) { renderHist(btn); return; }
+
+    var reply = e.target.closest ? e.target.closest('.ndg-hist-reply') : null;
+    if (reply) {
+      var body = window.prompt('Reply for W' + reply.getAttribute('data-week') + ':');
+      if (body === null || !body.trim()) { return; }
+      reply.disabled = true;
+      fetch(NOTES_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': CSRF_EL.getAttribute('content') },
+        body: JSON.stringify({ goal_id: parseInt(reply.getAttribute('data-goal'), 10), week_no: parseInt(reply.getAttribute('data-week'), 10), body: body.trim() }),
+      }).then(function (r) { return r.json(); }).then(function (j) {
+        if (!j.success) { reply.disabled = false; alert(j.message || 'Could not save the reply.'); return; }
+        location.reload();
+      }).catch(function () { reply.disabled = false; alert('Request failed. Try again.'); });
+    }
   });
-  document.getElementById('ndgHistBody').innerHTML = html;
-  if (window.bootstrap && window.bootstrap.Modal) { window.bootstrap.Modal.getOrCreateInstance(document.getElementById('ndgHistModal')).show(); }
-});
+})();
 </script>
 @endonce
