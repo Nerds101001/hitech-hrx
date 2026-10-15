@@ -169,22 +169,23 @@ class SalesPipelineController extends Controller
     }
 
     /**
-     * One-off reopen of September 2026 for Nidhi Sharma (CCare, user id 255)
-     * only, at the client's request on 2026-10-15 -- Sept had already passed
-     * its Oct-5 grace window. Self-expiring through the end of Sunday
-     * 18 Oct 2026 (IST), same mechanism as isReopened() above but scoped to
-     * one user instead of the whole team. Dead code and safe to delete once
-     * the moment has passed.
+     * One-off reopen of August and September 2026 for Nidhi Sharma (CCare,
+     * user id 255) only, at the client's request on 2026-10-15 -- both had
+     * already passed their grace windows (August's own team-wide reopen
+     * through isReopened() above also expired 21 Sept). Self-expiring
+     * through the end of Sunday 18 Oct 2026 (IST), same mechanism as
+     * isReopened() but scoped to one user instead of the whole team. Dead
+     * code and safe to delete once the moment has passed.
      */
     public const REOPEN_FOR_USER_ID   = 255;
-    public const REOPEN_FOR_USER_MONTH = '2026-09';
+    public const REOPEN_FOR_USER_MONTHS = ['2026-08', '2026-09'];
     public const REOPEN_FOR_USER_UNTIL = '2026-10-18 23:59:59';   // Asia/Kolkata
 
     public static function isReopenedForUser($user, string $monthYear): bool
     {
         return $user
             && (int) $user->id === self::REOPEN_FOR_USER_ID
-            && $monthYear === self::REOPEN_FOR_USER_MONTH
+            && in_array($monthYear, self::REOPEN_FOR_USER_MONTHS, true)
             && \Carbon\Carbon::now()->lte(\Carbon\Carbon::parse(self::REOPEN_FOR_USER_UNTIL, 'Asia/Kolkata'));
     }
 
