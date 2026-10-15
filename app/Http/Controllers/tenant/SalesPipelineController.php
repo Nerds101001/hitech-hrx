@@ -169,6 +169,26 @@ class SalesPipelineController extends Controller
     }
 
     /**
+     * One-off reopen of September 2026 for Nidhi Sharma (CCare, user id 255)
+     * only, at the client's request on 2026-10-15 -- Sept had already passed
+     * its Oct-5 grace window. Self-expiring through the end of Sunday
+     * 18 Oct 2026 (IST), same mechanism as isReopened() above but scoped to
+     * one user instead of the whole team. Dead code and safe to delete once
+     * the moment has passed.
+     */
+    public const REOPEN_FOR_USER_ID   = 255;
+    public const REOPEN_FOR_USER_MONTH = '2026-09';
+    public const REOPEN_FOR_USER_UNTIL = '2026-10-18 23:59:59';   // Asia/Kolkata
+
+    public static function isReopenedForUser($user, string $monthYear): bool
+    {
+        return $user
+            && (int) $user->id === self::REOPEN_FOR_USER_ID
+            && $monthYear === self::REOPEN_FOR_USER_MONTH
+            && \Carbon\Carbon::now()->lte(\Carbon\Carbon::parse(self::REOPEN_FOR_USER_UNTIL, 'Asia/Kolkata'));
+    }
+
+    /**
      * A closed month's Sale / Pending / Forecast / Remarks figures are
      * locked to everyone except Admin/HR. "Closed" means: not the current
      * month, and not last month before the 5th of this month either (e.g.
@@ -182,6 +202,10 @@ class SalesPipelineController extends Controller
         }
 
         if (self::isReopened($monthYear)) {
+            return false;
+        }
+
+        if (self::isReopenedForUser($user, $monthYear)) {
             return false;
         }
 

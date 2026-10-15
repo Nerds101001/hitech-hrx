@@ -695,9 +695,11 @@
                                         // closes, only Admin/HR can still edit it — mirrors
                                         // isMonthLockedForUser() server-side.
                                         // A one-off reopen (SalesPipelineController::isReopened) lifts the
-                                        // lock for everyone until it expires by itself.
+                                        // lock for everyone until it expires by itself. A narrower
+                                        // one (isReopenedForUser) lifts it for a single named user only.
                                         $monthLocked = !$isAdminOrHr
                                             && !\App\Http\Controllers\tenant\SalesPipelineController::isReopened($m['key'])
+                                            && !\App\Http\Controllers\tenant\SalesPipelineController::isReopenedForUser(auth()->user(), $m['key'])
                                             && !($isThisMonth || ($m['key'] === $prevMonthKey && \Carbon\Carbon::now()->day <= 5));
                                         // Sale / Pending / Remarks stay the book editors' job
                                         // (CCare / New Biz / manager / admin).
