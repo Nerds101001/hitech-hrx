@@ -79,12 +79,19 @@ class MyTasksController extends Controller
             ->sortBy(fn ($t) => [$t->due_date === null ? 1 : 0, $t->due_date])
             ->values();
 
+        // Last submitted first here - once a task is done, what matters is
+        // what you just finished, not its old due date/priority.
+        $completed = $tasks->filter(fn ($t) => $t->is_completed)->sortByDesc('completed_at')->values();
+
         return [
-            'all'       => $tasks,
+            // Still-open work leads (priority, then nearest due date) with
+            // completed tasks trailing behind it, most recently finished
+            // first - otherwise a task finished weeks ago but due date 09 Sep
+            // outranks one due today just because it shares the same
+            // priority, which is what made the "All" tab look unsorted.
+            'all'       => $tasks->filter(fn ($t) => !$t->is_completed)->values()->concat($completed)->values(),
             'overdue'   => $tasks->filter(fn ($t) => $t->is_overdue)->values(),
-            // Last submitted first here - once a task is done, what matters
-            // is what you just finished, not its old due date/priority.
-            'completed' => $tasks->filter(fn ($t) => $t->is_completed)->sortByDesc('completed_at')->values(),
+            'completed' => $completed,
             'pending'   => $tasks->filter(fn ($t) => !$t->is_completed && !$t->is_overdue && $t->due_date && $t->due_date->isToday())->values(),
             'upcoming'  => $tasks->filter(fn ($t) => !$t->is_completed && !$t->is_overdue && (!$t->due_date || $t->due_date->isFuture()))->values(),
             'watching'  => $watching,

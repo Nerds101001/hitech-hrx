@@ -56,15 +56,20 @@ class TaskManagementController extends Controller
         $user = auth()->user();
         $canSeeAll = TaskAccess::isUnrestricted($user);
 
-        // Highest priority first, then nearest deadline — what actually
-        // needs attention next — with undated tasks pushed to the end rather
-        // than sorting first as NULL otherwise would, and newest-assigned as
-        // the final tiebreaker. Same ordering My Tasks uses.
+        // Still-open work leads the unfiltered list (highest priority first,
+        // then nearest deadline, undated tasks pushed to the end), with
+        // closed tasks trailing behind it, most recently completed first -
+        // otherwise a task finished weeks ago but with an old due date
+        // outranks something still open just because they share a priority.
+        // Same ordering My Tasks' "All" tab uses.
+        $closedCase = "CASE WHEN tasks.status IN ('" . implode("','", Task::CLOSED_STATUSES) . "') THEN 1 ELSE 0 END";
         $query = Task::with(['user.department', 'assignedBy', 'ccUsers', 'taskUpdates' => fn ($q) => $q->with('createdBy:id,first_name,last_name')->latest()->limit(1)])
-            ->orderByRaw("FIELD(priority, 'high', 'medium', 'low')")
-            ->orderByRaw('due_date IS NULL')
-            ->orderBy('due_date')
-            ->orderByDesc('created_at');
+            ->orderByRaw($closedCase)
+            ->orderByRaw("CASE WHEN $closedCase = 1 THEN NULL ELSE FIELD(tasks.priority, 'high', 'medium', 'low') END")
+            ->orderByRaw("CASE WHEN $closedCase = 1 THEN NULL ELSE tasks.due_date IS NULL END")
+            ->orderByRaw("CASE WHEN $closedCase = 1 THEN NULL ELSE tasks.due_date END")
+            ->orderByDesc('tasks.completed_at')
+            ->orderByDesc('tasks.created_at');
 
         // Column sorting - the table headers link here. There was none: the
         // order was fixed to priority, then due date.
