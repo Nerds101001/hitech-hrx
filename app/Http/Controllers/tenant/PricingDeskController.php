@@ -30,6 +30,35 @@ class PricingDeskController extends Controller
         ]);
     }
 
+    /**
+     * Just what the header's Quick Calculator popup needs (factors + the
+     * priced lists it looks rates up against) — not the whole page's markup,
+     * so the popup opens instantly instead of loading the full tool. Each
+     * price row is trimmed to only the fields the calculators actually read
+     * (code/name/spec/unit/dlp/t) — cat/colour/size are price-list-browsing
+     * fields this popup never shows, and dropping them roughly halves the
+     * payload.
+     */
+    public function calculatorData(): JsonResponse
+    {
+        abort_unless(PricingDeskAccess::canView(auth()->user()), 404);
+
+        $data = PricingDeskData::current()->data;
+        $trim = fn ($rows) => array_map(fn ($r) => [
+            'code' => $r['code'] ?? null, 'name' => $r['name'] ?? null, 'spec' => $r['spec'] ?? null,
+            'unit' => $r['unit'] ?? null, 'dlp' => $r['dlp'] ?? null, 't' => $r['t'] ?? [],
+        ], $rows ?? []);
+
+        return response()->json([
+            'factors' => $data['factors'] ?? [],
+            'vci'     => $trim($data['vci'] ?? []),
+            'lubes'   => $trim($data['lubes'] ?? []),
+            'drbio'   => $trim($data['drbio'] ?? []),
+            'rules'   => $data['rules'] ?? [],
+            'lists'   => $data['lists'] ?? [],
+        ]);
+    }
+
     public function save(Request $request): JsonResponse
     {
         abort_unless(PricingDeskAccess::canManage(auth()->user()), 403);

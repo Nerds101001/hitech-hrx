@@ -73,13 +73,13 @@
             </a>
             <ul class="dropdown-menu dropdown-menu-end">
               <li>
-                <a class="dropdown-item" href="javascript:void(0);" data-bs-toggle="modal" data-bs-target="#pricingDeskModal">
-                  <i class="bx bx-window-open me-1"></i> Quick view
+                <a class="dropdown-item" href="javascript:void(0);" data-bs-toggle="modal" data-bs-target="#quickCalcModal">
+                  <i class="bx bx-calculator me-1"></i> Quick Calculator
                 </a>
               </li>
               <li>
                 <a class="dropdown-item" href="{{ route('sales-visits.pricing-desk.index') }}" target="_blank" rel="noopener">
-                  <i class="bx bx-link-external me-1"></i> Open full page
+                  <i class="bx bx-link-external me-1"></i> Open full Pricing Desk
                 </a>
               </li>
             </ul>
@@ -422,30 +422,5 @@
 <!-- / Navbar -->
 
 @if ($showPricingDesk)
-  <!-- Pricing Desk quick-view: the iframe only loads the tool on first
-       open (never on every page load), and is torn down on close rather
-       than just hidden, so an admin's edits in one quick-view session
-       don't linger stale behind a reused iframe. -->
-  <div class="modal fade" id="pricingDeskModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered modal-fullscreen" style="max-width:96vw;margin:2vh auto;">
-      <div class="modal-content" style="height:96vh;">
-        <div class="modal-header py-2">
-          <h6 class="modal-title">Pricing Desk</h6>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-        </div>
-        <div class="modal-body p-0">
-          <iframe id="pricingDeskFrame" title="Pricing Desk" style="width:100%;height:100%;border:0;"></iframe>
-        </div>
-      </div>
-    </div>
-  </div>
-  <script>
-    document.getElementById('pricingDeskModal')?.addEventListener('show.bs.modal', function () {
-      var f = document.getElementById('pricingDeskFrame');
-      if (!f.src) f.src = @json(route('sales-visits.pricing-desk.index'));
-    });
-    document.getElementById('pricingDeskModal')?.addEventListener('hidden.bs.modal', function () {
-      document.getElementById('pricingDeskFrame').src = '';
-    });
-  </script>
+  @include('layouts.sections.navbar._quick_calculator_modal')
 @endif

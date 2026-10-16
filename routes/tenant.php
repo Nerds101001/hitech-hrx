@@ -999,6 +999,7 @@ Route::middleware([
             Route::prefix('pricing-desk')->name('pricing-desk.')->group(function () {
                 Route::get('/', [\App\Http\Controllers\tenant\PricingDeskController::class, 'index'])->name('index');
                 Route::put('/data', [\App\Http\Controllers\tenant\PricingDeskController::class, 'save'])->name('save');
+                Route::get('/calculator-data', [\App\Http\Controllers\tenant\PricingDeskController::class, 'calculatorData'])->name('calculator-data');
             });
 
             // Customer <-> Setu verification badge/popup (customers table, not

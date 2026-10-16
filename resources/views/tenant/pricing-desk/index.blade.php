@@ -1,138 +1,176 @@
-<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="csrf-token" content="{{ csrf_token() }}">
-<title>Sales Pricing Desk</title>
+@extends('layouts/layoutMaster')
+
+@section('title', 'Pricing Desk')
+
+@section('content')
+<div class="hitech-page-hero mb-4">
+  <div class="hitech-page-hero-text d-flex justify-content-between align-items-center w-100">
+    <div>
+      <h4 class="greeting text-white mb-1">Pricing Desk</h4>
+      <p class="sub-text text-white-50 mb-0">Price list, discount approval finder, product calculators and quotes — <span id="verLabel"></span></p>
+    </div>
+  </div>
+</div>
+
+<div id="pricingDeskRoot">
 <style>
-:root{
+#pricingDeskRoot{
   --bg:#f4f6f9;--panel:#ffffff;--ink:#16202c;--muted:#5d6b7a;--line:#dfe4ea;--soft:#eef2f6;
-  --brand:#12355b;--brand-ink:#ffffff;--accent:#d9661f;
+  --brand:var(--hitech-primary, #008080);--brand-ink:#ffffff;--accent:var(--hitech-primary, #008080);
   --ok:#1f7a45;--ok-bg:#e3f4ea;--warn:#8a5a00;--warn-bg:#fdf1d6;--ch:#9a4a07;--ch-bg:#fde6d3;--bad:#a4262c;--bad-bg:#fbe3e4;
   --focus:#2f6fb3;
+  background:var(--bg);color:var(--ink);font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+  border-radius:12px; overflow:hidden;
 }
-@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
-  --bg:#0f141a;--panel:#171e26;--ink:#e6ebf0;--muted:#97a4b2;--line:#2a3440;--soft:#1e2731;
-  --brand:#1d4a7a;--brand-ink:#ffffff;--accent:#f08a46;
-  --ok:#6fd39a;--ok-bg:#16382a;--warn:#f3c463;--warn-bg:#3a2f12;--ch:#f6a668;--ch-bg:#3d2513;--bad:#f28b8f;--bad-bg:#3d1a1c;--focus:#6aa8ec;}}
-:root[data-theme="dark"]{
-  --bg:#0f141a;--panel:#171e26;--ink:#e6ebf0;--muted:#97a4b2;--line:#2a3440;--soft:#1e2731;
-  --brand:#1d4a7a;--brand-ink:#ffffff;--accent:#f08a46;
-  --ok:#6fd39a;--ok-bg:#16382a;--warn:#f3c463;--warn-bg:#3a2f12;--ch:#f6a668;--ch-bg:#3d2513;--bad:#f28b8f;--bad-bg:#3d1a1c;--focus:#6aa8ec;}
-*{box-sizing:border-box}
-html,body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif}
-button,input,select,textarea{font:inherit;color:inherit}
-header.top{background:var(--brand);color:var(--brand-ink);padding:12px 20px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
-header.top h1{font-size:17px;margin:0;font-weight:650;letter-spacing:.2px}
-header.top .sub{opacity:.75;font-size:12px}
-nav.tabs{display:flex;gap:4px;margin-left:auto;flex-wrap:wrap}
-nav.tabs button{background:transparent;border:1px solid rgba(255,255,255,.25);color:var(--brand-ink);padding:6px 12px;border-radius:6px;cursor:pointer}
-nav.tabs button.on{background:#fff;color:#12355b;border-color:#fff;font-weight:600}
-nav.tabs .badge{background:var(--accent);color:#fff;border-radius:9px;padding:0 6px;font-size:11px;margin-left:4px}
-main{max-width:1320px;margin:0 auto;padding:18px 16px 60px}
-.banner{background:var(--warn-bg);color:var(--warn);border:1px solid var(--line);padding:8px 12px;border-radius:8px;margin-bottom:12px;font-size:13px}
-.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px}
-.row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
-.grow{flex:1}
-h2{font-size:16px;margin:0 0 10px}
-h3{font-size:14px;margin:14px 0 8px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
-.muted{color:var(--muted)}
-.small{font-size:12px}
-input[type=text],input[type=number],input[type=search],input[type=password],input[type=date],select,textarea{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:7px 9px;min-width:0}
-input:focus,select:focus,textarea:focus,button:focus-visible{outline:2px solid var(--focus);outline-offset:1px}
-.btn{background:var(--soft);border:1px solid var(--line);border-radius:6px;padding:7px 12px;cursor:pointer;white-space:nowrap}
-.btn:hover{border-color:var(--muted)}
-.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
-.btn.danger{color:var(--bad)}
-.seg{display:inline-flex;flex-wrap:wrap;border:1px solid var(--line);border-radius:7px;overflow:hidden;max-width:100%}
-.seg button{border:0;background:var(--panel);padding:6px 12px;cursor:pointer}
-.seg button.on{background:var(--brand);color:#fff}
-.tablewrap{overflow:auto;border:1px solid var(--line);border-radius:8px;max-height:66vh}
-table{border-collapse:collapse;width:100%;font-size:13px}
-th,td{padding:7px 9px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
-th{position:sticky;top:0;background:var(--soft);font-weight:600;z-index:1;white-space:nowrap}
-td.n,th.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
-tr.cat td{background:var(--soft);font-weight:650;color:var(--brand)}
-@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) tr.cat td{color:var(--accent)}}
-tbody tr.item{cursor:pointer}
-tbody tr.item:hover td{background:var(--soft)}
-tbody tr.sel td{background:var(--warn-bg)!important}
-.pill{display:inline-block;border-radius:999px;padding:2px 9px;font-size:12px;font-weight:600;white-space:nowrap}
-.b0{background:var(--ok-bg);color:var(--ok)}.b1{background:var(--warn-bg);color:var(--warn)}.b2{background:var(--ch-bg);color:var(--ch)}.b3{background:var(--bad-bg);color:var(--bad)}.bx{background:var(--soft);color:var(--muted)}
-.grid2>*,.grid-calc>*{min-width:0}
-.grid2{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:16px}
-.grid-calc{display:grid;grid-template-columns:250px minmax(0,1fr);gap:16px}
-@media (max-width:900px){.grid2,.grid-calc{grid-template-columns:minmax(0,1fr)}.side{position:static}}
-@media (max-width:520px){main{padding:12px 10px 40px}.form{grid-template-columns:1fr 1fr}label[style*="span 2"]{grid-column:1/-1!important}#pSearch{min-width:0!important;width:100%}}
-.side{position:sticky;top:12px;align-self:start}
-.calclist button{display:block;width:100%;text-align:left;background:none;border:0;border-radius:6px;padding:7px 9px;cursor:pointer}
-.calclist button:hover{background:var(--soft)}
-.calclist button.on{background:var(--brand);color:#fff}
-.calclist .grp{font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin:12px 9px 4px}
-.form{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px 14px}
-.form label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted)}
-.form>*{min-width:0}
-.form label input,.form label select{font-size:14px;color:var(--ink);width:100%;min-width:0}
-.results{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px;margin-top:14px}
-.stat{border:1px solid var(--line);border-radius:8px;padding:10px 12px;background:var(--panel)}
-.stat .k{font-size:12px;color:var(--muted)}
-.stat .v{font-size:19px;font-weight:650;font-variant-numeric:tabular-nums}
-.stat.hi{border-color:var(--accent);box-shadow:inset 3px 0 0 var(--accent)}
-.note{background:var(--soft);border-radius:8px;padding:9px 12px;font-size:12.5px;color:var(--muted);margin-top:12px}
-.kv{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:13px}
-.kv div:nth-child(odd){color:var(--muted)}
-.hide{display:none!important}
-.qtable input{width:100%;padding:5px 6px}
-.qtable td{vertical-align:middle}
-.totals{margin-left:auto;min-width:280px}
-.totals div{display:flex;justify-content:space-between;padding:4px 0}
-.totals .gt{font-weight:700;font-size:16px;border-top:1px solid var(--line);padding-top:8px}
-#pTable td:first-child{white-space:nowrap}#bandLegend{overflow-x:auto}#bandLegend .pill{padding:2px 6px}#bandLegend td,#bandLegend th{padding:6px 5px}
-#printArea{display:none}
+#pricingDeskRoot *{box-sizing:border-box}
+#pricingDeskRoot button,#pricingDeskRoot input,#pricingDeskRoot select,#pricingDeskRoot textarea{font:inherit;color:inherit}
+#pricingDeskRoot .pricing-desk-tabs-wrap{background:#fff;padding:14px 16px 0}
+#pricingDeskRoot main{padding:18px 16px 32px}
+#pricingDeskRoot .banner{background:var(--warn-bg);color:var(--warn);border:1px solid var(--line);padding:8px 12px;border-radius:8px;margin-bottom:12px;font-size:13px}
+#pricingDeskRoot .panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px}
+#pricingDeskRoot .row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+#pricingDeskRoot .grow{flex:1}
+#pricingDeskRoot h2{font-size:16px;margin:0 0 10px}
+#pricingDeskRoot h3{font-size:14px;margin:14px 0 8px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+#pricingDeskRoot .muted{color:var(--muted)}
+#pricingDeskRoot .small{font-size:12px}
+#pricingDeskRoot input[type=text],#pricingDeskRoot input[type=number],#pricingDeskRoot input[type=search],#pricingDeskRoot input[type=password],#pricingDeskRoot input[type=date],#pricingDeskRoot select,#pricingDeskRoot textarea{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:7px 9px;min-width:0}
+#pricingDeskRoot input:focus,#pricingDeskRoot select:focus,#pricingDeskRoot textarea:focus,#pricingDeskRoot button:focus-visible{outline:2px solid var(--focus);outline-offset:1px}
+#pricingDeskRoot .btn{background:var(--soft);border:1px solid var(--line);border-radius:6px;padding:7px 12px;cursor:pointer;white-space:nowrap}
+#pricingDeskRoot .btn:hover{border-color:var(--muted)}
+#pricingDeskRoot .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+#pricingDeskRoot .btn.danger{color:var(--bad)}
+#pricingDeskRoot .seg{display:inline-flex;flex-wrap:wrap;border:1px solid var(--line);border-radius:7px;overflow:hidden;max-width:100%}
+#pricingDeskRoot .seg button{border:0;background:var(--panel);padding:6px 12px;cursor:pointer}
+#pricingDeskRoot .seg button.on{background:var(--brand);color:#fff}
+#pricingDeskRoot .tablewrap{overflow:auto;border:1px solid var(--line);border-radius:8px;max-height:66vh}
+#pricingDeskRoot table{border-collapse:collapse;width:100%;font-size:13px}
+#pricingDeskRoot th,#pricingDeskRoot td{padding:7px 9px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+#pricingDeskRoot th{position:sticky;top:0;background:var(--soft);font-weight:600;z-index:1;white-space:nowrap}
+#pricingDeskRoot td.n,#pricingDeskRoot th.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+#pricingDeskRoot tr.cat td{background:var(--soft);font-weight:650;color:var(--brand)}
+#pricingDeskRoot tbody tr.item{cursor:pointer}
+#pricingDeskRoot tbody tr.item:hover td{background:var(--soft)}
+#pricingDeskRoot tbody tr.sel td{background:var(--warn-bg)!important}
+#pricingDeskRoot .pill{display:inline-block;border-radius:999px;padding:2px 9px;font-size:12px;font-weight:600;white-space:nowrap}
+#pricingDeskRoot .b0{background:var(--ok-bg);color:var(--ok)}
+#pricingDeskRoot .b1{background:var(--warn-bg);color:var(--warn)}
+#pricingDeskRoot .b2{background:var(--ch-bg);color:var(--ch)}
+#pricingDeskRoot .b3{background:var(--bad-bg);color:var(--bad)}
+#pricingDeskRoot .bx{background:var(--soft);color:var(--muted)}
+#pricingDeskRoot .grid2>*{min-width:0}
+#pricingDeskRoot .grid2{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:16px}
+@media (max-width:900px){#pricingDeskRoot .grid2{grid-template-columns:minmax(0,1fr)}#pricingDeskRoot .side{position:static}}
+@media (max-width:520px){#pricingDeskRoot main{padding:12px 10px 32px}#pricingDeskRoot .form{grid-template-columns:1fr 1fr}#pricingDeskRoot label[style*="span 2"]{grid-column:1/-1!important}#pricingDeskRoot #pSearch{min-width:0!important;width:100%}}
+#pricingDeskRoot .side{position:sticky;top:12px;align-self:start}
+
+/* ---- Calculators tab: same sidebar+panel component as the header's Quick Calculator popup ---- */
+#pricingDeskRoot .qc-embed{display:flex;min-height:560px;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#fff}
+#pricingDeskRoot .qc-sidebar{width:300px;flex-shrink:0;border-right:1px solid var(--line);display:flex;flex-direction:column;background:#fbfcfd}
+#pricingDeskRoot .qc-sidebar-head{padding:16px;border-bottom:1px solid var(--line)}
+#pricingDeskRoot .qc-search-icon{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:#9aa5b1;font-size:.9rem}
+#pricingDeskRoot .qc-list{flex-grow:1;overflow-y:auto;padding:6px 0;max-height:70vh}
+#pricingDeskRoot .qc-group-head{display:flex;align-items:center;gap:8px;width:100%;border:0;background:none;padding:9px 16px;font-weight:600;font-size:.86rem;color:#2b2f33}
+#pricingDeskRoot .qc-group-head:hover{background:var(--soft)}
+#pricingDeskRoot .qc-group-icon{width:26px;height:26px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:.85rem;color:#fff;flex-shrink:0}
+#pricingDeskRoot .qc-group-count{margin-left:auto;background:var(--soft);color:#6b7684;font-size:.72rem;font-weight:700;border-radius:999px;padding:1px 8px}
+#pricingDeskRoot .qc-group-chevron{transition:transform .15s ease;color:#9aa5b1}
+#pricingDeskRoot .qc-group-head.collapsed .qc-group-chevron{transform:rotate(-90deg)}
+#pricingDeskRoot .qc-item{display:block;width:100%;text-align:left;border:0;background:none;padding:7px 16px 7px 50px;font-size:.84rem;color:#4a525c;border-left:3px solid transparent}
+#pricingDeskRoot .qc-item:hover{background:var(--soft)}
+#pricingDeskRoot .qc-item.active{background:var(--hitech-primary-light, rgba(0,128,128,.08));color:var(--hitech-primary, #008080);font-weight:600;border-left-color:var(--hitech-primary, #008080)}
+#pricingDeskRoot .qc-panel{flex-grow:1;padding:24px 28px;overflow-y:auto;max-height:70vh}
+#pricingDeskRoot .qc-product-icon{width:56px;height:56px;border-radius:12px;background:var(--hitech-primary-light, rgba(0,128,128,.08));color:var(--hitech-primary, #008080);display:flex;align-items:center;justify-content:center;font-size:1.5rem;flex-shrink:0}
+#pricingDeskRoot .qc-unit-seg .btn.active{background:var(--hitech-primary, #008080);border-color:var(--hitech-primary, #008080);color:#fff}
+#pricingDeskRoot #qcFields label,#pricingDeskRoot #qcRateSection label{font-size:.78rem;font-weight:600;color:#4a525c}
+#pricingDeskRoot .req{color:#e35b5b}
+#pricingDeskRoot .qc-hero{border:1px solid transparent;border-radius:12px;padding:14px 16px;height:100%;display:flex;align-items:center;gap:14px}
+#pricingDeskRoot .qc-hero.a{background:rgba(77,108,240,.08);border-color:rgba(77,108,240,.18)}
+#pricingDeskRoot .qc-hero.b{background:rgba(245,166,35,.10);border-color:rgba(245,166,35,.22)}
+#pricingDeskRoot .qc-hero-icon{width:42px;height:42px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:1.2rem;flex-shrink:0;background:#fff}
+#pricingDeskRoot .qc-hero-icon.a{color:var(--hitech-icon-view, #4d6cf0)}
+#pricingDeskRoot .qc-hero-icon.b{color:var(--hitech-icon-edit, #f5a623)}
+#pricingDeskRoot .qc-hero .qc-k{font-size:.78rem;color:#8a94a6;font-weight:600}
+#pricingDeskRoot .qc-hero .qc-v{font-size:1.15rem;font-weight:700;color:#1f2937}
+@media (max-width:767px){#pricingDeskRoot .qc-embed{flex-direction:column}#pricingDeskRoot .qc-sidebar{width:100%;max-height:240px}}
+#pricingDeskRoot .form{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px 14px}
+#pricingDeskRoot .form label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted)}
+#pricingDeskRoot .form>*{min-width:0}
+#pricingDeskRoot .form label input,#pricingDeskRoot .form label select{font-size:14px;color:var(--ink);width:100%;min-width:0}
+#pricingDeskRoot .results{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px;margin-top:14px}
+#pricingDeskRoot .stat{border:1px solid var(--line);border-radius:8px;padding:10px 12px;background:var(--panel)}
+#pricingDeskRoot .stat .k{font-size:12px;color:var(--muted)}
+#pricingDeskRoot .stat .v{font-size:19px;font-weight:650;font-variant-numeric:tabular-nums}
+#pricingDeskRoot .stat.hi{border-color:var(--accent);box-shadow:inset 3px 0 0 var(--accent)}
+#pricingDeskRoot .note{background:var(--soft);border-radius:8px;padding:9px 12px;font-size:12.5px;color:var(--muted);margin-top:12px}
+#pricingDeskRoot .kv{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:13px}
+#pricingDeskRoot .kv div:nth-child(odd){color:var(--muted)}
+#pricingDeskRoot .hide{display:none!important}
+#pricingDeskRoot .qtable input{width:100%;padding:5px 6px}
+#pricingDeskRoot .qtable td{vertical-align:middle}
+#pricingDeskRoot .totals{margin-left:auto;min-width:280px}
+#pricingDeskRoot .totals div{display:flex;justify-content:space-between;padding:4px 0}
+#pricingDeskRoot .totals .gt{font-weight:700;font-size:16px;border-top:1px solid var(--line);padding-top:8px}
+#pricingDeskRoot #pTable td:first-child{white-space:nowrap}
+#pricingDeskRoot #bandLegend{overflow-x:auto}
+#pricingDeskRoot #bandLegend .pill{padding:2px 6px}
+#pricingDeskRoot #bandLegend td,#pricingDeskRoot #bandLegend th{padding:6px 5px}
+#pricingDeskRoot #printArea{display:none}
 @media print{
-  body{background:#fff;color:#000}
-  header.top,main{display:none!important}
-  #printArea{display:block;padding:10mm;font-size:12px;color:#000}
+  body *{visibility:hidden}
+  #printArea,#printArea *{visibility:visible}
+  #printArea{display:block;position:absolute;left:0;top:0;padding:10mm;font-size:12px;color:#000;background:#fff}
   #printArea table th{background:#eee;position:static}
   #printArea td,#printArea th{border:1px solid #bbb}
 }
 </style>
-</head>
-<body>
-<header class="top">
-  <div>
-    <h1>Sales Pricing Desk</h1>
-    <div class="sub">Hi-Tech International Group · RUST-X · Dr. Bio · Fillezy · Tuffpaulin · Zorbit — <span id="verLabel"></span></div>
-  </div>
-  <nav class="tabs" id="tabs">
-    <button data-t="prices" class="on">Price list</button>
-    <button data-t="disc">Discount finder</button>
-    <button data-t="calc">Calculators</button>
-    <button data-t="quote">Quote <span class="badge" id="qCount">0</span></button>
-    <button data-t="ref">Reference</button>
-    @if($canManage)
-    <button data-t="admin">Admin</button>
-    @endif
-  </nav>
-</header>
+<div class="pricing-desk-tabs-wrap">
+<ul class="nav nav-pills hitech-tabs-sm mb-0" id="tabs" role="tablist">
+  <li class="nav-item" role="presentation">
+    <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#t-prices" data-t="prices" type="button" role="tab">
+      <i class="bx bx-list-ul"></i> Price list
+    </button>
+  </li>
+  <li class="nav-item" role="presentation">
+    <button class="nav-link" data-bs-toggle="tab" data-bs-target="#t-calc" data-t="calc" type="button" role="tab">
+      <i class="bx bx-calculator"></i> Calculators
+    </button>
+  </li>
+  @if($canManage)
+  <li class="nav-item" role="presentation">
+    <button class="nav-link" data-bs-toggle="tab" data-bs-target="#t-admin" data-t="admin" type="button" role="tab">
+      <i class="bx bx-cog"></i> Admin
+    </button>
+  </li>
+  @endif
+</ul>
+</div>
 <main>
-  <div id="overrideBanner" class="banner hide">This browser is using locally edited prices that are not yet published to the team. Go to Admin → “Download updated tool” to publish them.</div>
+  <div id="overrideBanner" class="banner hide">This browser is using locally edited prices that are not yet published to the team.</div>
 
+  <div class="tab-content">
   <!-- PRICE LIST -->
-  <section id="t-prices">
+  <section id="t-prices" class="tab-pane fade show active" role="tabpanel">
     <div class="grid2">
       <div class="panel">
         <div class="row" style="margin-bottom:12px">
           <div class="seg" id="listSeg"></div>
-          <input type="search" id="pSearch" class="grow" placeholder="Search code, product, size…" style="min-width:180px">
-          <select id="pCat"></select>
+          <div class="search-wrapper-hitech grow" style="min-width:180px;max-width:320px;">
+            <i class="bx bx-search text-muted ms-3"></i>
+            <input type="search" id="pSearch" class="form-control" placeholder="Search code, product, size…">
+          </div>
+          <select id="pCat" class="form-select form-select-sm" style="max-width:220px;"></select>
         </div>
         <div class="tablewrap"><table id="pTable"></table></div>
         <div class="small muted" style="margin-top:8px" id="pFoot"></div>
       </div>
       <div class="side">
-        <div class="panel" id="checkPanel">
+        <div class="panel" id="typePanel">
+          <h2>Customer type</h2>
+          <div class="muted small" style="margin-bottom:8px">Channel pricing only clears without extra approval when quoting an actual channel partner. Set this before checking a price below.</div>
+          <select id="qType" class="grow"><option>Direct customer</option><option>Channel partner</option></select>
+        </div>
+        <div class="panel" id="checkPanel" style="margin-top:12px">
           <h2>Price check</h2>
           <div class="muted small" id="chkEmpty">Click a product in the list to check a customer price against the approval bands.</div>
           <div id="chkBody" class="hide">
@@ -145,7 +183,6 @@ tbody tr.sel td{background:var(--warn-bg)!important}
             </div>
             <div id="chkResult" style="margin-top:12px"></div>
             <div id="chkWarn"></div>
-            <div class="row" style="margin-top:12px"><button class="btn primary" id="chkAdd">Add to quote</button></div>
           </div>
         </div>
         <div class="panel" style="margin-top:12px">
@@ -156,59 +193,45 @@ tbody tr.sel td{background:var(--warn-bg)!important}
     </div>
   </section>
 
-  <!-- DISCOUNT FINDER -->
-  <section id="t-disc" class="hide">
-    <div class="panel">
-      <div class="row" style="justify-content:space-between;margin-bottom:6px">
-        <div><h2 style="margin:0">Discount finder</h2><div class="muted small">Pick a product, type the customer's price, and see the discount off DLP and who must approve it. Or type a discount % to get the price.</div></div>
-        <div class="row">
-          <label class="small muted">Customer type <select id="dType"><option>Direct customer</option><option>Channel partner</option></select></label>
-          <button class="btn" id="dAdd">+ Add rows</button>
-          <button class="btn" id="dCsv">Export CSV</button>
-          <button class="btn danger" id="dClear">Clear</button>
-        </div>
-      </div>
-      <datalist id="dProducts"></datalist>
-      <div class="tablewrap" style="max-height:none;margin-top:10px"><table class="qtable" id="dTable"></table></div>
-      <div class="note">Product not in the list? Leave the product blank, type the DLP yourself and choose which rules apply. Discount % = (DLP − price) ÷ DLP. Net-priced items (no DLP) show the gap to the net price instead.</div>
-    </div>
-  </section>
-
   <!-- CALCULATORS -->
-  <section id="t-calc" class="hide">
-    <div class="grid-calc">
-      <div class="panel calclist" id="calcList"></div>
-      <div class="panel" id="calcPanel"></div>
-    </div>
-  </section>
-
-  <!-- QUOTE -->
-  <section id="t-quote" class="hide">
-    <div class="panel">
-      <div class="row" style="justify-content:space-between;margin-bottom:10px">
-        <h2 style="margin:0">Quotation</h2>
-        <div class="row">
-          <button class="btn" id="qCsv">Export CSV</button>
-          <button class="btn" id="qPrint">Print / Save PDF</button>
-          <button class="btn danger" id="qClear">Clear quote</button>
+  <section id="t-calc" class="tab-pane fade" role="tabpanel">
+    <div class="qc-embed">
+      <div id="qcLoading" class="text-muted small py-5 text-center">Loading…</div>
+      <div id="qcWrap" class="d-none">
+        <div class="qc-sidebar">
+          <div class="qc-sidebar-head">
+            <div class="fw-bold">Product Catalogue</div>
+            <div class="text-muted small">Search and select a product</div>
+            <div class="position-relative mt-2">
+              <i class="bx bx-search qc-search-icon"></i>
+              <input type="text" id="qcSearch" class="form-control form-control-sm ps-4" placeholder="Search product, category…" autocomplete="off">
+            </div>
+          </div>
+          <div id="qcList" class="qc-list"></div>
         </div>
-      </div>
-      <div class="form">
-        <label>Customer<input type="text" id="qCust"></label>
-        <label>Contact / location<input type="text" id="qContact"></label>
-        <label>Customer type<select id="qType"><option>Direct customer</option><option>Channel partner</option></select></label>
-        <label>Sales person<input type="text" id="qSales"></label>
-        <label>Quote ref<input type="text" id="qRef"></label>
-        <label>Date<input type="date" id="qDate"></label>
-        <label>Validity (days)<input type="number" id="qValid" value="15"></label>
-        <label>Freight / terms<input type="text" id="qTerms" value="Ex-factory. GST extra as applicable."></label>
-      </div>
-      <div class="tablewrap" style="margin-top:14px;max-height:none">
-        <table class="qtable" id="qTable"></table>
-      </div>
-      <div class="row" style="margin-top:14px;align-items:flex-start">
-        <div class="grow" id="qApproval"></div>
-        <div class="totals" id="qTotals"></div>
+        <div class="qc-panel">
+          <div id="qcEmpty" class="text-muted text-center py-5">
+            <i class="bx bx-left-arrow-alt bx-sm d-block mb-2"></i>
+            Pick a product from the catalogue on the left.
+          </div>
+          <div id="qcBody" class="d-none">
+            <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+              <div class="d-flex align-items-start gap-3">
+                <div class="qc-product-icon" id="qcProductIcon"><i class="bx bx-cube"></i></div>
+                <div>
+                  <h5 class="mb-0 fw-bold" id="qcTitle"></h5>
+                  <div class="text-muted small" id="qcDesc" style="max-width:480px;"></div>
+                </div>
+              </div>
+              <div class="btn-group btn-group-sm qc-unit-seg" id="qcUnitSeg" role="group"></div>
+            </div>
+            <div class="row g-3 mt-1" id="qcFields"></div>
+            <div id="qcRateSection"></div>
+            <div class="row g-3 mt-2" id="qcResults"></div>
+            <div id="qcBand" class="mt-3"></div>
+            <div id="qcError" class="alert alert-danger small mt-3 d-none"></div>
+          </div>
+        </div>
       </div>
     </div>
   </section>
@@ -226,7 +249,7 @@ tbody tr.sel td{background:var(--warn-bg)!important}
 
   @if($canManage)
   <!-- ADMIN -->
-  <section id="t-admin" class="hide">
+  <section id="t-admin" class="tab-pane fade" role="tabpanel">
     <div id="adminBody">
       <div class="panel">
         <h2>Publish workflow</h2>
@@ -237,9 +260,6 @@ tbody tr.sel td{background:var(--warn-bg)!important}
         <div class="row">
           <label class="small muted">Price list version label <input type="text" id="aVer" style="width:220px"></label>
           <button class="btn primary" id="aSaveServer">Save to server</button>
-          <button class="btn" id="aDownload">Download as standalone file (backup)</button>
-          <button class="btn" id="aExport">Export prices (JSON)</button>
-          <label class="btn">Import prices (JSON)<input type="file" id="aImport" accept=".json" class="hide"></label>
           <button class="btn danger" id="aReset">Discard local edits</button>
         </div>
         <div id="aMsg" class="small" style="margin-top:8px"></div>
@@ -255,8 +275,11 @@ tbody tr.sel td{background:var(--warn-bg)!important}
         <div class="row" style="margin-bottom:10px">
           <h2 style="margin:0">Edit price list</h2>
           <div class="seg" id="aListSeg"></div>
-          <input type="search" id="aSearch" class="grow" placeholder="Filter…">
-          <button class="btn" id="aAdd">+ Add product</button>
+          <div class="search-wrapper-hitech grow" style="min-width:160px;max-width:280px;">
+            <i class="bx bx-search text-muted ms-3"></i>
+            <input type="search" id="aSearch" class="form-control" placeholder="Filter…">
+          </div>
+          <button class="btn primary" id="aAdd">+ Add product</button>
         </div>
         <p class="small muted" style="margin-top:0">Changing DLP recalculates the three tier prices automatically. You can still overwrite a tier by hand.</p>
         <div class="tablewrap"><table id="aTable" class="qtable"></table></div>
@@ -264,6 +287,7 @@ tbody tr.sel td{background:var(--warn-bg)!important}
     </div>
   </section>
   @endif
+  </div>
 </main>
 <div id="printArea"></div>
 
@@ -310,12 +334,21 @@ function band(price, dlp, t, custType, force){
 function pill(b){ if(!b) return '<span class="pill bx">—</span>'; if(b.forced) return '<span class="pill b3">Management approval</span>'; const cls=b.lvl===2&&b.eff===2?'b0':'b'+b.lvl; return `<span class="pill ${b.lvl===2?'b2':cls}">${esc(b.lvl===2?(b.eff===2?'Channel OK':'Channel → Director'):BAND_TXT[b.lvl])}</span>`; }
 
 /* ---------- tabs ---------- */
-$('#tabs').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;showTab(b.dataset.t)});
-function showTab(t){$$('#tabs button').forEach(x=>x.classList.toggle('on',x.dataset.t===t));['prices','disc','calc','quote','ref','admin'].forEach(k=>document.getElementById('t-'+k)?.classList.toggle('hide',k!==t)); if(t==='quote')renderQuote();if(t==='disc')renderDisc();if(t==='admin'&&CAN_MANAGE)renderAdmin(); LS.set('spd_tab',t)}
+// Tab switching is native Bootstrap (data-bs-toggle="tab") now, not a
+// custom show/hide — this just reacts to a pane becoming active to lazily
+// render it (the calculator loads its data on first visit; Admin re-reads
+// DATA each time in case something else just changed it).
+let calcInited=false;
+$('#tabs').addEventListener('shown.bs.tab',e=>{
+  const t=e.target.dataset.t;
+  if(t==='calc'&&!calcInited){calcInited=true;initCalcTab()}
+  if(t==='admin'&&CAN_MANAGE)renderAdmin();
+  LS.set('spd_tab',t);
+});
 
 /* ---------- PRICE LIST ---------- */
 let curList='vci', selIdx=null;
-function renderSegs(){$('#listSeg').innerHTML=segHtml(curList);$('#aListSeg').innerHTML=segHtml(aList)}
+function renderSegs(){$('#listSeg').innerHTML=segHtml(curList);if(CAN_MANAGE)$('#aListSeg').innerHTML=segHtml(aList)}
 $('#listSeg').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;curList=b.dataset.l;$$('#listSeg button').forEach(x=>x.classList.toggle('on',x===b));selIdx=null;fillCats();renderPrices();renderCheck()});
 $('#pSearch').addEventListener('input',renderPrices);
 $('#pCat').addEventListener('change',renderPrices);
@@ -358,11 +391,7 @@ function updCheck(){
   $('#chkWarn').innerHTML=(isKgOnly(x)?`<div class="note" style="color:var(--bad)"><b>Do not quote per kg.</b> This product must be quoted per piece — use the Calculators tab to convert this rate to ₹/pc.</div>`:'')+(x.note&&!isKgOnly(x)||x.force?`<div class="note" style="color:var(--bad)">${esc(x.note||x.force)}</div>`:'');
 }
 $('#chkPrice').addEventListener('input',updCheck);$('#chkQty').addEventListener('input',updCheck);
-$('#chkAdd').addEventListener('click',()=>{
-  const x=DATA[curList][selIdx]; if(!x)return;
-  if(isKgOnly(x) && !confirm('This product should be quoted per piece, not per kg. Add the per-kg line anyway (internal use only)?')) return;
-  addLine({desc:x.code+(x.name?' — '+x.name:'')+(x.spec?' ('+x.spec+(x.size?', '+x.size:'')+')':''),unit:x.unit||'unit',qty:parseFloat($('#chkQty').value)||1,rate:parseFloat($('#chkPrice').value)||x.t[0],dlp:x.dlp,t:x.t.slice(),gst:defaultGst(curList,x),list:curList,force:x.force||null});
-});
+$('#qType').addEventListener('change',updCheck);
 function renderLegend(){
   const r=DATA.rules;
   const ls=LISTS().filter(m=>r[m.k]);const cell=(k,op)=>ls.map(m=>`<td class="n">${op} ${r[m.k][k]}%</td>`).join('');
@@ -371,56 +400,8 @@ function renderLegend(){
   <tr><td><span class="pill b1">GM approval</span></td>${cell(1,'≤')}</tr>
   <tr><td><span class="pill b2">Channel price</span></td>${cell(2,'≤')}</tr>
   <tr><td><span class="pill b3">Director approval</span></td>${cell(2,'&gt;')}</tr></table>
-  <p class="muted" style="margin:8px 0 0">Discounts are off DLP (MRP for Dr. Bio, list rate for Fillezy). Channel price is for channel partners only; for a direct customer it needs Director approval. Set customer type on the Quote tab.</p>`;
+  <p class="muted" style="margin:8px 0 0">Discounts are off DLP (MRP for Dr. Bio, list rate for Fillezy). Channel price is for channel partners only; for a direct customer it needs Director approval. Set customer type above.</p>`;
 }
-
-/* ---------- GST defaults ---------- */
-function defaultGst(list,x){ if(list==='drbio'&&/KG/i.test(x.unit||''))return 5; if(list==='vci'){ if(/^ZB|^ZN/i.test(x.code)&&/CLAY/i.test(x.name))return 5; if(/NON WOVEN/i.test(x.name)&&!/BAG/i.test(x.name))return 5;} return 18; }
-
-/* ---------- DISCOUNT FINDER ---------- */
-let DR=LS.get('spd_disc')||Array.from({length:10},()=>({}));
-let PL={};
-function buildDatalist(){PL={};const o=[];LISTS().filter(m=>DATA[m.k]).forEach(m=>{const l=m.k;DATA[l].forEach((x,i)=>{let lab=m.short+' · '+x.code+(x.name?' — '+x.name:'')+(m.rich&&(x.spec||x.size||x.colour)?' · '+[x.spec,x.size,l==='drbio'?x.colour:''].filter(Boolean).join(' · '):'');while(PL[lab])lab+=' ';PL[lab]={l,i};o.push(`<option value="${esc(lab)}">`)})});$('#dProducts').innerHTML=o.join('')}
-function dItem(r){const m=PL[r.p];if(m){const x=DATA[m.l][m.i];if(x)return{x,l:m.l}}return null}
-function dCalc(r){
-  const it=dItem(r);let dlp,t,unit='',l;
-  if(it){dlp=it.x.dlp;t=it.x.t;unit=it.x.unit||'unit';l=it.l}
-  else{dlp=parseFloat(r.dlp)||0;l=r.rl||'vci';t=dlp>0?tiersFrom(l,dlp):[0,0,0]}
-  let price=parseFloat(r.price);const pct=parseFloat(r.pct);
-  if(r.drv==='pct'&&!isNaN(pct)&&dlp>0)price=r2(dlp*(1-pct/100));
-  const b=(price>0&&(dlp>0||t[0]>0||(it&&it.x.force)))?band(price,dlp,t,$('#dType').value,it&&it.x.force):null;
-  return{it,dlp,t,unit,l,price,b};
-}
-function renderDisc(){
-  const ct=$('#dType').value;
-  let h=`<thead><tr><th>#</th><th style="min-width:300px">Product (type to search)</th><th>Unit</th><th class="n">DLP ₹</th><th class="n">Customer price ₹</th><th class="n">Discount %</th><th>Approval</th><th class="n">No-approval price ₹</th><th class="n">Below no-approval by</th><th></th></tr></thead><tbody>`;
-  DR.forEach((r,i)=>{const c=dCalc(r);
-    const gap=c.price>0&&c.t[0]>0?c.t[0]-c.price:null;
-    const pctVal=r.drv==='pct'?(r.pct??''):(c.b&&c.b.disc!=null?r2(c.b.disc):'');
-    const priceVal=r.drv==='pct'?(c.price>0?c.price:''):(r.price??'');
-    h+=`<tr data-i="${i}"><td>${i+1}</td>
-    <td><input type="text" list="dProducts" data-f="p" value="${esc(r.p||'')}" placeholder="e.g. VCI 702, AmpliFi, FEQ, DB-1005">${c.it?'':!(r.man||r.dlp)?`<div class="small" style="margin-top:3px"><a href="#" data-man="${i}" style="color:var(--muted)">Not in list? Enter DLP</a></div>`:`<div class="row small muted" style="margin-top:4px">DLP <input type="number" step="any" data-f="dlp" value="${esc(r.dlp||'')}" style="width:90px"> rules <select data-f="rl">${LISTS().map(m=>`<option value="${m.k}"${(r.rl||'vci')===m.k?' selected':''}>${esc(m.short)}</option>`).join('')}</select></div>`}</td>
-    <td>${esc(c.unit)}</td>
-    <td class="n">${c.dlp>0?fmt(c.dlp):(c.it?'<span class="muted">net '+fmt(c.t[0])+'</span>':'–')}</td>
-    <td class="n"><input type="number" step="0.01" data-f="price" value="${esc(priceVal)}" style="width:110px"></td>
-    <td class="n"><input type="number" step="0.1" data-f="pct" value="${esc(pctVal)}" style="width:80px" ${c.dlp>0?'':'disabled'}></td>
-    <td>${pill(c.b)}</td>
-    <td class="n">${c.t[0]>0?fmt(c.t[0]):'–'}</td>
-    <td class="n">${gap==null?'–':gap<=0.005?'<span style="color:var(--ok)">within limit</span>':'₹ '+fmt(gap)+' ('+fmt(gap/c.t[0]*100,1)+'%)'}</td>
-    <td style="white-space:nowrap">${c.b?`<button class="btn" data-dq="${i}" title="Add to quote">→ Quote</button> `:''}<button class="btn danger" data-dd="${i}" title="Remove row">×</button></td></tr>`});
-  $('#dTable').innerHTML=h+'</tbody>';
-}
-function saveD(){LS.set('spd_disc',DR)}
-$('#dTable').addEventListener('change',e=>{const tr=e.target.closest('tr[data-i]'),f=e.target.dataset.f;if(!tr||!f)return;const r=DR[+tr.dataset.i];
-  if(f==='price'){r.price=e.target.value;r.drv='price'}else if(f==='pct'){r.pct=e.target.value;r.drv='pct'}else r[f]=e.target.value;
-  if(f==='p'&&PL[r.p]&&!(parseFloat(r.price)>0)){const x=DATA[PL[r.p].l][PL[r.p].i];r.price=String(x.t[0]);r.drv='price'}
-  saveD();renderDisc();const nx=$(`#dTable tr[data-i="${tr.dataset.i}"] [data-f="${f==='p'?'price':f}"]`);if(nx&&f==='p')nx.focus()});
-$('#dTable').addEventListener('click',e=>{const mn=e.target.closest('[data-man]');if(mn){e.preventDefault();DR[+mn.dataset.man].man=true;saveD();renderDisc();const x=$(`#dTable tr[data-i="${mn.dataset.man}"] [data-f=dlp]`);if(x)x.focus();return}const d=e.target.closest('[data-dd]');if(d){DR.splice(+d.dataset.dd,1);if(!DR.length)DR.push({});saveD();renderDisc();return}
-  const q=e.target.closest('[data-dq]');if(q){const r=DR[+q.dataset.dq],c=dCalc(r);addLine({force:c.it&&c.it.x.force||null,desc:c.it?(c.it.x.code+(c.it.x.name?' — '+c.it.x.name:'')+(c.it.x.spec?' ('+c.it.x.spec+')':'')):'Item (manual DLP ₹'+fmt(c.dlp)+')',unit:c.unit||'unit',qty:1,rate:c.price,dlp:c.dlp,t:c.t.slice(),gst:18,list:c.l})}});
-$('#dType').addEventListener('change',()=>{$('#qType').value=$('#dType').value;Q.qType=$('#dType').value;saveQ();renderDisc()});
-$('#dAdd').addEventListener('click',()=>{for(let k=0;k<5;k++)DR.push({});saveD();renderDisc()});
-$('#dClear').addEventListener('click',()=>{if(!confirm('Clear all rows?'))return;DR=Array.from({length:10},()=>({}));saveD();renderDisc()});
-$('#dCsv').addEventListener('click',()=>{const rows=[['Product','Unit','DLP','Customer price','Discount %','Approval','No-approval price']];DR.forEach(r=>{const c=dCalc(r);if(!c.b)return;rows.push([c.it?r.p:'Manual',c.unit,c.dlp,c.price,c.b.disc!=null?r2(c.b.disc):'',c.b.label,c.t[0]])});download('discount-check.csv',rows.map(r=>r.map(x=>`"${String(x).replace(/"/g,'""')}"`).join(',')).join('\n'),'text/csv')});
 
 /* ---------- CALCULATORS ---------- */
 const F=()=>DATA.factors;
@@ -517,148 +498,152 @@ const CALCS=[
   fields:[sel('type','Format',['Machine wrap','Hand wrap','Individual pack'],'Machine wrap'),d('W','Width',18,450),n('Lm','Roll length (metres)',500),n('mic','Thickness (micron)',20)],rate:{unit:'KG',list:'drbio',codes:['DB-1064'],def:'DB-1064'},
   calc(v){const wi=v.W;const kg=(wi/40)*v.Lm*v.mic*4*F().drbio/6600;return{kg,add:v.type==='Individual pack'?15:0,unit:'roll',desc:`Dr. Bio stretch film (${v.type.toLowerCase()}) ${v._dims('W')} × ${v.Lm} m, ${v.mic} mic`}}},
 ];
-let curCalc=LS.get('spd_calc')||'2d', calcUnit=LS.get('spd_unit')||'in';
-const calcState=LS.get('spd_cstate')||{};
-function renderCalcList(){
-  let h='',g=null;CALCS.forEach(c=>{if(c.g!==g){h+=`<div class="grp">${esc(c.g)}</div>`;g=c.g}h+=`<button data-c="${c.id}" class="${c.id===curCalc?'on':''}">${esc(c.t)}</button>`});
-  $('#calcList').innerHTML=h;
-}
-$('#calcList').addEventListener('click',e=>{const b=e.target.closest('button[data-c]');if(!b)return;curCalc=b.dataset.c;LS.set('spd_calc',curCalc);renderCalcList();renderCalc()});
-function stKey(c){return c.id+'|'+(c.noUnits?'x':calcUnit)}
-function renderCalc(){
-  const c=CALCS.find(x=>x.id===curCalc)||CALCS[0];const st=calcState[stKey(c)]||{};
-  let h=`<div class="row" style="justify-content:space-between"><div><h2 style="margin:0">${esc(c.t)}</h2><div class="muted small">${esc(c.desc)}</div></div>`;
-  if(!c.noUnits)h+=`<div class="seg" id="unitSeg"><button data-u="in" class="${calcUnit==='in'?'on':''}">Inches</button><button data-u="mm" class="${calcUnit==='mm'?'on':''}">mm</button></div>`;
-  h+=`</div><div class="form" style="margin-top:14px">`;
-  c.fields.forEach(f=>{
-    const val=st[f.k]!=null?st[f.k]:(f.dim?(calcUnit==='mm'?f.mmDef:f.inDef):f.def);
-    if(f.opts)h+=`<label>${esc(f.label)}<select data-k="${f.k}">${f.opts.map(o=>`<option${o==val?' selected':''}>${esc(o)}</option>`).join('')}</select></label>`;
-    else h+=`<label>${esc(f.label)}${f.dim?` (${calcUnit==='mm'?'mm':'inch'})`:''}<input type="number" step="any" data-k="${f.k}" value="${esc(val)}"></label>`;
+const GROUP_META={
+  'VCI plastic':{icon:'bx-shield-quarter',color:'#009688'},
+  'VCI paper & barrier':{icon:'bx-file',color:'#c77b2e'},
+  'Tuffpaulin':{icon:'bx-cube',color:'#3f6fd1'},
+  'Size converters':{icon:'bx-transfer-alt',color:'#7e57c2'},
+  'Dr. Bio compostable':{icon:'bx-leaf',color:'#4caf7d'},
+};
+let curCalc=null, calcUnit=LS.get('spd_unit')||'in', calcCollapsed={};
+function qcGroups(list){const seen=[],map={};list.forEach(c=>{if(!map[c.g]){map[c.g]=[];seen.push(c.g)}map[c.g].push(c)});return seen.map(g=>({g,items:map[g]}))}
+function renderCalcList(filter){
+  const q=(filter||'').trim().toLowerCase();
+  const matches=CALCS.filter(c=>!q||c.t.toLowerCase().includes(q)||c.g.toLowerCase().includes(q));
+  const box=$('#qcList');
+  if(!matches.length){box.innerHTML='<div class="text-muted small p-3">No match.</div>';return}
+  let h='';
+  qcGroups(matches).forEach(({g,items})=>{
+    const meta=GROUP_META[g]||{icon:'bx-cube',color:'#6c757d'};
+    const isCollapsed=!!calcCollapsed[g]&&!q;
+    h+=`<button type="button" class="qc-group-head${isCollapsed?' collapsed':''}" data-g="${esc(g)}">
+        <span class="qc-group-icon" style="background:${meta.color}"><i class="bx ${meta.icon}"></i></span>
+        <span>${esc(g)}</span><span class="qc-group-count">${items.length}</span>
+        <i class="bx bx-chevron-down qc-group-chevron"></i></button>`;
+    if(!isCollapsed)items.forEach(c=>{h+=`<button type="button" class="qc-item${curCalc&&curCalc.id===c.id?' active':''}" data-c="${c.id}">${esc(c.t)}</button>`});
   });
-  h+='</div>';
+  box.innerHTML=h;
+}
+function selectCalc(id){
+  curCalc=CALCS.find(c=>c.id===id); if(!curCalc)return;
+  LS.set('spd_calc',curCalc.id);
+  $('#qcError').classList.add('hide');
+  $('#qcEmpty').classList.add('hide');
+  $('#qcBody').classList.remove('hide');
+  $('#qcTitle').textContent=curCalc.t;
+  $('#qcDesc').textContent=curCalc.desc;
+  const meta=GROUP_META[curCalc.g]||{icon:'bx-cube'};
+  $('#qcProductIcon').innerHTML=`<i class="bx ${meta.icon}"></i>`;
+  renderCalcList($('#qcSearch').value);
+  const unitSeg=$('#qcUnitSeg');
+  if(curCalc.noUnits){unitSeg.innerHTML=''}
+  else{unitSeg.innerHTML=`<button type="button" class="btn btn-outline-secondary ${calcUnit==='in'?'active':''}" data-u="in">Inches</button>
+    <button type="button" class="btn btn-outline-secondary ${calcUnit==='mm'?'active':''}" data-u="mm">mm</button>`}
+  try{renderCalcFields()}catch(e){showCalcError(e)}
+}
+function showCalcError(e){const box=$('#qcError');box.textContent='Something went wrong computing this calculator: '+e.message;box.classList.remove('hide');console.error(e)}
+function renderCalcFields(){
+  const c=curCalc; let h='';
+  c.fields.forEach(f=>{
+    const val=f.dim?(calcUnit==='mm'?f.mmDef:f.inDef):f.def;
+    if(f.opts)h+=`<div class="col-6 col-md-4"><label class="form-label mb-1">${esc(f.label)} <span class="req">*</span></label>
+      <select class="form-select form-select-sm" data-k="${f.k}">${f.opts.map(o=>`<option${o==val?' selected':''}>${esc(o)}</option>`).join('')}</select></div>`;
+    else h+=`<div class="col-6 col-md-4"><label class="form-label mb-1">${esc(f.label)}${f.dim?` (${calcUnit==='mm'?'mm':'inch'})`:''} <span class="req">*</span></label>
+      <input type="number" step="any" class="form-control form-control-sm" data-k="${f.k}" value="${esc(val)}"></div>`;
+  });
+  $('#qcFields').innerHTML=h;
+
+  const rateSection=$('#qcRateSection');
   if(c.rate){
-    if(c.rate.manual){
-      h+=`<h3>Rate</h3><div class="form"><label>Selling rate (₹/${c.rate.unit.toLowerCase()})<input type="number" step="any" id="cRate" value="${esc(st._rate!=null?st._rate:c.rate.def)}"></label></div>
-      <div class="note">Dr. Bio has no DLP list loaded yet, so no approval band is shown. Sheet guidance: custom print MOQ 1000 kg ≈ ₹300/kg; Dr. Bio standard print MOQ 200 kg ≈ ₹260–280/kg; transparent ≈ ₹340/kg; shrink/stretch ≈ ₹340–360/kg.</div>`;
-    } else {
-      const RL=c.rate.list||'vci';const opts=(DATA[RL]||[]).map((x,i)=>({x,i})).filter(o=>c.rate.codes.includes(o.x.code)&&o.x.unit===c.rate.unit);
-      const defCode=c.rate.auto?c.rate.auto({gsm:st.gsm||c.fields.find(f=>f.k==='gsm').def}):c.rate.def;
-      const pi=st._pi!=null&&opts.some(o=>o.i==st._pi)?st._pi:(opts.find(o=>o.x.code===defCode)||opts[0]||{}).i;
-      const tier=st._tier||'1';
-      h+=`<h3>Rate basis</h3><div class="form">
-        <label style="grid-column:span 2">Price-list product (₹/${c.rate.unit.toLowerCase()})<select id="cProd">${opts.map(o=>`<option value="${o.i}"${o.i==pi?' selected':''}>${esc(o.x.code+' — '+o.x.name+(o.x.spec?' · '+o.x.spec:'')+(RL==='drbio'?' · '+o.x.colour:(o.x.size&&o.x.size!=='Custom Size'?' · '+o.x.size:'')))}</option>`).join('')}</select></label>
-        <label>Price level<select id="cTier">${tierNames(RL).map((t,k)=>`<option value="${k}"${String(k)===tier?' selected':''}>${esc(t)}</option>`).join('')}<option value="m"${tier==='m'?' selected':''}>Custom rate…</option></select></label>
-        <label id="cRateWrap" class="${tier==='m'?'':'hide'}">Custom rate (₹/${c.rate.unit.toLowerCase()})<input type="number" step="any" id="cRate" value="${esc(st._rate!=null?st._rate:'')}"></label>
-      </div>`;
-    }
-  }
-  h+=`<div class="results" id="cRes"></div><div id="cBand" style="margin-top:12px"></div>`;
-  if(c.rate)h+=`<div class="row" style="margin-top:14px"><label class="small muted">Qty <input type="number" id="cQty" value="${esc(st._qty||1000)}" style="width:110px"></label><button class="btn primary" id="cAdd">Add to quote</button></div>`;
-  if(c.id==='3d6'||c.id==='3d5'||c.id==='2d'||c.id==='liner')h+=`<div class="note">VCI plastic bags: quote the customer <b>per piece only</b> — never share the ₹/kg rate.</div>`;
-  $('#calcPanel').innerHTML=h;
-  const us=$('#unitSeg');if(us)us.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;calcUnit=b.dataset.u;LS.set('spd_unit',calcUnit);renderCalc()});
-  computeCalc();
+    const list=DATA[c.rate.list||'vci']||[];
+    const opts=list.map((x,i)=>({x,i})).filter(o=>c.rate.codes.includes(o.x.code)&&o.x.unit===c.rate.unit);
+    const defCode=c.rate.auto?c.rate.auto({gsm:c.fields.find(f=>f.k==='gsm').def}):c.rate.def;
+    const pi=(opts.find(o=>o.x.code===defCode)||opts[0]||{}).i;
+    rateSection.innerHTML=opts.length?`
+      <h6 class="text-uppercase text-muted mt-4 mb-2" style="font-size:.74rem;letter-spacing:.04em;">Rate basis</h6>
+      <div class="row g-3">
+        <div class="col-12 col-md-6"><label class="form-label mb-1">Price-list product (SKU) <span class="req">*</span></label>
+          <select class="form-select form-select-sm" id="qcProd">${opts.map(o=>`<option value="${o.i}"${o.i===pi?' selected':''}>${esc(o.x.code+' — '+o.x.name+(o.x.spec?' · '+o.x.spec:''))}</option>`).join('')}</select></div>
+        <div class="col-12 col-md-6"><label class="form-label mb-1">Price level <span class="req">*</span></label>
+          <select class="form-select form-select-sm" id="qcTier">${tierNames(c.rate.list||'vci').map((t,k)=>`<option value="${k}">${esc(t)}</option>`).join('')}<option value="m">Custom rate…</option></select></div>
+        <div class="col-6 hide" id="qcRateWrap"><label class="form-label mb-1">Custom rate (₹/${c.rate.unit.toLowerCase()})</label>
+          <input type="number" step="any" class="form-control form-control-sm" id="qcRate"></div>
+      </div>` : '<div class="text-muted small mt-2">No price-list rate configured for this item yet — weight only.</div>';
+  } else { rateSection.innerHTML='' }
+  try{computeCalc()}catch(e){showCalcError(e)}
 }
-$('#calcPanel').addEventListener('input',onCalcInput);$('#calcPanel').addEventListener('change',onCalcInput);
-$('#calcPanel').addEventListener('click',e=>{if(e.target.id==='cAdd')addCalcLine()});
-function onCalcInput(e){
-  const c=CALCS.find(x=>x.id===curCalc),k=stKey(c);calcState[k]=calcState[k]||{};const st=calcState[k];
-  const t=e.target;if(t.dataset.k)st[t.dataset.k]=t.tagName==='SELECT'?t.value:t.value;
-  if(t.id==='cProd')st._pi=+t.value;
-  if(t.id==='cTier'){st._tier=t.value;$('#cRateWrap').classList.toggle('hide',t.value!=='m');}
-  if(t.id==='cRate')st._rate=t.value;
-  if(t.id==='cQty')st._qty=t.value;
-  if(c.rate&&c.rate.auto&&t.dataset.k){const code=c.rate.auto(readVals(c));const i=DATA[c.rate.list||'vci'].findIndex(x=>x.code===code);if(i>=0){st._pi=i;const s=$('#cProd');if(s)s.value=i;}}
-  LS.set('spd_cstate',calcState);computeCalc();
-}
-function readVals(c){
+function qcReadVals(c){
   const v={_mm:calcUnit==='mm'&&!c.noUnits,_raw:{}};
-  c.fields.forEach(f=>{const el=$(`#calcPanel [data-k="${f.k}"]`);let x=el?el.value:f.def;if(!f.opts)x=parseFloat(x)||0;v._raw[f.k]=x;v[f.k]=(f.dim&&v._mm)?x/25.4:x;});
+  c.fields.forEach(f=>{const el=$(`#qcFields [data-k="${f.k}"]`);let x=el?el.value:f.def;if(!f.opts)x=parseFloat(x)||0;v._raw[f.k]=x;v[f.k]=(f.dim&&v._mm)?x/25.4:x});
   v._dims=(...ks)=>ks.map(k=>fmtDim(v._raw[k])).join(' × ')+(v._mm?' mm':'″');
   return v;
 }
 function fmtDim(x){return Number.isInteger(x)?String(x):String(r2(x))}
-let lastCalc=null;
-function getRate(c){
+function qcGetRate(c){
   if(!c.rate)return null;
-  if(c.rate.manual){return{rate:parseFloat(($('#cRate')||{}).value)||0,prod:null}}
-  const pi=+(($('#cProd')||{}).value);const x=(DATA[c.rate.list||'vci']||[])[pi];if(!x)return{rate:0,prod:null};
-  const tier=($('#cTier')||{}).value||'1';
-  const rate=tier==='m'?(parseFloat($('#cRate').value)||0):(tier==='0'?x.dlp:x.t[+tier-1]);
+  const list=DATA[c.rate.list||'vci']||[];
+  const pi=+(($('#qcProd')||{}).value);const x=list[pi];if(!x)return{rate:0,prod:null};
+  const tier=($('#qcTier')||{}).value||'1';
+  const rate=tier==='m'?(parseFloat(($('#qcRate')||{}).value)||0):(tier==='0'?x.dlp:x.t[+tier-1]);
   return{rate,prod:x};
 }
+function qcHeroCard(label,value,variant){
+  const icons={weight:'bx-package',price:'bx-coin-stack',area:'bx-crop',count:'bx-hash',generic:'bx-bar-chart-alt-2'};
+  const lower=label.toLowerCase();
+  const icon=lower.includes('weight')?icons.weight:(lower.includes('price')||lower.includes('₹'))?icons.price:(lower.includes('sqm')||lower.includes('area')||lower.includes('square'))?icons.area:(lower.includes('pieces')||lower.includes('count')||lower.includes('sheets'))?icons.count:icons.generic;
+  return `<div class="col-12 col-md-6"><div class="qc-hero ${variant}"><div class="qc-hero-icon ${variant}"><i class="bx ${icon}"></i></div>
+    <div><div class="qc-k">${esc(label)}</div><div class="qc-v">${value}</div></div></div></div>`;
+}
 function computeCalc(){
-  const c=CALCS.find(x=>x.id===curCalc);const v=readVals(c);const r=c.calc(v);const R=getRate(c);
-  let cards=[];
-  if(r.info){r.info.forEach(([k,val,dp,hi])=>cards.push(stat(k,fmt(val,dp),hi)));}
+  const c=curCalc; const v=qcReadVals(c); const r=c.calc(v); const R=qcGetRate(c);
+  let cards=[], b=null, bProd=null;
+  if(r.info){r.info.forEach(([k,val,dp],i)=>cards.push(qcHeroCard(k,fmt(val,dp),i%2===0?'a':'b')));}
   else{
-    if(r.sqm!=null)cards.push(stat('Area incl. wastage',fmt(r.sqm,3)+' sqm'));
-    if(r.kg!=null)cards.push(stat('Weight',r.kg<1?fmt(r.kg*1000,2)+' g/'+r.unit:fmt(r.kg,3)+' kg/'+r.unit));
-    if(r.kg&&r.unit==='pc')cards.push(stat('Pieces per kg',fmt(1/r.kg,1)));
-    let price=null;
-    if(R){const base=c.rate.unit==='SQM'?r.sqm*R.rate:r.kg*R.rate;price=base+(r.add||0);
-      cards.push(stat(`Price per ${r.unit}`,'₹ '+fmt(price,2),true));
-      if(r.fg)cards.push(stat('FG size price (+'+Math.round((r.fg-1)*100)+'%)','₹ '+fmt(price*r.fg,2)));
-      if(r.add)cards.push(stat('incl. tape / packing','₹ '+fmt(r.add,2)));
-      if(r.extra)r.extra(R.rate).forEach(([k,val,dp])=>cards.push(stat(k,fmt(val,dp))));
+    if(r.kg!=null)cards.push(qcHeroCard('Weight',r.kg<1?fmt(r.kg*1000,2)+' g/'+r.unit:fmt(r.kg,3)+' kg/'+r.unit,'a'));
+    if(r.sqm!=null)cards.push(qcHeroCard('Area incl. wastage',fmt(r.sqm,3)+' sqm','a'));
+    if(r.kg&&r.unit==='pc')cards.push(qcHeroCard('Pieces per kg',fmt(1/r.kg,1),'b'));
+    if(R&&R.prod){
+      const base=c.rate.unit==='SQM'?r.sqm*R.rate:r.kg*R.rate; const price=base+(r.add||0);
+      cards.push(qcHeroCard(`Price per ${r.unit}`,'₹ '+fmt(price,2),'b'));
+      if(r.fg)cards.push(qcHeroCard('FG size price (+'+Math.round((r.fg-1)*100)+'%)','₹ '+fmt(price*r.fg,2),'b'));
+      if(r.add)cards.push(qcHeroCard('incl. tape / packing','₹ '+fmt(r.add,2),'b'));
+      if(r.extra)r.extra(R.rate).forEach(([k,val,dp])=>cards.push(qcHeroCard(k,fmt(val,dp),'a')));
+      b=band(R.rate,R.prod.dlp,R.prod.t,$('#qType').value,R.prod.force); bProd=R.prod;
     }
-    lastCalc={c,v,r,R,price};
   }
-  $('#cRes').innerHTML=cards.join('');
-  const cb=$('#cBand');
-  if(R&&R.prod){const b=band(R.rate,R.prod.dlp,R.prod.t,$('#qType').value,R.prod.force);cb.innerHTML=b?`<div class="row">${pill(b)}<span class="small muted">Rate ₹${fmt(R.rate)}/${c.rate.unit.toLowerCase()} vs ${esc(tierNames(c.rate.list||'vci')[0])} ₹${fmt(R.prod.dlp)} → ${fmt(b.disc,1)}% off · ${esc(b.label)}</span></div>`+(R.prod.note?`<div class="note" style="color:var(--bad)">${esc(R.prod.note)}</div>`:''):''}else if(cb)cb.innerHTML='';
+  $('#qcResults').innerHTML=cards.join('');
+  const bandBox=$('#qcBand');
+  if(b&&bProd){
+    bandBox.innerHTML=`<div class="row">${pill(b)}<span class="small muted">Rate ₹${fmt(R.rate)}/${c.rate.unit.toLowerCase()} vs ${esc(tierNames(c.rate.list||'vci')[0])} ₹${fmt(bProd.dlp)} → ${b.disc!=null?fmt(b.disc,1)+'%':'–'} off</span></div>`;
+  } else { bandBox.innerHTML='' }
+  if(curCalc.id==='3d6'||curCalc.id==='3d5'||curCalc.id==='2d'||curCalc.id==='liner'){
+    bandBox.innerHTML+=`<div class="note">VCI plastic bags: quote the customer <b>per piece only</b> — never share the ₹/kg rate.</div>`;
+  }
 }
-function stat(k,v,hi){return`<div class="stat${hi?' hi':''}"><div class="k">${esc(k)}</div><div class="v">${v}</div></div>`}
-function addCalcLine(){
-  if(!lastCalc||lastCalc.price==null)return;const {c,r,R,price}=lastCalc;
-  const qty=parseFloat($('#cQty').value)||1;
-  let dlp=null,t=null;
-  if(R.prod){const qf=(c.rate.unit==='SQM'?r.sqm:r.kg);dlp=R.prod.dlp*qf+(r.add||0);t=R.prod.t.map(x=>x*qf+(r.add||0));}
-  const gst=c.g.startsWith('Dr. Bio')?5:18;
-  addLine({force:R.prod&&R.prod.force||null,desc:r.desc,unit:r.unit,qty,rate:r2(price),dlp,t,gst,list:'calc',meta:{kgPerUnit:r.kg,basis:R.prod?R.prod.code:'manual',basisRate:R.rate}});
-}
-
-/* ---------- QUOTE ---------- */
-let Q=LS.get('spd_quote')||{items:[]};
-['qCust','qContact','qType','qSales','qRef','qDate','qValid','qTerms'].forEach(id=>{const el=$('#'+id);if(Q[id]!=null)el.value=Q[id];el.addEventListener('input',()=>{Q[id]=el.value;saveQ();if(id==='qType'){$('#dType').value=el.value;renderQuote();updCheck();if(lastCalc)computeCalc();}})});
-if(!$('#qDate').value)$('#qDate').value=new Date().toISOString().slice(0,10);
-function saveQ(){LS.set('spd_quote',Q);$('#qCount').textContent=Q.items.length}
-function addLine(it){Q.items.push(it);saveQ();flash(`Added to quote (${Q.items.length} lines)`)}
-function flash(m){let f=$('#flash');if(!f){f=document.createElement('div');f.id='flash';f.style.cssText='position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#16202c;color:#fff;padding:9px 16px;border-radius:8px;z-index:9;font-size:13px';document.body.appendChild(f)}f.textContent=m;f.style.display='block';clearTimeout(f._t);f._t=setTimeout(()=>f.style.display='none',1800)}
-function renderQuote(){
-  const ct=$('#qType').value;
-  let h=`<thead><tr><th>#</th><th style="min-width:260px">Description</th><th class="n">Qty</th><th>Unit</th><th class="n">Rate ₹</th><th class="n">% off DLP</th><th>Approval</th><th class="n">GST %</th><th class="n">Amount ₹</th><th></th></tr></thead><tbody>`;
-  let sub=0,gst=0,worst=-1;const reasons=[];
-  Q.items.forEach((it,i)=>{
-    const b=(it.t||it.force)?band(it.rate,it.dlp,it.t||[0,0,0],ct,it.force):null;if(b){if(b.eff>worst)worst=b.eff;if(b.eff>0)reasons.push(`Line ${i+1}: ${b.label}`)}
-    const amt=(it.qty||0)*(it.rate||0);sub+=amt;gst+=amt*(it.gst||0)/100;
-    h+=`<tr data-i="${i}"><td>${i+1}</td><td><input type="text" data-f="desc" value="${esc(it.desc)}"></td><td class="n"><input type="number" data-f="qty" value="${esc(it.qty)}" style="width:90px"></td><td>${esc(it.unit)}</td><td class="n"><input type="number" step="0.01" data-f="rate" value="${esc(it.rate)}" style="width:100px"></td><td class="n">${b&&b.disc!=null?fmt(b.disc,1)+'%':'–'}</td><td>${pill(b)}</td><td class="n"><input type="number" data-f="gst" value="${esc(it.gst)}" style="width:60px"></td><td class="n">${fmt(amt)}</td><td><button class="btn danger" data-del="${i}" title="Remove">×</button></td></tr>`;
-  });
-  if(!Q.items.length)h+=`<tr><td colspan="10" class="muted" style="padding:20px;text-align:center">No lines yet. Add products from the Price list or a Calculator.</td></tr>`;
-  $('#qTable').innerHTML=h+'</tbody>';
-  $('#qTotals').innerHTML=`<div><span>Sub-total</span><span>₹ ${fmt(sub)}</span></div><div><span>GST</span><span>₹ ${fmt(gst)}</span></div><div class="gt"><span>Total</span><span>₹ ${fmt(sub+gst)}</span></div>`;
-  const W=['No approval needed — you can release this quote.','Needs GM approval before release.','Channel pricing — OK for this channel partner.','Needs Director / management approval before release.'];
-  $('#qApproval').innerHTML=Q.items.length?`<div class="panel" style="padding:12px"><div class="row">${worst>=0?`<span class="pill b${worst}">${esc(['Release','GM approval','Channel OK','Director approval'][worst])}</span>`:'<span class="pill bx">Manual rates</span>'}<b>${worst>=0?esc(W[worst]):'Dr. Bio / manual lines have no DLP — check rates with your manager.'}</b></div>${reasons.length?`<ul class="small muted" style="margin:8px 0 0;padding-left:18px">${reasons.map(r=>`<li>${esc(r)}</li>`).join('')}</ul>`:''}<div class="small muted" style="margin-top:6px">Approval info is internal and is not printed on the customer copy.</div></div>`:'';
-}
-$('#qTable').addEventListener('change',e=>{const tr=e.target.closest('tr[data-i]');if(!tr||!e.target.dataset.f)return;const it=Q.items[+tr.dataset.i],f=e.target.dataset.f;it[f]=f==='desc'?e.target.value:parseFloat(e.target.value)||0;saveQ();renderQuote()});
-$('#qTable').addEventListener('click',e=>{const b=e.target.closest('[data-del]');if(!b)return;Q.items.splice(+b.dataset.del,1);saveQ();renderQuote()});
-$('#qClear').addEventListener('click',()=>{if(!confirm('Clear all quote lines and customer details?'))return;Q={items:[]};['qCust','qContact','qRef'].forEach(id=>$('#'+id).value='');saveQ();renderQuote()});
-$('#qCsv').addEventListener('click',()=>{
-  const rows=[['#','Description','Qty','Unit','Rate','% off DLP','Approval','GST %','Amount']];
-  Q.items.forEach((it,i)=>{const b=(it.t||it.force)?band(it.rate,it.dlp,it.t||[0,0,0],$('#qType').value,it.force):null;rows.push([i+1,it.desc,it.qty,it.unit,it.rate,b&&b.disc!=null?r2(b.disc):'',b?b.label:'manual',it.gst,r2(it.qty*it.rate)])});
-  const csv=rows.map(r=>r.map(x=>`"${String(x).replace(/"/g,'""')}"`).join(',')).join('\n');
-  download(`quote-${($('#qCust').value||'customer').replace(/\W+/g,'-')}-${$('#qDate').value}.csv`,csv,'text/csv');
+$('#qcSearch').addEventListener('input',e=>renderCalcList(e.target.value));
+$('#qcList').addEventListener('click',e=>{
+  const g=e.target.closest('.qc-group-head');
+  if(g){calcCollapsed[g.dataset.g]=!calcCollapsed[g.dataset.g];renderCalcList($('#qcSearch').value);return}
+  const b=e.target.closest('button[data-c]'); if(b)selectCalc(b.dataset.c);
 });
-$('#qPrint').addEventListener('click',()=>{
-  let sub=0,gst=0;
-  const lines=Q.items.map((it,i)=>{const a=it.qty*it.rate;sub+=a;gst+=a*it.gst/100;return`<tr><td>${i+1}</td><td>${esc(it.desc)}</td><td style="text-align:right">${fmt(it.qty,0)}</td><td>${esc(it.unit)}</td><td style="text-align:right">${fmt(it.rate)}</td><td style="text-align:right">${it.gst}%</td><td style="text-align:right">${fmt(a)}</td></tr>`}).join('');
-  $('#printArea').innerHTML=`<div style="display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2px solid #12355b;padding-bottom:8px"><div><div style="font-size:20px;font-weight:700;color:#12355b">Hi-Tech International Group</div><div>RUST-X · Dr. Bio · Tuffpaulin · Zorbit · Fillezy · Keep It Fresh</div></div><div style="text-align:right;font-size:18px;font-weight:700">QUOTATION</div></div>
-  <table style="width:100%;margin:12px 0;border:0"><tr><td style="border:0"><b>To:</b> ${esc($('#qCust').value)}<br>${esc($('#qContact').value)}</td><td style="border:0;text-align:right"><b>Ref:</b> ${esc($('#qRef').value)}<br><b>Date:</b> ${esc($('#qDate').value)}<br><b>Valid for:</b> ${esc($('#qValid').value)} days</td></tr></table>
-  <table style="width:100%;border-collapse:collapse"><thead><tr><th>#</th><th>Description</th><th>Qty</th><th>Unit</th><th>Rate ₹</th><th>GST</th><th>Amount ₹</th></tr></thead><tbody>${lines}</tbody></table>
-  <table style="margin:10px 0 0 auto;border-collapse:collapse"><tr><td>Sub-total</td><td style="text-align:right">₹ ${fmt(sub)}</td></tr><tr><td>GST</td><td style="text-align:right">₹ ${fmt(gst)}</td></tr><tr><td><b>Total</b></td><td style="text-align:right"><b>₹ ${fmt(sub+gst)}</b></td></tr></table>
-  <p style="margin-top:16px"><b>Terms:</b> ${esc($('#qTerms').value)}</p><p>Sales contact: ${esc($('#qSales').value)}</p>`;
-  window.print();
+$('#qcFields').addEventListener('input',()=>{try{computeCalc()}catch(e){showCalcError(e)}});
+$('#qcFields').addEventListener('change',()=>{try{computeCalc()}catch(e){showCalcError(e)}});
+$('#qcRateSection').addEventListener('change',e=>{
+  if(e.target.id==='qcTier')$('#qcRateWrap').classList.toggle('hide',e.target.value!=='m');
+  try{computeCalc()}catch(err){showCalcError(err)}
 });
+$('#qcUnitSeg').addEventListener('click',e=>{
+  const b=e.target.closest('button[data-u]'); if(!b)return;
+  calcUnit=b.dataset.u; LS.set('spd_unit',calcUnit);
+  [...e.currentTarget.querySelectorAll('button')].forEach(x=>x.classList.toggle('active',x===b));
+  try{renderCalcFields()}catch(err){showCalcError(err)}
+});
+$('#qType').addEventListener('change',()=>{if(curCalc)try{computeCalc()}catch(e){showCalcError(e)}});
+function initCalcTab(){
+  $('#qcLoading').classList.add('hide'); $('#qcWrap').classList.remove('d-none'); $('#qcWrap').style.display='flex';
+  renderCalcList('');
+  const want=LS.get('spd_calc'); if(want&&CALCS.some(c=>c.id===want))selectCalc(want);
+}
 
 /* ---------- REFERENCE ---------- */
 let curRef='hsn';
@@ -693,6 +678,13 @@ function renderATable(){
   $('#aTable').innerHTML=h+'</tbody>';
 }
 function tiersFrom(l,dlp){const r=DATA.rules[l],d=LM(l).round;return r.map(p=>d===0?Math.round(dlp*(1-p/100)):r2(dlp*(1-p/100)))}
+// The Admin section itself only renders in the DOM for managers (Blade's
+// canManage check), but this is one shared <script> for every viewer —
+// binding straight to '#aXxx' here would throw "Cannot read
+// properties of null" for everyone else (an uncaught error that silently
+// stops the REST of this script too, including the Price list render at
+// the bottom), so every one of these is gated on the same CAN_MANAGE flag.
+if(CAN_MANAGE){
 $('#aListSeg').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;aList=b.dataset.l;$$('#aListSeg button').forEach(x=>x.classList.toggle('on',x===b));renderATable()});
 $('#aSearch').addEventListener('input',renderATable);
 $('#aTable').addEventListener('change',e=>{const t=e.target;if(t.dataset.ai==null)return;const x=DATA[aList][+t.dataset.ai],f=t.dataset.af;
@@ -707,24 +699,10 @@ $('#aRules').addEventListener('change',e=>{const t=e.target;DATA.rules[t.dataset
 $('#aFactors').addEventListener('change',e=>{const t=e.target;DATA.factors[t.dataset.fk]=parseFloat(t.value)||1;markDirty();computeCalc()});
 $('#aRecalc').addEventListener('click',()=>{if(!confirm('Overwrite every tier price with DLP × (1 − rule %)? Items with no DLP are left unchanged.'))return;LISTS().forEach(m=>(DATA[m.k]||[]).forEach(x=>{if(x.dlp>0)x.t=tiersFrom(m.k,x.dlp)}));markDirty();renderATable();refreshAll(false)});
 $('#aVer').addEventListener('change',e=>{DATA.version=e.target.value;markDirty()});
-$('#aExport').addEventListener('click',()=>download('sales-pricing-data.json',JSON.stringify(DATA,null,1),'application/json'));
-$('#aImport').addEventListener('change',e=>{const f=e.target.files[0];if(!f)return;const rd=new FileReader();rd.onload=()=>{try{const d=JSON.parse(rd.result);if(!d.vci||!d.lubes)throw 0;DATA=d;markDirty();renderAdmin();refreshAll(true);$('#aMsg').textContent='Imported.'}catch(err){$('#aMsg').textContent='That file is not a valid price export.'}};rd.readAsText(f)});
 $('#aReset').addEventListener('click',()=>{if(!confirm('Discard all local edits and go back to the published prices?'))return;LS.del('spd_override');DATA=clone(SEED);$('#overrideBanner').classList.add('hide');renderAdmin();refreshAll(true)});
-$('#aDownload').addEventListener('click',async()=>{
-  let src=null;
-  try{const r=await fetch(location.href,{cache:'no-store'});if(r.ok)src=await r.text()}catch(e){}
-  if(!src||src.indexOf('/*PRICEDATA_START*/')<0){src='<!doctype html>\n'+document.documentElement.outerHTML.replace(/<div id="printArea">[\s\S]*?<\/div>\s*<script id="seed"/,'<div id="printArea"></div>\n<script id="seed"');}
-  const json=JSON.stringify(DATA).replace(/<\//g,'<\\/');
-  const out=src.replace(/\/\*PRICEDATA_START\*\/[\s\S]*?\/\*PRICEDATA_END\*\//,()=>'/*PRICEDATA_START*/'+json+'/*PRICEDATA_END*/');
-  download('sales-pricing-desk.html',out,'text/html');
-  $('#aMsg').innerHTML='Downloaded <b>sales-pricing-desk.html</b> as a backup copy.';
-});
-function download(name,text,type){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type}));a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},500)}
 
 // Persists DATA to the database (pricing_desk_data table) via PricingDeskController::save().
-// Every viewer's next page load reads this same row, so there is nothing
-// left to download or re-upload — unlike the original file-swap workflow
-// aDownload above still supports as an offline backup.
+// Every viewer's next page load reads this same row.
 $('#aSaveServer').addEventListener('click',async()=>{
   const btn=$('#aSaveServer');
   btn.disabled=true;btn.textContent='Saving…';
@@ -746,13 +724,20 @@ $('#aSaveServer').addEventListener('click',async()=>{
     btn.disabled=false;btn.textContent='Save to server';
   }
 });
+}
 
 /* ---------- boot ---------- */
-function refreshAll(full){renderSegs();buildDatalist();if(Q.qType)$('#dType').value=Q.qType;renderDisc();$('#verLabel').textContent=DATA.version;if(full){fillCats();selIdx=null}renderPrices();renderCheck();renderLegend();renderCalc();renderRef();renderQuote()}
+function refreshAll(full){renderSegs();$('#verLabel').textContent=DATA.version;if(full){fillCats();selIdx=null}renderPrices();renderCheck();renderLegend();renderRef()}
 if(LS.get('spd_override'))$('#overrideBanner').classList.remove('hide');
-renderSegs();fillCats();renderCalcList();refreshAll(true);saveQ();
-const lt=LS.get('spd_tab');if(lt&&lt!=='admin')showTab(lt);
+renderSegs();fillCats();refreshAll(true);
+// Restore the last tab the user was on (Price list is the default, already
+// marked active in the markup) via Bootstrap's own tab API.
+const lt=LS.get('spd_tab');
+if(lt==='calc'||lt==='admin'){
+  const btn=document.querySelector(`#tabs [data-t="${lt}"]`);
+  if(btn&&window.bootstrap)new bootstrap.Tab(btn).show();
+}
 })();
 </script>
-</body>
-</html>
+</div>
+@endsection
