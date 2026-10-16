@@ -82,14 +82,13 @@
 #pricingDeskRoot .qc-panel{flex-grow:1;padding:24px 28px;overflow-y:auto;max-height:70vh}
 #pricingDeskRoot .qc-product-icon{width:56px;height:56px;border-radius:12px;background:var(--hitech-primary-light, rgba(0,128,128,.08));color:var(--hitech-primary, #008080);display:flex;align-items:center;justify-content:center;font-size:1.5rem;flex-shrink:0}
 #pricingDeskRoot .qc-unit-seg .btn.active{background:var(--hitech-primary, #008080);border-color:var(--hitech-primary, #008080);color:#fff}
-#pricingDeskRoot #qcFields label,#pricingDeskRoot #qcRateSection label{font-size:.78rem;font-weight:600;color:#4a525c}
+#pricingDeskRoot #pdcFields label,#pricingDeskRoot #pdcRateSection label{font-size:.78rem;font-weight:600;color:#4a525c}
 #pricingDeskRoot .req{color:#e35b5b}
 #pricingDeskRoot .qc-hero{border:1px solid transparent;border-radius:12px;padding:14px 16px;height:100%;display:flex;align-items:center;gap:14px}
-#pricingDeskRoot .qc-hero.a{background:rgba(77,108,240,.08);border-color:rgba(77,108,240,.18)}
-#pricingDeskRoot .qc-hero.b{background:rgba(245,166,35,.10);border-color:rgba(245,166,35,.22)}
+#pricingDeskRoot .qc-hero.a{background:var(--hitech-primary-light, rgba(0,128,128,.07));border-color:rgba(0,128,128,.16)}
+#pricingDeskRoot .qc-hero.b{background:#f7f5f0;border-color:#ece7db}
 #pricingDeskRoot .qc-hero-icon{width:42px;height:42px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:1.2rem;flex-shrink:0;background:#fff}
-#pricingDeskRoot .qc-hero-icon.a{color:var(--hitech-icon-view, #4d6cf0)}
-#pricingDeskRoot .qc-hero-icon.b{color:var(--hitech-icon-edit, #f5a623)}
+#pricingDeskRoot .qc-hero-icon.a,#pricingDeskRoot .qc-hero-icon.b{color:var(--hitech-primary, #008080)}
 #pricingDeskRoot .qc-hero .qc-k{font-size:.78rem;color:#8a94a6;font-weight:600}
 #pricingDeskRoot .qc-hero .qc-v{font-size:1.15rem;font-weight:700;color:#1f2937}
 @media (max-width:767px){#pricingDeskRoot .qc-embed{flex-direction:column}#pricingDeskRoot .qc-sidebar{width:100%;max-height:240px}}
@@ -196,40 +195,40 @@
   <!-- CALCULATORS -->
   <section id="t-calc" class="tab-pane fade" role="tabpanel">
     <div class="qc-embed">
-      <div id="qcLoading" class="text-muted small py-5 text-center">Loading…</div>
-      <div id="qcWrap" class="d-none">
+      <div id="pdcLoading" class="text-muted small py-5 text-center">Loading…</div>
+      <div id="pdcWrap" class="d-none">
         <div class="qc-sidebar">
           <div class="qc-sidebar-head">
             <div class="fw-bold">Product Catalogue</div>
             <div class="text-muted small">Search and select a product</div>
             <div class="position-relative mt-2">
               <i class="bx bx-search qc-search-icon"></i>
-              <input type="text" id="qcSearch" class="form-control form-control-sm ps-4" placeholder="Search product, category…" autocomplete="off">
+              <input type="text" id="pdcSearch" class="form-control form-control-sm ps-4" placeholder="Search product, category…" autocomplete="off">
             </div>
           </div>
-          <div id="qcList" class="qc-list"></div>
+          <div id="pdcList" class="qc-list"></div>
         </div>
         <div class="qc-panel">
-          <div id="qcEmpty" class="text-muted text-center py-5">
+          <div id="pdcEmpty" class="text-muted text-center py-5">
             <i class="bx bx-left-arrow-alt bx-sm d-block mb-2"></i>
             Pick a product from the catalogue on the left.
           </div>
-          <div id="qcBody" class="d-none">
+          <div id="pdcBody" class="d-none">
             <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
               <div class="d-flex align-items-start gap-3">
-                <div class="qc-product-icon" id="qcProductIcon"><i class="bx bx-cube"></i></div>
+                <div class="qc-product-icon" id="pdcProductIcon"><i class="bx bx-cube"></i></div>
                 <div>
-                  <h5 class="mb-0 fw-bold" id="qcTitle"></h5>
-                  <div class="text-muted small" id="qcDesc" style="max-width:480px;"></div>
+                  <h5 class="mb-0 fw-bold" id="pdcTitle"></h5>
+                  <div class="text-muted small" id="pdcDesc" style="max-width:480px;"></div>
                 </div>
               </div>
-              <div class="btn-group btn-group-sm qc-unit-seg" id="qcUnitSeg" role="group"></div>
+              <div class="btn-group btn-group-sm qc-unit-seg" id="pdcUnitSeg" role="group"></div>
             </div>
-            <div class="row g-3 mt-1" id="qcFields"></div>
-            <div id="qcRateSection"></div>
-            <div class="row g-3 mt-2" id="qcResults"></div>
-            <div id="qcBand" class="mt-3"></div>
-            <div id="qcError" class="alert alert-danger small mt-3 d-none"></div>
+            <div class="row g-3 mt-1" id="pdcFields"></div>
+            <div id="pdcRateSection"></div>
+            <div class="row g-3 mt-2" id="pdcResults"></div>
+            <div id="pdcBand" class="mt-3"></div>
+            <div id="pdcError" class="alert alert-danger small mt-3 d-none"></div>
           </div>
         </div>
       </div>
@@ -510,7 +509,7 @@ function qcGroups(list){const seen=[],map={};list.forEach(c=>{if(!map[c.g]){map[
 function renderCalcList(filter){
   const q=(filter||'').trim().toLowerCase();
   const matches=CALCS.filter(c=>!q||c.t.toLowerCase().includes(q)||c.g.toLowerCase().includes(q));
-  const box=$('#qcList');
+  const box=$('#pdcList');
   if(!matches.length){box.innerHTML='<div class="text-muted small p-3">No match.</div>';return}
   let h='';
   qcGroups(matches).forEach(({g,items})=>{
@@ -527,21 +526,21 @@ function renderCalcList(filter){
 function selectCalc(id){
   curCalc=CALCS.find(c=>c.id===id); if(!curCalc)return;
   LS.set('spd_calc',curCalc.id);
-  $('#qcError').classList.add('hide');
-  $('#qcEmpty').classList.add('hide');
-  $('#qcBody').classList.remove('hide');
-  $('#qcTitle').textContent=curCalc.t;
-  $('#qcDesc').textContent=curCalc.desc;
+  $('#pdcError').classList.add('hide');
+  $('#pdcEmpty').classList.add('hide');
+  $('#pdcBody').classList.remove('hide');
+  $('#pdcTitle').textContent=curCalc.t;
+  $('#pdcDesc').textContent=curCalc.desc;
   const meta=GROUP_META[curCalc.g]||{icon:'bx-cube'};
-  $('#qcProductIcon').innerHTML=`<i class="bx ${meta.icon}"></i>`;
-  renderCalcList($('#qcSearch').value);
-  const unitSeg=$('#qcUnitSeg');
+  $('#pdcProductIcon').innerHTML=`<i class="bx ${meta.icon}"></i>`;
+  renderCalcList($('#pdcSearch').value);
+  const unitSeg=$('#pdcUnitSeg');
   if(curCalc.noUnits){unitSeg.innerHTML=''}
   else{unitSeg.innerHTML=`<button type="button" class="btn btn-outline-secondary ${calcUnit==='in'?'active':''}" data-u="in">Inches</button>
     <button type="button" class="btn btn-outline-secondary ${calcUnit==='mm'?'active':''}" data-u="mm">mm</button>`}
   try{renderCalcFields()}catch(e){showCalcError(e)}
 }
-function showCalcError(e){const box=$('#qcError');box.textContent='Something went wrong computing this calculator: '+e.message;box.classList.remove('hide');console.error(e)}
+function showCalcError(e){const box=$('#pdcError');box.textContent='Something went wrong computing this calculator: '+e.message;box.classList.remove('hide');console.error(e)}
 function renderCalcFields(){
   const c=curCalc; let h='';
   c.fields.forEach(f=>{
@@ -551,9 +550,9 @@ function renderCalcFields(){
     else h+=`<div class="col-6 col-md-4"><label class="form-label mb-1">${esc(f.label)}${f.dim?` (${calcUnit==='mm'?'mm':'inch'})`:''} <span class="req">*</span></label>
       <input type="number" step="any" class="form-control form-control-sm" data-k="${f.k}" value="${esc(val)}"></div>`;
   });
-  $('#qcFields').innerHTML=h;
+  $('#pdcFields').innerHTML=h;
 
-  const rateSection=$('#qcRateSection');
+  const rateSection=$('#pdcRateSection');
   if(c.rate){
     const list=DATA[c.rate.list||'vci']||[];
     const opts=list.map((x,i)=>({x,i})).filter(o=>c.rate.codes.includes(o.x.code)&&o.x.unit===c.rate.unit);
@@ -563,18 +562,18 @@ function renderCalcFields(){
       <h6 class="text-uppercase text-muted mt-4 mb-2" style="font-size:.74rem;letter-spacing:.04em;">Rate basis</h6>
       <div class="row g-3">
         <div class="col-12 col-md-6"><label class="form-label mb-1">Price-list product (SKU) <span class="req">*</span></label>
-          <select class="form-select form-select-sm" id="qcProd">${opts.map(o=>`<option value="${o.i}"${o.i===pi?' selected':''}>${esc(o.x.code+' — '+o.x.name+(o.x.spec?' · '+o.x.spec:''))}</option>`).join('')}</select></div>
+          <select class="form-select form-select-sm" id="pdcProd">${opts.map(o=>`<option value="${o.i}"${o.i===pi?' selected':''}>${esc(o.x.code+' — '+o.x.name+(o.x.spec?' · '+o.x.spec:''))}</option>`).join('')}</select></div>
         <div class="col-12 col-md-6"><label class="form-label mb-1">Price level <span class="req">*</span></label>
-          <select class="form-select form-select-sm" id="qcTier">${tierNames(c.rate.list||'vci').map((t,k)=>`<option value="${k}">${esc(t)}</option>`).join('')}<option value="m">Custom rate…</option></select></div>
-        <div class="col-6 hide" id="qcRateWrap"><label class="form-label mb-1">Custom rate (₹/${c.rate.unit.toLowerCase()})</label>
-          <input type="number" step="any" class="form-control form-control-sm" id="qcRate"></div>
+          <select class="form-select form-select-sm" id="pdcTier">${tierNames(c.rate.list||'vci').map((t,k)=>`<option value="${k}">${esc(t)}</option>`).join('')}<option value="m">Custom rate…</option></select></div>
+        <div class="col-6 hide" id="pdcRateWrap"><label class="form-label mb-1">Custom rate (₹/${c.rate.unit.toLowerCase()})</label>
+          <input type="number" step="any" class="form-control form-control-sm" id="pdcRate"></div>
       </div>` : '<div class="text-muted small mt-2">No price-list rate configured for this item yet — weight only.</div>';
   } else { rateSection.innerHTML='' }
   try{computeCalc()}catch(e){showCalcError(e)}
 }
 function qcReadVals(c){
   const v={_mm:calcUnit==='mm'&&!c.noUnits,_raw:{}};
-  c.fields.forEach(f=>{const el=$(`#qcFields [data-k="${f.k}"]`);let x=el?el.value:f.def;if(!f.opts)x=parseFloat(x)||0;v._raw[f.k]=x;v[f.k]=(f.dim&&v._mm)?x/25.4:x});
+  c.fields.forEach(f=>{const el=$(`#pdcFields [data-k="${f.k}"]`);let x=el?el.value:f.def;if(!f.opts)x=parseFloat(x)||0;v._raw[f.k]=x;v[f.k]=(f.dim&&v._mm)?x/25.4:x});
   v._dims=(...ks)=>ks.map(k=>fmtDim(v._raw[k])).join(' × ')+(v._mm?' mm':'″');
   return v;
 }
@@ -582,9 +581,9 @@ function fmtDim(x){return Number.isInteger(x)?String(x):String(r2(x))}
 function qcGetRate(c){
   if(!c.rate)return null;
   const list=DATA[c.rate.list||'vci']||[];
-  const pi=+(($('#qcProd')||{}).value);const x=list[pi];if(!x)return{rate:0,prod:null};
-  const tier=($('#qcTier')||{}).value||'1';
-  const rate=tier==='m'?(parseFloat(($('#qcRate')||{}).value)||0):(tier==='0'?x.dlp:x.t[+tier-1]);
+  const pi=+(($('#pdcProd')||{}).value);const x=list[pi];if(!x)return{rate:0,prod:null};
+  const tier=($('#pdcTier')||{}).value||'1';
+  const rate=tier==='m'?(parseFloat(($('#pdcRate')||{}).value)||0):(tier==='0'?x.dlp:x.t[+tier-1]);
   return{rate,prod:x};
 }
 function qcHeroCard(label,value,variant){
@@ -611,8 +610,8 @@ function computeCalc(){
       b=band(R.rate,R.prod.dlp,R.prod.t,$('#qType').value,R.prod.force); bProd=R.prod;
     }
   }
-  $('#qcResults').innerHTML=cards.join('');
-  const bandBox=$('#qcBand');
+  $('#pdcResults').innerHTML=cards.join('');
+  const bandBox=$('#pdcBand');
   if(b&&bProd){
     bandBox.innerHTML=`<div class="row">${pill(b)}<span class="small muted">Rate ₹${fmt(R.rate)}/${c.rate.unit.toLowerCase()} vs ${esc(tierNames(c.rate.list||'vci')[0])} ₹${fmt(bProd.dlp)} → ${b.disc!=null?fmt(b.disc,1)+'%':'–'} off</span></div>`;
   } else { bandBox.innerHTML='' }
@@ -620,19 +619,19 @@ function computeCalc(){
     bandBox.innerHTML+=`<div class="note">VCI plastic bags: quote the customer <b>per piece only</b> — never share the ₹/kg rate.</div>`;
   }
 }
-$('#qcSearch').addEventListener('input',e=>renderCalcList(e.target.value));
-$('#qcList').addEventListener('click',e=>{
+$('#pdcSearch').addEventListener('input',e=>renderCalcList(e.target.value));
+$('#pdcList').addEventListener('click',e=>{
   const g=e.target.closest('.qc-group-head');
-  if(g){calcCollapsed[g.dataset.g]=!calcCollapsed[g.dataset.g];renderCalcList($('#qcSearch').value);return}
+  if(g){calcCollapsed[g.dataset.g]=!calcCollapsed[g.dataset.g];renderCalcList($('#pdcSearch').value);return}
   const b=e.target.closest('button[data-c]'); if(b)selectCalc(b.dataset.c);
 });
-$('#qcFields').addEventListener('input',()=>{try{computeCalc()}catch(e){showCalcError(e)}});
-$('#qcFields').addEventListener('change',()=>{try{computeCalc()}catch(e){showCalcError(e)}});
-$('#qcRateSection').addEventListener('change',e=>{
-  if(e.target.id==='qcTier')$('#qcRateWrap').classList.toggle('hide',e.target.value!=='m');
+$('#pdcFields').addEventListener('input',()=>{try{computeCalc()}catch(e){showCalcError(e)}});
+$('#pdcFields').addEventListener('change',()=>{try{computeCalc()}catch(e){showCalcError(e)}});
+$('#pdcRateSection').addEventListener('change',e=>{
+  if(e.target.id==='pdcTier')$('#pdcRateWrap').classList.toggle('hide',e.target.value!=='m');
   try{computeCalc()}catch(err){showCalcError(err)}
 });
-$('#qcUnitSeg').addEventListener('click',e=>{
+$('#pdcUnitSeg').addEventListener('click',e=>{
   const b=e.target.closest('button[data-u]'); if(!b)return;
   calcUnit=b.dataset.u; LS.set('spd_unit',calcUnit);
   [...e.currentTarget.querySelectorAll('button')].forEach(x=>x.classList.toggle('active',x===b));
@@ -640,7 +639,7 @@ $('#qcUnitSeg').addEventListener('click',e=>{
 });
 $('#qType').addEventListener('change',()=>{if(curCalc)try{computeCalc()}catch(e){showCalcError(e)}});
 function initCalcTab(){
-  $('#qcLoading').classList.add('hide'); $('#qcWrap').classList.remove('d-none'); $('#qcWrap').style.display='flex';
+  $('#pdcLoading').classList.add('hide'); $('#pdcWrap').classList.remove('d-none'); $('#pdcWrap').style.display='flex';
   renderCalcList('');
   const want=LS.get('spd_calc'); if(want&&CALCS.some(c=>c.id===want))selectCalc(want);
 }
