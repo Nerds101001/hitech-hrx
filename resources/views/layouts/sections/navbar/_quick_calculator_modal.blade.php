@@ -335,11 +335,14 @@
       : (lower.includes('sqm') || lower.includes('area') || lower.includes('square')) ? icons.area
       : (lower.includes('pieces') || lower.includes('count') || lower.includes('sheets')) ? icons.count
       : icons.generic;
-    return `<div class="col-12 col-md-6"><div class="qc-hero ${variant}">
+    return `<div class="qc-hero ${variant}">
       <div class="qc-hero-icon ${variant}"><i class="bx ${icon}"></i></div>
       <div><div class="qc-k">${esc(label)}</div><div class="qc-v">${value}</div></div>
-    </div></div>`;
+    </div>`;
   }
+  // Cards per row depends on how many there are, so a count like 3 fills one
+  // clean row instead of leaving the last card alone with an empty gap beside it.
+  function heroColClass(n){ return n===1 ? 'col-12' : n===3 ? 'col-12 col-md-4' : 'col-12 col-md-6'; }
 
   function groupsInOrder(list){
     const seen = [], map = {};
@@ -476,7 +479,8 @@
         bProd = R.prod;
       }
     }
-    document.getElementById('qcResults').innerHTML = cards.join('');
+    const colClass = heroColClass(cards.length);
+    document.getElementById('qcResults').innerHTML = cards.map(h => `<div class="${colClass}">${h}</div>`).join('');
     const bandBox = document.getElementById('qcBand');
     if (b && bProd) {
       const disc = bProd.dlp>0 ? (1-R.rate/bProd.dlp)*100 : null;

@@ -173,9 +173,10 @@
           <div class="seg" id="listSeg"></div>
         </div>
         <div class="pd-row" style="margin-bottom:12px">
-          <div class="search-wrapper-hitech" style="flex:1 1 220px;min-width:200px;max-width:320px;">
+          <div class="search-wrapper-hitech" style="flex:1 1 240px;min-width:220px;max-width:360px;">
             <i class="bx bx-search text-muted ms-3"></i>
             <input type="search" id="pSearch" class="form-control" placeholder="Search code, product, size…">
+            <button class="btn-search shadow-sm" id="pSearchBtn" type="button"><i class="bx bx-search fs-5"></i><span>Search</span></button>
           </div>
           <select id="pCat" class="form-select form-select-sm" style="max-width:220px;flex:0 1 auto"></select>
           <span class="small muted" id="pCount" style="white-space:nowrap;flex:0 0 auto"></span>
@@ -298,9 +299,10 @@
         </div>
         <div class="pd-row" style="margin-bottom:10px">
           <div class="seg" id="aListSeg"></div>
-          <div class="search-wrapper-hitech" style="flex:1 1 220px;min-width:200px;max-width:320px;">
+          <div class="search-wrapper-hitech" style="flex:1 1 240px;min-width:220px;max-width:360px;">
             <i class="bx bx-search text-muted ms-3"></i>
             <input type="search" id="aSearch" class="form-control" placeholder="Filter…">
+            <button class="btn-search shadow-sm" id="aSearchBtn" type="button"><i class="bx bx-search fs-5"></i><span>Search</span></button>
           </div>
         </div>
         <p class="small muted" style="margin-top:0">Changing DLP recalculates the three tier prices automatically. You can still overwrite a tier by hand.</p>
@@ -373,6 +375,7 @@ let curList='vci', selIdx=null;
 function renderSegs(){$('#listSeg').innerHTML=segHtml(curList);if(CAN_MANAGE)$('#aListSeg').innerHTML=segHtml(aList)}
 $('#listSeg').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;curList=b.dataset.l;$$('#listSeg button').forEach(x=>x.classList.toggle('on',x===b));selIdx=null;fillCats();renderPrices();renderCheck()});
 $('#pSearch').addEventListener('input',renderPrices);
+$('#pSearchBtn').addEventListener('click',renderPrices);
 $('#pCat').addEventListener('change',renderPrices);
 function fillCats(){const cats=[...new Set(DATA[curList].map(x=>x.cat))];$('#pCat').innerHTML='<option value="">All categories</option>'+cats.map(c=>`<option>${esc(c)}</option>`).join('')}
 function itemText(x){return [x.code,x.name,x.spec,x.size,x.colour,x.cat].join(' ').toLowerCase()}
@@ -639,9 +642,12 @@ function qcHeroCard(label,value,variant){
   const icons={weight:'bx-package',price:'bx-coin-stack',area:'bx-crop',count:'bx-hash',generic:'bx-bar-chart-alt-2'};
   const lower=label.toLowerCase();
   const icon=lower.includes('weight')?icons.weight:(lower.includes('price')||lower.includes('₹'))?icons.price:(lower.includes('sqm')||lower.includes('area')||lower.includes('square'))?icons.area:(lower.includes('pieces')||lower.includes('count')||lower.includes('sheets'))?icons.count:icons.generic;
-  return `<div class="col-12 col-md-6"><div class="qc-hero ${variant}"><div class="qc-hero-icon ${variant}"><i class="bx ${icon}"></i></div>
-    <div><div class="qc-k">${esc(label)}</div><div class="qc-v">${value}</div></div></div></div>`;
+  return `<div class="qc-hero ${variant}"><div class="qc-hero-icon ${variant}"><i class="bx ${icon}"></i></div>
+    <div><div class="qc-k">${esc(label)}</div><div class="qc-v">${value}</div></div></div>`;
 }
+// Cards per row depends on how many there are, so a count like 3 fills one
+// clean row instead of leaving the last card alone with an empty gap beside it.
+function qcHeroColClass(n){return n===1?'col-12':n===3?'col-12 col-md-4':'col-12 col-md-6'}
 function computeCalc(){
   const c=curCalc; const v=qcReadVals(c); const r=c.calc(v); const R=qcGetRate(c);
   let cards=[], b=null, bProd=null;
@@ -659,7 +665,8 @@ function computeCalc(){
       b=band(R.rate,R.prod.dlp,R.prod.t,$('#qType').value,R.prod.force); bProd=R.prod;
     }
   }
-  $('#pdcResults').innerHTML=cards.join('');
+  const colClass=qcHeroColClass(cards.length);
+  $('#pdcResults').innerHTML=cards.map(h=>`<div class="${colClass}">${h}</div>`).join('');
   const bandBox=$('#pdcBand');
   if(b&&bProd){
     bandBox.innerHTML=`<div class="pd-row">${pill(b)}<span class="muted" style="font-size:14px">Rate ₹${fmt(R.rate)}/${c.rate.unit.toLowerCase()} vs ${esc(tierNames(c.rate.list||'vci')[0])} ₹${fmt(bProd.dlp)} → ${b.disc!=null?fmt(b.disc,1)+'%':'–'} off</span></div>`;
@@ -735,6 +742,7 @@ function tiersFrom(l,dlp){const r=DATA.rules[l],d=LM(l).round;return r.map(p=>d=
 if(CAN_MANAGE){
 $('#aListSeg').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;aList=b.dataset.l;$$('#aListSeg button').forEach(x=>x.classList.toggle('on',x===b));renderATable()});
 $('#aSearch').addEventListener('input',renderATable);
+$('#aSearchBtn').addEventListener('click',renderATable);
 $('#aTable').addEventListener('change',e=>{const t=e.target;if(t.dataset.ai==null)return;const x=DATA[aList][+t.dataset.ai],f=t.dataset.af;
   if(f==='dlp'){x.dlp=parseFloat(t.value)||0;if(x.dlp>0){x.t=tiersFrom(aList,x.dlp);}renderATable();}
   else if(/^t\d$/.test(f))x.t[+f[1]]=parseFloat(t.value)||0; else x[f]=t.value;
