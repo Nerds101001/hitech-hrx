@@ -45,7 +45,7 @@
 #pricingDeskRoot main{padding:18px 16px 32px}
 #pricingDeskRoot .banner{background:var(--warn-bg);color:var(--warn);border:1px solid var(--line);padding:8px 12px;border-radius:8px;margin-bottom:12px;font-size:13px}
 #pricingDeskRoot .panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px}
-#pricingDeskRoot .row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+#pricingDeskRoot .pd-row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
 #pricingDeskRoot .grow{flex:1}
 #pricingDeskRoot h2{font-size:16px;margin:0 0 10px}
 #pricingDeskRoot h3{font-size:14px;margin:14px 0 8px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
@@ -170,7 +170,7 @@
   <section id="t-prices" class="tab-pane fade show active" role="tabpanel">
     <div class="grid2">
       <div class="panel">
-        <div class="row" style="margin-bottom:12px">
+        <div class="pd-row" style="margin-bottom:12px">
           <div class="seg" id="listSeg"></div>
           <div class="search-wrapper-hitech grow" style="min-width:180px;max-width:320px;">
             <i class="bx bx-search text-muted ms-3"></i>
@@ -258,7 +258,7 @@
   <!-- REFERENCE -->
   <section id="t-ref" class="hide">
     <div class="panel">
-      <div class="row" style="margin-bottom:12px">
+      <div class="pd-row" style="margin-bottom:12px">
         <div class="seg" id="refSeg"><button data-r="hsn" class="on">HSN &amp; GST</button><button data-r="pack">Standard packing</button><button data-r="shrink">Shrink film sizes</button><button data-r="sugg">Rules of thumb</button></div>
         <input type="search" id="refSearch" class="grow" placeholder="Search…">
       </div>
@@ -276,7 +276,7 @@
           <li>Edit prices below.</li>
           <li>Click <b>Save to server</b>. Every viewer sees the new prices on refresh — no file to download or re-upload.</li>
         </ol>
-        <div class="row">
+        <div class="pd-row">
           <label class="small muted">Price list version label <input type="text" id="aVer" style="width:220px"></label>
           <button class="btn primary" id="aSaveServer">Save to server</button>
           <button class="btn danger" id="aReset">Discard local edits</button>
@@ -286,12 +286,12 @@
       <div class="panel" style="margin-top:12px">
         <h2>Discount rules (% off DLP)</h2>
         <div class="form" id="aRules"></div>
-        <div class="row" style="margin-top:10px"><button class="btn" id="aRecalc">Recalculate all tier prices from DLP</button><span class="small muted">Lubricants round to whole rupees; other lists to paise.</span></div>
+        <div class="pd-row" style="margin-top:10px"><button class="btn" id="aRecalc">Recalculate all tier prices from DLP</button><span class="small muted">Lubricants round to whole rupees; other lists to paise.</span></div>
         <h3>Calculator factors</h3>
         <div class="form" id="aFactors"></div>
       </div>
       <div class="panel" style="margin-top:12px">
-        <div class="row" style="margin-bottom:10px">
+        <div class="pd-row" style="margin-bottom:10px">
           <h2 style="margin:0">Edit price list</h2>
           <div class="seg" id="aListSeg"></div>
           <div class="search-wrapper-hitech grow" style="min-width:160px;max-width:280px;">
@@ -430,7 +430,7 @@ function updCheck(){
   const x=DATA[curList][selIdx]; if(!x)return;
   const p=parseFloat($('#chkPrice').value), q=parseFloat($('#chkQty').value)||0, b=band(p,x.dlp,x.t,$('#qType').value,x.force);
   if(!b){$('#chkResult').innerHTML='';return}
-  $('#chkResult').innerHTML=`<div class="row" style="justify-content:space-between">${pill(b)}<span class="small muted">${b.disc!=null?fmt(b.disc,1)+'% off '+esc(tierNames(curList)[0]):'net-priced item'}</span></div>
+  $('#chkResult').innerHTML=`<div class="pd-row" style="justify-content:space-between">${pill(b)}<span class="small muted">${b.disc!=null?fmt(b.disc,1)+'% off '+esc(tierNames(curList)[0]):'net-priced item'}</span></div>
   <div class="small" style="margin-top:6px">${esc(b.label)}${b.above?' · above DLP':''}</div>
   <div class="kv" style="margin-top:8px"><div>Line value</div><div><b>₹ ${fmt(p*q)}</b> + GST</div></div>`;
   $('#chkWarn').innerHTML=(isKgOnly(x)?`<div class="note" style="color:var(--bad)"><b>Do not quote per kg.</b> This product must be quoted per piece — use the Calculators tab to convert this rate to ₹/pc.</div>`:'')+(x.note&&!isKgOnly(x)||x.force?`<div class="note" style="color:var(--bad)">${esc(x.note||x.force)}</div>`:'');
@@ -659,7 +659,7 @@ function computeCalc(){
   $('#pdcResults').innerHTML=cards.join('');
   const bandBox=$('#pdcBand');
   if(b&&bProd){
-    bandBox.innerHTML=`<div class="row">${pill(b)}<span class="small muted">Rate ₹${fmt(R.rate)}/${c.rate.unit.toLowerCase()} vs ${esc(tierNames(c.rate.list||'vci')[0])} ₹${fmt(bProd.dlp)} → ${b.disc!=null?fmt(b.disc,1)+'%':'–'} off</span></div>`;
+    bandBox.innerHTML=`<div class="pd-row">${pill(b)}<span class="small muted">Rate ₹${fmt(R.rate)}/${c.rate.unit.toLowerCase()} vs ${esc(tierNames(c.rate.list||'vci')[0])} ₹${fmt(bProd.dlp)} → ${b.disc!=null?fmt(b.disc,1)+'%':'–'} off</span></div>`;
   } else { bandBox.innerHTML='' }
   if(curCalc.id==='3d6'||curCalc.id==='3d5'||curCalc.id==='2d'||curCalc.id==='liner'){
     bandBox.innerHTML+=`<div class="note">VCI plastic bags: quote the customer <b>per piece only</b> — never share the ₹/kg rate.</div>`;
