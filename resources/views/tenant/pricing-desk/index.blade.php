@@ -4,10 +4,27 @@
 
 @section('content')
 <div class="hitech-page-hero mb-4">
-  <div class="hitech-page-hero-text d-flex justify-content-between align-items-center w-100">
+  <style>
+    .pd-hero-stat{display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.18);border-radius:12px;padding:10px 16px;min-width:140px}
+    .pd-hero-stat .pd-hero-icon{width:36px;height:36px;border-radius:9px;background:rgba(255,255,255,.18);display:flex;align-items:center;justify-content:center;font-size:1.1rem;color:#fff;flex-shrink:0}
+    .pd-hero-stat .pd-hero-v{font-size:1.25rem;font-weight:800;color:#fff;line-height:1.1}
+    .pd-hero-stat .pd-hero-k{font-size:.68rem;color:rgba(255,255,255,.75);text-transform:uppercase;letter-spacing:.04em;font-weight:600}
+    @media (max-width:860px){#pdHeroStats{display:none}}
+  </style>
+  <div class="hitech-page-hero-text d-flex justify-content-between align-items-center w-100 flex-wrap gap-3">
     <div>
+      <div class="text-white-50 text-uppercase fw-bold mb-1" style="letter-spacing:.08em;font-size:.72rem">Sales &amp; Pricing</div>
       <h4 class="greeting text-white mb-1">Pricing Desk</h4>
-      <p class="sub-text text-white-50 mb-0">Price list, discount approval finder, product calculators and quotes — <span id="verLabel"></span></p>
+      <p class="sub-text text-white-50 mb-0">Price list, discount approval finder, product calculators and quotes.
+        <span class="badge rounded-pill ms-1" style="background:rgba(255,255,255,.18);font-weight:600;font-size:.72rem;padding:4px 10px;vertical-align:middle">
+          <span id="verLabel"></span>
+        </span>
+      </p>
+    </div>
+    <div class="d-flex gap-2 flex-wrap" id="pdHeroStats">
+      <div class="pd-hero-stat"><span class="pd-hero-icon"><i class="bx bx-grid-alt"></i></span><div><div class="pd-hero-v" id="pdStatFamilies">–</div><div class="pd-hero-k">Product Families</div></div></div>
+      <div class="pd-hero-stat"><span class="pd-hero-icon"><i class="bx bx-package"></i></span><div><div class="pd-hero-v" id="pdStatProducts">–</div><div class="pd-hero-k">Products</div></div></div>
+      <div class="pd-hero-stat"><span class="pd-hero-icon"><i class="bx bx-shield-quarter"></i></span><div><div class="pd-hero-v" id="pdStatBands">–</div><div class="pd-hero-k">Approval Bands</div></div></div>
     </div>
   </div>
 </div>
@@ -159,6 +176,8 @@
             <input type="search" id="pSearch" class="form-control" placeholder="Search code, product, size…">
           </div>
           <select id="pCat" class="form-select form-select-sm" style="max-width:220px;"></select>
+          <span class="small muted" id="pCount" style="white-space:nowrap"></span>
+          <button class="btn" id="pExport" type="button"><i class="bx bx-download me-1"></i>Export</button>
         </div>
         <div class="tablewrap"><table id="pTable"></table></div>
         <div class="small muted" style="margin-top:8px" id="pFoot"></div>
@@ -353,22 +372,48 @@ $('#pSearch').addEventListener('input',renderPrices);
 $('#pCat').addEventListener('change',renderPrices);
 function fillCats(){const cats=[...new Set(DATA[curList].map(x=>x.cat))];$('#pCat').innerHTML='<option value="">All categories</option>'+cats.map(c=>`<option>${esc(c)}</option>`).join('')}
 function itemText(x){return [x.code,x.name,x.spec,x.size,x.colour,x.cat].join(' ').toLowerCase()}
+let sortKey=null, sortDir=1;
+const SORT_ACCESSORS={code:x=>x.code||'',name:x=>x.name||'',unit:x=>x.unit||'',dlp:x=>x.dlp||0,t0:x=>x.t[0]||0,t1:x=>x.t[1]||0,t2:x=>x.t[2]||0,cls:x=>x.cls||''};
+function sortTh(key,label,extra){
+  const active=sortKey===key;
+  const icon=active?(sortDir===1?'bx-chevron-up':'bx-chevron-down'):'bx-sort-alt-2';
+  return `<th data-sk="${key}" style="cursor:pointer;user-select:none">${esc(label)} <i class="bx ${icon}" style="font-size:12px;opacity:${active?'1':'.4'}"></i>${extra||''}</th>`;
+}
 function renderPrices(){
   const q=$('#pSearch').value.trim().toLowerCase(), cat=$('#pCat').value, L=DATA[curList], tn=tierNames(curList);
   const isV=LM(curList).rich, dp=LM(curList).round;
   const r=DATA.rules[curList];
-  let h=`<thead><tr><th>Code</th>${isV?'<th>Product</th>':''}<th>Unit</th><th class="n">${esc(tn[0])}</th><th class="n">No approval<div class="small muted">${r[0]}% off</div></th><th class="n">GM<div class="small muted">${r[1]}% off</div></th><th class="n">Channel<div class="small muted">${r[2]}% off</div></th>${isV?'':'<th>Class</th>'}</tr></thead><tbody>`;
-  let last=null,n=0;
-  L.forEach((x,i)=>{
-    if(cat&&x.cat!==cat)return; if(q&&!itemText(x).includes(q))return;
+  let h=`<thead><tr>${sortTh('code','Code')}${isV?sortTh('name','Product'):''}${sortTh('unit','Unit')}${sortTh('dlp',esc(tn[0]))}${sortTh('t0','No approval',`<div class="small muted">${r[0]}% off</div>`)}${sortTh('t1','GM',`<div class="small muted">${r[1]}% off</div>`)}${sortTh('t2','Channel',`<div class="small muted">${r[2]}% off</div>`)}${isV?'':sortTh('cls','Class')}</tr></thead><tbody>`;
+  let rows=L.map((x,i)=>({x,i})).filter(({x})=>(!cat||x.cat===cat)&&(!q||itemText(x).includes(q)));
+  if(sortKey){const acc=SORT_ACCESSORS[sortKey];rows=rows.slice().sort((a,b)=>{const av=acc(a.x),bv=acc(b.x);return (av<bv?-1:av>bv?1:0)*sortDir})}
+  let last=null;
+  rows.forEach(({x,i})=>{
     if(x.cat!==last){h+=`<tr class="cat"><td colspan="7">${esc(x.cat)}</td></tr>`;last=x.cat}
-    n++;
     h+=`<tr class="item${i===selIdx?' sel':''}" data-i="${i}"><td><b>${esc(x.code)}</b></td>${isV?`<td>${esc(x.name)}<div class="small muted">${esc([x.spec,x.size,x.colour].filter(Boolean).join(' · '))}</div>${x.note?`<div class="small" style="color:var(--bad)">${esc(x.note)}</div>`:''}</td>`:''}<td>${esc(x.unit||'')}</td><td class="n">${x.dlp?fmt(x.dlp,dp):`<span class="muted">${x.force?'on request':'net'}</span>`}</td><td class="n">${x.t[0]?fmt(x.t[0],dp):'–'}</td><td class="n">${x.t[1]?fmt(x.t[1],dp):'–'}</td><td class="n">${x.t[2]?fmt(x.t[2],dp):'–'}</td>${isV?'':`<td>${esc(x.cls||'')}</td>`}</tr>`;
   });
   $('#pTable').innerHTML=h+'</tbody>';
-  $('#pFoot').textContent=`${n} of ${L.length} products · ${LM(curList).label} · ${LM(curList).source||DATA.version}`;
+  $('#pFoot').textContent=`${rows.length} of ${L.length} products · ${LM(curList).label} · ${LM(curList).source||DATA.version}`;
+  $('#pCount').textContent=`Showing ${rows.length} product${rows.length===1?'':'s'}`;
 }
-$('#pTable').addEventListener('click',e=>{const tr=e.target.closest('tr.item');if(!tr)return;selIdx=+tr.dataset.i;renderPrices();renderCheck();$('#chkPrice').focus()});
+$('#pTable').addEventListener('click',e=>{
+  const th=e.target.closest('th[data-sk]');
+  if(th){const k=th.dataset.sk;sortDir=(sortKey===k)?-sortDir:1;sortKey=k;renderPrices();return}
+  const tr=e.target.closest('tr.item');if(!tr)return;selIdx=+tr.dataset.i;renderPrices();renderCheck();$('#chkPrice').focus()
+});
+$('#pExport').addEventListener('click',()=>{
+  const rows=[...document.querySelectorAll('#pTable tbody tr.item')].map(tr=>tr.dataset.i).map(i=>DATA[curList][+i]);
+  if(!rows.length){alert('Nothing to export — adjust the filters first.');return}
+  const isV=LM(curList).rich, tn=tierNames(curList);
+  const head=['Code',...(isV?['Product']:[]),'Unit',tn[0],tn[1],tn[2],tn[3],...(isV?[]:['Class'])];
+  const csvCell=v=>`"${String(v==null?'':v).replace(/"/g,'""')}"`;
+  const lines=[head.map(csvCell).join(',')];
+  rows.forEach(x=>{
+    const cells=[x.code,...(isV?[x.name]:[]),x.unit||'',x.dlp||'',x.t[0]||'',x.t[1]||'',x.t[2]||'',...(isV?[]:[x.cls||''])];
+    lines.push(cells.map(csvCell).join(','));
+  });
+  const blob=new Blob([lines.join('\r\n')],{type:'text/csv;charset=utf-8;'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`${LM(curList).label.replace(/\s+/g,'-')}-price-list.csv`;a.click();URL.revokeObjectURL(a.href);
+});
 function renderCheck(){
   const x=selIdx==null?null:DATA[curList][selIdx];
   $('#chkEmpty').classList.toggle('hide',!!x);$('#chkBody').classList.toggle('hide',!x);if(!x)return;
@@ -526,9 +571,9 @@ function renderCalcList(filter){
 function selectCalc(id){
   curCalc=CALCS.find(c=>c.id===id); if(!curCalc)return;
   LS.set('spd_calc',curCalc.id);
-  $('#pdcError').classList.add('hide');
-  $('#pdcEmpty').classList.add('hide');
-  $('#pdcBody').classList.remove('hide');
+  $('#pdcError').classList.add('d-none');
+  $('#pdcEmpty').classList.add('d-none');
+  $('#pdcBody').classList.remove('d-none');
   $('#pdcTitle').textContent=curCalc.t;
   $('#pdcDesc').textContent=curCalc.desc;
   const meta=GROUP_META[curCalc.g]||{icon:'bx-cube'};
@@ -540,7 +585,7 @@ function selectCalc(id){
     <button type="button" class="btn btn-outline-secondary ${calcUnit==='mm'?'active':''}" data-u="mm">mm</button>`}
   try{renderCalcFields()}catch(e){showCalcError(e)}
 }
-function showCalcError(e){const box=$('#pdcError');box.textContent='Something went wrong computing this calculator: '+e.message;box.classList.remove('hide');console.error(e)}
+function showCalcError(e){const box=$('#pdcError');box.textContent='Something went wrong computing this calculator: '+e.message;box.classList.remove('d-none');console.error(e)}
 function renderCalcFields(){
   const c=curCalc; let h='';
   c.fields.forEach(f=>{
@@ -726,7 +771,13 @@ $('#aSaveServer').addEventListener('click',async()=>{
 }
 
 /* ---------- boot ---------- */
-function refreshAll(full){renderSegs();$('#verLabel').textContent=DATA.version;if(full){fillCats();selIdx=null}renderPrices();renderCheck();renderLegend();renderRef()}
+function updHeroStats(){
+  const ls=LISTS().filter(m=>DATA[m.k]);
+  $('#pdStatFamilies').textContent=ls.length;
+  $('#pdStatProducts').textContent=ls.reduce((s,m)=>s+(DATA[m.k]||[]).length,0).toLocaleString('en-IN');
+  $('#pdStatBands').textContent=4;
+}
+function refreshAll(full){renderSegs();$('#verLabel').textContent=DATA.version;if(full){fillCats();selIdx=null}renderPrices();renderCheck();renderLegend();renderRef();updHeroStats()}
 if(LS.get('spd_override'))$('#overrideBanner').classList.remove('hide');
 renderSegs();fillCats();refreshAll(true);
 // Restore the last tab the user was on (Price list is the default, already
