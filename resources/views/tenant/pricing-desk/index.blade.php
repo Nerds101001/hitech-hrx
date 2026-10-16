@@ -82,7 +82,8 @@
 #pricingDeskRoot .side{position:sticky;top:12px;align-self:start}
 
 /* ---- Calculators tab: same sidebar+panel component as the header's Quick Calculator popup ---- */
-#pricingDeskRoot .qc-embed{display:flex;min-height:560px;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#fff}
+#pricingDeskRoot .qc-embed{min-height:560px;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#fff}
+#pricingDeskRoot .qc-embed #pdcWrap{display:flex;min-height:560px;max-height:78vh}
 #pricingDeskRoot .qc-sidebar{width:300px;flex-shrink:0;border-right:1px solid var(--line);display:flex;flex-direction:column;background:#fbfcfd}
 #pricingDeskRoot .qc-sidebar-head{padding:16px;border-bottom:1px solid var(--line)}
 #pricingDeskRoot .qc-search-icon{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:#9aa5b1;font-size:.9rem}
@@ -108,7 +109,7 @@
 #pricingDeskRoot .qc-hero-icon.a,#pricingDeskRoot .qc-hero-icon.b{color:var(--hitech-primary, #008080)}
 #pricingDeskRoot .qc-hero .qc-k{font-size:.78rem;color:#8a94a6;font-weight:600}
 #pricingDeskRoot .qc-hero .qc-v{font-size:1.15rem;font-weight:700;color:#1f2937}
-@media (max-width:767px){#pricingDeskRoot .qc-embed{flex-direction:column}#pricingDeskRoot .qc-sidebar{width:100%;max-height:240px}}
+@media (max-width:767px){#pricingDeskRoot .qc-embed #pdcWrap{flex-direction:column;max-height:none}#pricingDeskRoot .qc-sidebar{width:100%;max-height:240px}}
 #pricingDeskRoot .form{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px 14px}
 #pricingDeskRoot .form label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted)}
 #pricingDeskRoot .form>*{min-width:0}
@@ -176,8 +177,8 @@
             <input type="search" id="pSearch" class="form-control" placeholder="Search code, product, size…">
           </div>
           <select id="pCat" class="form-select form-select-sm" style="max-width:220px;"></select>
-          <span class="small muted" id="pCount" style="white-space:nowrap"></span>
-          <button class="btn" id="pExport" type="button"><i class="bx bx-download me-1"></i>Export</button>
+          <span class="small muted" id="pCount" style="white-space:nowrap;flex:0 0 auto"></span>
+          <button class="btn" id="pExport" type="button" style="flex:0 0 auto;margin-left:auto"><i class="bx bx-download me-1"></i>Export</button>
         </div>
         <div class="tablewrap"><table id="pTable"></table></div>
         <div class="small muted" style="margin-top:8px" id="pFoot"></div>
@@ -297,7 +298,7 @@
             <i class="bx bx-search text-muted ms-3"></i>
             <input type="search" id="aSearch" class="form-control" placeholder="Filter…">
           </div>
-          <button class="btn primary" id="aAdd">+ Add product</button>
+          <button class="btn primary" id="aAdd" style="flex:0 0 auto;margin-left:auto">+ Add product</button>
         </div>
         <p class="small muted" style="margin-top:0">Changing DLP recalculates the three tier prices automatically. You can still overwrite a tier by hand.</p>
         <div class="tablewrap"><table id="aTable" class="qtable"></table></div>
