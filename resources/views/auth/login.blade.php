@@ -157,7 +157,10 @@ $customizerHidden = 'customizer-hide';
 </div>
 
 {{-- LOCAL DEVELOPMENT QUICK LOGIN --}}
-@if (app()->isLocal())
+{{-- Dev one-click logins: local environment only, and only for plain localhost traffic or a tunnel request that has
+     already passed the passphrase gate (App\Http\Middleware\TunnelAccessGate) -- so the panel, and the staff emails
+     listed in its page source, never reach an anonymous visitor arriving through a tunnel or proxy hostname. --}}
+@if (\App\Http\Middleware\TunnelAccessGate::isLocalShortcutAllowed(request()))
 <style>
   /* The panel is anchored to the bottom and grows upward. At 16 accounts it
      ran off the top of the screen and those buttons became unreachable, so it
