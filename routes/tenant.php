@@ -991,6 +991,16 @@ Route::middleware([
             Route::post('/sales-report/sync-crm-mapping/{salespersonId}', [\App\Http\Controllers\tenant\SalesPipelineController::class, 'syncCrmMapping'])->name('pipeline.sync-crm-mapping');
             Route::post('/sales-report/resolve-crm-mapping/{salespersonId}', [\App\Http\Controllers\tenant\SalesPipelineController::class, 'resolveCrmMapping'])->name('pipeline.resolve-crm-mapping');
 
+            // Sales Pricing Desk: price list, discount finder, calculators, and
+            // (pricing_desk.manage only) the data editor. Access is checked
+            // inside the controller (PricingDeskAccess) rather than route
+            // middleware, since it combines a role check, a permission check
+            // and a department default — not a single gate.
+            Route::prefix('pricing-desk')->name('pricing-desk.')->group(function () {
+                Route::get('/', [\App\Http\Controllers\tenant\PricingDeskController::class, 'index'])->name('index');
+                Route::put('/data', [\App\Http\Controllers\tenant\PricingDeskController::class, 'save'])->name('save');
+            });
+
             // Customer <-> Setu verification badge/popup (customers table, not
             // per-salesperson — see CustomerSetuMappingController).
             Route::get('/sales-report/customer/{customer}/setu-preview', [\App\Http\Controllers\tenant\CustomerSetuMappingController::class, 'preview'])->name('pipeline.customer.setu-preview');

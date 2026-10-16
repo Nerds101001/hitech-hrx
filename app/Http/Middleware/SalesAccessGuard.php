@@ -34,6 +34,12 @@ class SalesAccessGuard
         'sales_report.view', 'sales_report.manage', 'sales_report.import',
         'sales_pipeline.view', 'sales_targets.manage', 'sales_analytics.view',
         'crm_clients.manage', 'kingo_bingo.play',
+        // Pricing Desk: its own access logic (PricingDeskAccess) also allows a
+        // department default, but Billing / AI & IT aren't part of this
+        // section's broad department check above, so someone there needs
+        // one of these granted (Role Matrix or Special Permissions) to get
+        // past this outer gate at all.
+        'pricing_desk.view', 'pricing_desk.manage',
     ];
 
     /**

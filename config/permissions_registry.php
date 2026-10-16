@@ -243,4 +243,9 @@ return [
         'training.manage' => 'Manage Training Portal',
     ],
 
+    'Pricing Desk' => [
+        'pricing_desk.view' => 'View Pricing Desk (price list, discount finder, calculators)',
+        'pricing_desk.manage' => 'Edit Pricing Desk Data (products, discount rules, factors)',
+    ],
+
 ];
