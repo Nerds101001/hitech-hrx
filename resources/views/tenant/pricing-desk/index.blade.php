@@ -42,7 +42,7 @@
 #pricingDeskRoot *{box-sizing:border-box}
 #pricingDeskRoot button,#pricingDeskRoot input,#pricingDeskRoot select,#pricingDeskRoot textarea{font:inherit;color:inherit}
 #pricingDeskRoot main{padding:18px 16px 32px}
-#pricingDeskRoot .pricing-desk-tabs-wrap{background:#fff;padding-bottom:14px}
+#pricingDeskRoot .pricing-desk-tabs-wrap{background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px;margin-bottom:16px}
 #pricingDeskRoot .banner{background:var(--warn-bg);color:var(--warn);border:1px solid var(--line);padding:8px 12px;border-radius:8px;margin-bottom:12px;font-size:13px}
 #pricingDeskRoot .panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px}
 #pricingDeskRoot .pd-row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
@@ -169,13 +169,15 @@
   <section id="t-prices" class="tab-pane fade show active" role="tabpanel">
     <div class="grid2">
       <div class="panel">
-        <div class="pd-row" style="margin-bottom:12px">
+        <div class="pd-row" style="margin-bottom:10px">
           <div class="seg" id="listSeg"></div>
-          <div class="search-wrapper-hitech grow" style="min-width:180px;max-width:320px;">
+        </div>
+        <div class="pd-row" style="margin-bottom:12px">
+          <div class="search-wrapper-hitech" style="flex:1 1 220px;min-width:200px;max-width:320px;">
             <i class="bx bx-search text-muted ms-3"></i>
             <input type="search" id="pSearch" class="form-control" placeholder="Search code, product, size…">
           </div>
-          <select id="pCat" class="form-select form-select-sm" style="max-width:220px;"></select>
+          <select id="pCat" class="form-select form-select-sm" style="max-width:220px;flex:0 1 auto"></select>
           <span class="small muted" id="pCount" style="white-space:nowrap;flex:0 0 auto"></span>
           <button class="btn" id="pExport" type="button" style="flex:0 0 auto;margin-left:auto"><i class="bx bx-download me-1"></i>Export</button>
         </div>
@@ -290,14 +292,16 @@
         <div class="form" id="aFactors"></div>
       </div>
       <div class="panel" style="margin-top:12px">
-        <div class="pd-row" style="margin-bottom:10px">
+        <div class="pd-row" style="margin-bottom:12px;justify-content:space-between">
           <h2 style="margin:0">Edit price list</h2>
+          <button class="btn primary" id="aAdd" style="flex:0 0 auto">+ Add product</button>
+        </div>
+        <div class="pd-row" style="margin-bottom:10px">
           <div class="seg" id="aListSeg"></div>
-          <div class="search-wrapper-hitech grow" style="min-width:160px;max-width:280px;">
+          <div class="search-wrapper-hitech" style="flex:1 1 220px;min-width:200px;max-width:320px;">
             <i class="bx bx-search text-muted ms-3"></i>
             <input type="search" id="aSearch" class="form-control" placeholder="Filter…">
           </div>
-          <button class="btn primary" id="aAdd" style="flex:0 0 auto;margin-left:auto">+ Add product</button>
         </div>
         <p class="small muted" style="margin-top:0">Changing DLP recalculates the three tier prices automatically. You can still overwrite a tier by hand.</p>
         <div class="tablewrap"><table id="aTable" class="qtable"></table></div>
