@@ -51,6 +51,21 @@
         tr.flagged-row > td:first-child { box-shadow: inset 3px 0 0 0 #dc3545; }
         tr.flagged-row input.form-control, tr.flagged-row select.form-select { border-color: #f1a9a0; }
 
+        /* The grid is packed with number boxes right next to each other, and
+           the browser's built-in up/down spinner sits exactly where a cursor
+           rests while typing the next row — one stray click or a wheel-scroll
+           over the field bumps the amount instead of just moving the page.
+           Hidden here rather than globally, so number inputs elsewhere in the
+           app keep their spinner. */
+        #claimTableScroll input[type="number"]::-webkit-outer-spin-button,
+        #claimTableScroll input[type="number"]::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        #claimTableScroll input[type="number"] {
+            -moz-appearance: textfield;
+        }
+
         /* The horizontal scrollbar sits above the grid and stays put while the
            page moves, so you never have to travel to the bottom of a 31-row
            table to scroll sideways. */
@@ -228,12 +243,29 @@
                         <th style="min-width: 120px;">Courier (Transport/<br>Freight) etc (₹)</th>
                         <th style="min-width: 90px;">Lodging<br>(₹)</th>
                         <th style="min-width: 120px;">Other (Photocopy/<br>Misc) etc (₹)</th>
+                        <th style="min-width: 100px;">Day Total<br>(₹)</th>
                         <th style="min-width: 120px;">Remarks</th>
                     </tr>
                 </thead>
                 <tbody id="expenseRowsGrid">
                     <!-- Rows inserted by JS -->
                 </tbody>
+                <tfoot>
+                    <tr class="text-center align-middle fw-bold" style="background:#f1f3f5; font-size: 0.8rem;">
+                        <td colspan="8" class="text-end pe-2">Column Totals</td>
+                        <td id="footDistance" class="text-end p-1">0.00</td>
+                        <td id="footConveyance" class="text-end p-1">0.00</td>
+                        <td></td>
+                        <td id="footFood" class="text-end p-1">0.00</td>
+                        <td id="footToll" class="text-end p-1">0.00</td>
+                        <td id="footSpecialAppr" class="text-end p-1">0.00</td>
+                        <td id="footCourier" class="text-end p-1">0.00</td>
+                        <td id="footLodging" class="text-end p-1">0.00</td>
+                        <td id="footOther" class="text-end p-1">0.00</td>
+                        <td id="footDayTotal" class="text-end p-1">0.00</td>
+                        <td></td>
+                    </tr>
+                </tfoot>
             </table>
         </div>
 
@@ -455,6 +487,7 @@
                 <td class="p-1"><input type="number" step="0.01" name="items[${d}][courier_amount]" class="form-control form-control-sm courier text-end p-1" style="font-size: 0.8rem;" oninput="calculateTotals()" value="${parseFloat(ex.courier_amount || 0).toFixed(2)}"></td>
                 <td class="p-1"><input type="number" step="0.01" name="items[${d}][lodging_amount]" class="form-control form-control-sm lodging text-end p-1" style="font-size: 0.8rem;" oninput="calculateTotals()" value="${parseFloat(ex.lodging_amount || 0).toFixed(2)}"></td>
                 <td class="p-1"><input type="number" step="0.01" name="items[${d}][other_amount]" class="form-control form-control-sm other text-end p-1" style="font-size: 0.8rem;" oninput="calculateTotals()" value="${parseFloat(ex.other_amount || 0).toFixed(2)}"></td>
+                <td class="p-1"><input type="number" step="0.01" class="form-control form-control-sm day-total bg-light text-end fw-bold p-1" style="font-size: 0.8rem;" readonly tabindex="-1" value="0.00"></td>
                 <td class="p-1"><input type="text" name="items[${d}][remarks]" class="form-control form-control-sm p-1" style="font-size: 0.8rem;" placeholder="..." value="${ex.remarks || ''}"></td>
             </tr>`;
             grid.append(html);
@@ -573,17 +606,47 @@
     }
 
     function calculateTotals() {
-        let tConv = 0, tFood = 0, tLodg = 0, tCour = 0, tOth = 0, tToll = 0, tSpecialAppr = 0;
-        
+        let tConv = 0, tFood = 0, tLodg = 0, tCour = 0, tOth = 0, tToll = 0, tSpecialAppr = 0, tDist = 0, tDayTotal = 0;
+
         $('.expense-row').each(function() {
-            tConv += parseFloat($(this).find('.conveyance').val()) || 0;
-            tFood += parseFloat($(this).find('.food').val()) || 0;
-            tLodg += parseFloat($(this).find('.lodging').val()) || 0;
-            tCour += parseFloat($(this).find('.courier').val()) || 0;
-            tOth  += parseFloat($(this).find('.other').val()) || 0;
-            tToll += parseFloat($(this).find('.toll').val()) || 0;
-            tSpecialAppr += parseFloat($(this).find('.special-appr').val()) || 0;
+            let row = $(this);
+            let conv = parseFloat(row.find('.conveyance').val()) || 0;
+            let food = parseFloat(row.find('.food').val()) || 0;
+            let lodg = parseFloat(row.find('.lodging').val()) || 0;
+            let cour = parseFloat(row.find('.courier').val()) || 0;
+            let oth  = parseFloat(row.find('.other').val()) || 0;
+            let toll = parseFloat(row.find('.toll').val()) || 0;
+            let special = parseFloat(row.find('.special-appr').val()) || 0;
+
+            tConv += conv;
+            tFood += food;
+            tLodg += lodg;
+            tCour += cour;
+            tOth  += oth;
+            tToll += toll;
+            tSpecialAppr += special;
+            tDist += parseFloat(row.find('.distance').val()) || 0;
+
+            // Everything that day, added up in its own row so a wrong entry
+            // shows up against the day it belongs to rather than only in the
+            // month-end grand total.
+            let dayTotal = conv + food + lodg + cour + oth + toll + special;
+            row.find('.day-total').val(dayTotal.toFixed(2));
+            tDayTotal += dayTotal;
         });
+
+        // Column totals footer, right under the grid, so each amount column
+        // (and the km driven) can be checked at a glance instead of adding
+        // 30-odd rows by eye.
+        $('#footDistance').text(tDist.toFixed(2));
+        $('#footConveyance').text(tConv.toFixed(2));
+        $('#footFood').text(tFood.toFixed(2));
+        $('#footToll').text(tToll.toFixed(2));
+        $('#footSpecialAppr').text(tSpecialAppr.toFixed(2));
+        $('#footCourier').text(tCour.toFixed(2));
+        $('#footLodging').text(tLodg.toFixed(2));
+        $('#footOther').text(tOth.toFixed(2));
+        $('#footDayTotal').text(tDayTotal.toFixed(2));
 
         let grandTotal = tConv + tFood + tLodg + tCour + tOth + tToll + tSpecialAppr;
         $('#grandTotal').text('₹' + grandTotal.toFixed(2));
@@ -780,6 +843,16 @@
         }
         // Picking a photo clears the odometer warning straight away.
         $(document).on('change', '.odo-proof', updateOdometerRequirement);
+
+        // Hiding the spin buttons (CSS above) stops a stray click from
+        // bumping the value, but a focused number field still eats the
+        // mouse wheel and changes its own value instead of scrolling the
+        // page — exactly what happens when you scroll down past a field you
+        // just finished typing into. Blurring on wheel hands the scroll back
+        // to the page without touching what was typed.
+        $(document).on('wheel', '#claimTableScroll input[type="number"]', function() {
+            $(this).blur();
+        });
 
         updateOdometerRequirement();
         initAttachmentBoxes();
