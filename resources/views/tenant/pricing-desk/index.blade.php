@@ -41,8 +41,8 @@
 }
 #pricingDeskRoot *{box-sizing:border-box}
 #pricingDeskRoot button,#pricingDeskRoot input,#pricingDeskRoot select,#pricingDeskRoot textarea{font:inherit;color:inherit}
-#pricingDeskRoot .pricing-desk-tabs-wrap{background:#fff;padding:14px 16px 0}
 #pricingDeskRoot main{padding:18px 16px 32px}
+#pricingDeskRoot .pricing-desk-tabs-wrap{background:#fff;padding-bottom:14px}
 #pricingDeskRoot .banner{background:var(--warn-bg);color:var(--warn);border:1px solid var(--line);padding:8px 12px;border-radius:8px;margin-bottom:12px;font-size:13px}
 #pricingDeskRoot .panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px}
 #pricingDeskRoot .pd-row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
@@ -69,7 +69,7 @@
 #pricingDeskRoot tbody tr.item{cursor:pointer}
 #pricingDeskRoot tbody tr.item:hover td{background:var(--soft)}
 #pricingDeskRoot tbody tr.sel td{background:var(--warn-bg)!important}
-#pricingDeskRoot .pill{display:inline-block;border-radius:999px;padding:2px 9px;font-size:12px;font-weight:600;white-space:nowrap}
+#pricingDeskRoot .pill{display:inline-block;border-radius:999px;padding:5px 13px;font-size:14px;font-weight:600;white-space:nowrap}
 #pricingDeskRoot .b0{background:var(--ok-bg);color:var(--ok)}
 #pricingDeskRoot .b1{background:var(--warn-bg);color:var(--warn)}
 #pricingDeskRoot .b2{background:var(--ch-bg);color:var(--ch)}
@@ -103,8 +103,7 @@
 #pricingDeskRoot #pdcFields label,#pricingDeskRoot #pdcRateSection label{font-size:.78rem;font-weight:600;color:#4a525c}
 #pricingDeskRoot .req{color:#e35b5b}
 #pricingDeskRoot .qc-hero{border:1px solid transparent;border-radius:12px;padding:14px 16px;height:100%;display:flex;align-items:center;gap:14px}
-#pricingDeskRoot .qc-hero.a{background:var(--hitech-primary-light, rgba(0,128,128,.07));border-color:rgba(0,128,128,.16)}
-#pricingDeskRoot .qc-hero.b{background:#f7f5f0;border-color:#ece7db}
+#pricingDeskRoot .qc-hero.a,#pricingDeskRoot .qc-hero.b{background:var(--hitech-primary-light, rgba(0,128,128,.07));border-color:rgba(0,128,128,.16)}
 #pricingDeskRoot .qc-hero-icon{width:42px;height:42px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:1.2rem;flex-shrink:0;background:#fff}
 #pricingDeskRoot .qc-hero-icon.a,#pricingDeskRoot .qc-hero-icon.b{color:var(--hitech-primary, #008080)}
 #pricingDeskRoot .qc-hero .qc-k{font-size:.78rem;color:#8a94a6;font-weight:600}
@@ -130,7 +129,7 @@
 #pricingDeskRoot .totals .gt{font-weight:700;font-size:16px;border-top:1px solid var(--line);padding-top:8px}
 #pricingDeskRoot #pTable td:first-child{white-space:nowrap}
 #pricingDeskRoot #bandLegend{overflow-x:auto}
-#pricingDeskRoot #bandLegend .pill{padding:2px 6px}
+#pricingDeskRoot #bandLegend .pill{padding:2px 6px;font-size:12px}
 #pricingDeskRoot #bandLegend td,#pricingDeskRoot #bandLegend th{padding:6px 5px}
 #pricingDeskRoot #printArea{display:none}
 @media print{
@@ -141,28 +140,28 @@
   #printArea td,#printArea th{border:1px solid #bbb}
 }
 </style>
-<div class="pricing-desk-tabs-wrap">
-<ul class="nav nav-pills hitech-tabs-sm mb-0" id="tabs" role="tablist">
-  <li class="nav-item" role="presentation">
-    <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#t-prices" data-t="prices" type="button" role="tab">
-      <i class="bx bx-list-ul"></i> Price list
-    </button>
-  </li>
-  <li class="nav-item" role="presentation">
-    <button class="nav-link" data-bs-toggle="tab" data-bs-target="#t-calc" data-t="calc" type="button" role="tab">
-      <i class="bx bx-calculator"></i> Calculators
-    </button>
-  </li>
-  @if($canManage)
-  <li class="nav-item" role="presentation">
-    <button class="nav-link" data-bs-toggle="tab" data-bs-target="#t-admin" data-t="admin" type="button" role="tab">
-      <i class="bx bx-cog"></i> Admin
-    </button>
-  </li>
-  @endif
-</ul>
-</div>
 <main>
+  <div class="pricing-desk-tabs-wrap">
+  <ul class="nav nav-pills hitech-tabs-sm mb-0" id="tabs" role="tablist">
+    <li class="nav-item" role="presentation">
+      <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#t-prices" data-t="prices" type="button" role="tab">
+        <i class="bx bx-list-ul"></i> Price list
+      </button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" data-bs-toggle="tab" data-bs-target="#t-calc" data-t="calc" type="button" role="tab">
+        <i class="bx bx-calculator"></i> Calculators
+      </button>
+    </li>
+    @if($canManage)
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" data-bs-toggle="tab" data-bs-target="#t-admin" data-t="admin" type="button" role="tab">
+        <i class="bx bx-cog"></i> Admin
+      </button>
+    </li>
+    @endif
+  </ul>
+  </div>
   <div id="overrideBanner" class="banner hide">This browser is using locally edited prices that are not yet published to the team.</div>
 
   <div class="tab-content">
@@ -390,7 +389,7 @@ function renderPrices(){
   let last=null;
   rows.forEach(({x,i})=>{
     if(x.cat!==last){h+=`<tr class="cat"><td colspan="7">${esc(x.cat)}</td></tr>`;last=x.cat}
-    h+=`<tr class="item${i===selIdx?' sel':''}" data-i="${i}"><td><b>${esc(x.code)}</b></td>${isV?`<td>${esc(x.name)}<div class="small muted">${esc([x.spec,x.size,x.colour].filter(Boolean).join(' · '))}</div>${x.note?`<div class="small" style="color:var(--bad)">${esc(x.note)}</div>`:''}</td>`:''}<td>${esc(x.unit||'')}</td><td class="n">${x.dlp?fmt(x.dlp,dp):`<span class="muted">${x.force?'on request':'net'}</span>`}</td><td class="n">${x.t[0]?fmt(x.t[0],dp):'–'}</td><td class="n">${x.t[1]?fmt(x.t[1],dp):'–'}</td><td class="n">${x.t[2]?fmt(x.t[2],dp):'–'}</td>${isV?'':`<td>${esc(x.cls||'')}</td>`}</tr>`;
+    h+=`<tr class="item${i===selIdx?' sel':''}" data-i="${i}"><td><b>${esc(x.code)}</b></td>${isV?`<td>${esc(x.name)}<div class="small muted">${esc([x.spec,x.size,x.colour].filter(Boolean).join(' · '))}</div>${x.note?`<div class="small" style="color:var(--bad)">${esc(x.note)}</div>`:''}</td>`:''}<td>${esc(x.unit||'')}</td><td class="n">${x.dlp?'₹ '+fmt(x.dlp,dp):`<span class="muted">${x.force?'on request':'net'}</span>`}</td><td class="n">${x.t[0]?'₹ '+fmt(x.t[0],dp):'–'}</td><td class="n">${x.t[1]?'₹ '+fmt(x.t[1],dp):'–'}</td><td class="n">${x.t[2]?'₹ '+fmt(x.t[2],dp):'–'}</td>${isV?'':`<td>${esc(x.cls||'')}</td>`}</tr>`;
   });
   $('#pTable').innerHTML=h+'</tbody>';
   $('#pFoot').textContent=`${rows.length} of ${L.length} products · ${LM(curList).label} · ${LM(curList).source||DATA.version}`;
@@ -659,7 +658,7 @@ function computeCalc(){
   $('#pdcResults').innerHTML=cards.join('');
   const bandBox=$('#pdcBand');
   if(b&&bProd){
-    bandBox.innerHTML=`<div class="pd-row">${pill(b)}<span class="small muted">Rate ₹${fmt(R.rate)}/${c.rate.unit.toLowerCase()} vs ${esc(tierNames(c.rate.list||'vci')[0])} ₹${fmt(bProd.dlp)} → ${b.disc!=null?fmt(b.disc,1)+'%':'–'} off</span></div>`;
+    bandBox.innerHTML=`<div class="pd-row">${pill(b)}<span class="muted" style="font-size:14px">Rate ₹${fmt(R.rate)}/${c.rate.unit.toLowerCase()} vs ${esc(tierNames(c.rate.list||'vci')[0])} ₹${fmt(bProd.dlp)} → ${b.disc!=null?fmt(b.disc,1)+'%':'–'} off</span></div>`;
   } else { bandBox.innerHTML='' }
   if(curCalc.id==='3d6'||curCalc.id==='3d5'||curCalc.id==='2d'||curCalc.id==='liner'){
     bandBox.innerHTML+=`<div class="note">VCI plastic bags: quote the customer <b>per piece only</b> — never share the ₹/kg rate.</div>`;
