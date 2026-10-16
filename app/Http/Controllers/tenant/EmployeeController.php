@@ -990,7 +990,26 @@ class EmployeeController extends Controller
       Log::info("User ID {$user->id} terminated by User ID {$adminUserId}. Reason: {$validatedData['exitReason']}");
       // Or use JobApplicationActivity if termination stems from recruitment flow? Less likely here.
 
+      // A tracked record for this exit - without it there is nothing for the
+      // NOC clearances below to key on, and this action used to leave no
+      // trace besides the log line above (no clearances raised, no one told).
+      $termination = \App\Models\EmployeeTermination::create([
+        'user_id' => $user->id,
+        'approved_by_id' => $adminUserId,
+        'termination_date' => $validatedData['exitDate'],
+        'last_working_day' => $validatedData['lastWorkingDay'],
+        'termination_type' => $validatedData['terminationType'],
+        'reason' => $validatedData['exitReason'],
+        'is_eligible_for_rehire' => filter_var($validatedData['isEligibleForRehire'], FILTER_VALIDATE_BOOLEAN),
+        'status' => 'pending',
+      ]);
+
       DB::commit();
+
+      // Raise the IT / HR / Finance / Accounts NOCs and alert everyone -
+      // after the commit and self-guarded: a mail failure must not undo a
+      // termination that has already taken effect.
+      \App\Services\HrNotificationService::raiseExitClearances($user, 'termination', $termination->id);
 
       // Return structure consistent with your Success::response wrapper if applicable
       return response()->json([

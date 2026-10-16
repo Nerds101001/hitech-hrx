@@ -168,7 +168,9 @@ class HrNotificationService
 
     /**
      * Recipients for exit alerts and NOC updates: everyone holding the
-     * configured roles, the named managers, and the leaver's own manager.
+     * configured roles, the named managers, and the leaver's own manager —
+     * plus Finance in Cc, but only when the leaver's department actually has
+     * dues with Finance.
      *
      * @return array{to: string[], cc: string[]}
      */
@@ -198,7 +200,16 @@ class HrNotificationService
             }
         }
 
-        return self::dedupe($to, collect());
+        $cc = collect();
+        $dept = strtolower(trim(optional($leaver->department)->name ?? ''));
+        $financeDepts = array_map(
+            fn($n) => strtolower(trim($n)), (array) ($cfg['cc_finance_for_departments'] ?? [])
+        );
+        if ($dept !== '' && in_array($dept, $financeDepts, true) && !empty($cfg['cc_finance_email'])) {
+            $cc->push($cfg['cc_finance_email']);
+        }
+
+        return self::dedupe($to, $cc);
     }
 
     /**
@@ -498,7 +509,7 @@ class HrNotificationService
         ), true);
     }
 
-    /** Email the exit alert to accounts, HR and the named managers. */
+    /** Email the exit alert to accounts, HR and the named managers (Finance Cc'd where it applies). */
     public static function notifyExit(User $leaver, string $exitType, int $exitId): void
     {
         try {
@@ -508,9 +519,11 @@ class HrNotificationService
                 return;
             }
 
-            \Illuminate\Support\Facades\Mail::to($r['to'])->send(
-                new \App\Mail\ExitClearanceAlert($leaver, $exitType, $exitId)
-            );
+            $mail = \Illuminate\Support\Facades\Mail::to($r['to']);
+            if (!empty($r['cc'])) {
+                $mail->cc($r['cc']);
+            }
+            $mail->send(new \App\Mail\ExitClearanceAlert($leaver, $exitType, $exitId));
         } catch (\Throwable $e) {
             Log::error("Exit alert failed for user {$leaver->id}: " . $e->getMessage());
         }

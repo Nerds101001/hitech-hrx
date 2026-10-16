@@ -166,8 +166,14 @@ return [
      | Resolved as the union of:
      |   • every active user holding one of `roles`  (so new accounts staff
      |     are included automatically — no config edit needed)
-     |   • the fixed `emails` below
+     |   • the fixed `emails` below — these go out for every leaver, no
+     |     matter their department (Nagender/IT and HR are mandatory on
+     |     every exit mail, not just NOC-relevant ones)
      |   • the leaver's own reporting manager, when they have one
+     |
+     | Finance is handled separately: it is only CC'd (not To) when the
+     | leaver's own department actually has dues with Finance, matching the
+     | same departments as the Finance NOC step below.
      |
      | Employee-role staff are never included unless they hold one of the
      | roles listed here.
@@ -179,11 +185,22 @@ return [
             env('HR_NOTIFY_HR_1',  'suchita@rustx.com'),   // Suchita Rustogi  — Dy. GM, HR
             env('HR_NOTIFY_HR_2',  'priyal@rustx.com'),    // Priyal Gangwar   — Sr. Manager, HR
             env('HR_NOTIFY_HR_3',  'hr@rustx.com'),        // Ramandeep K Gill — Manager, HR
+            env('NOC_IT',          'ai@rustx.com'),        // Nagender Kumar   — IT Manager
             env('NOC_ACCOUNTS',    'accounts@rustx.com'),  // Rajesh Bhardwaj  — Accounts Manager
-            env('NOC_FINANCE',     'finance@rustx.com'),   // Arpana Katyal    — Finance Head
         ]),
 
         'include_reporting_manager' => true,
+
+        // Whole-department-name match (not substring) — "Pre Sales" and
+        // "Channel Sales" both contain "sales" and must stay excluded, same
+        // as the Finance NOC step's own only_for_departments above.
+        'cc_finance_for_departments' => [
+            'sales', 'sales department',
+            'customer care', 'customer care + new biz',
+            'new biz',
+            'export', 'export department',
+        ],
+        'cc_finance_email' => env('NOC_FINANCE', 'finance@rustx.com'),
     ],
 
     /*
