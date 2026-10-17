@@ -9,24 +9,25 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 /**
- * The Sales Pricing Desk: price list, discount-approval finder, the product
- * calculators, and (for people with pricing_desk.manage) an edit screen for
- * all of it. The page itself is the vendored tool
- * (resources/views/tenant/pricing-desk/index.blade.php) with its data now
- * read from and saved to the database instead of baked into a static file
- * that had to be hand-edited and re-uploaded to publish a price change.
+ * The Sales Pricing Desk: price list, discount-approval finder and the
+ * product calculators. Price-list editing (the former Admin tab) has been
+ * retired — this is now a read-only quoting tool handed to one salesperson
+ * (plus the admin account, for support) rather than the department-wide
+ * roster PricingDeskAccess governs; edits to prices/factors/rules happen
+ * directly in the pricing_desk_data table until that need resurfaces.
  */
 class PricingDeskController extends Controller
 {
     public function index()
     {
-        abort_unless(PricingDeskAccess::canView(auth()->user()), 404);
+        $allowed = ['mukul@rustx.com', 'ai@rustx.com'];
+        abort_unless(in_array(strtolower(auth()->user()->email ?? ''), $allowed, true), 404);
 
         $row = PricingDeskData::current();
 
         return view('tenant.pricing-desk.index', [
             'seedJson' => $this->safeJson($row->data),
-            'canManage' => PricingDeskAccess::canManage(auth()->user()),
+            'canManage' => false,
         ]);
     }
 
