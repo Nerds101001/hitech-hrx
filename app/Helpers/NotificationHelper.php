@@ -47,7 +47,12 @@ class NotificationHelper
           $notifiables = $notifiables->push($m);
       }
       
-      $notifiables = $notifiables->filter()->unique('id');
+      // Dedupe by who actually receives mail (User::routeNotificationForMail
+      // redirects a vacant-position account to its delegate's inbox), not by
+      // raw id — otherwise the manager entry and the delegate entry pushed
+      // above by withDelegate() both resolve to the same person and that
+      // person gets the same email twice.
+      $notifiables = $notifiables->filter()->unique(fn ($u) => $u->effectiveActor()->id);
 
       if ($isExceptMe && $authUser) {
         $notifiables = $notifiables->where('id', '!=', $authUser->id);
