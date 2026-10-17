@@ -921,6 +921,17 @@
   var onWeek = strip ? strip.querySelector('.ndg-week-pill.on') : null;
   if (onWeek) { onWeek.scrollIntoView({ inline: 'center', block: 'nearest' }); }
 
+  // The per-row "..." action menu (View details / Edit / Remove) lives inside a horizontally
+  // scrollable table (.ndg-mx-scroll). Bootstrap positions a dropdown-menu with CSS position:
+  // absolute by default, so on a narrow phone screen the scroll container's overflow clips it
+  // and the options never appear. Forcing Popper's "fixed" strategy makes the menu position
+  // itself against the viewport instead, so it escapes that clipping.
+  if (window.bootstrap && window.bootstrap.Dropdown) {
+    document.querySelectorAll('.ndg-mx-scroll [data-bs-toggle="dropdown"]').forEach(function (el) {
+      window.bootstrap.Dropdown.getOrCreateInstance(el, { popperConfig: { strategy: 'fixed' } });
+    });
+  }
+
   // ── Weekly Submission: read every row, save one or many via the same checkin endpoint ──
   var wkMsg = document.getElementById('ndgRdMsg');
   // Status values that mean a real order is on the books — the same two the rest of this module
