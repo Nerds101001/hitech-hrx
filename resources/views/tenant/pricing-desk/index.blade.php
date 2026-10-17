@@ -266,10 +266,10 @@
 #pd2Root .pd2-importrow.warn{background:var(--gm-bg);color:var(--gm-text)}
 #pd2Root .pd2-importrow.ok{background:var(--ok-bg);color:var(--ok-text)}
 
-/* mobile floating action button — jumps straight to the Calculators tab (or
-   back to the Price List) without hunting for the top-level tab bar; app-style
-   fixed bottom-right button, hidden on desktop/tablet where the tabs are
-   already in easy reach. */
+/* mobile floating action button — opens the calculator as a full-screen
+   popup on top of whatever the user is doing, instead of navigating the
+   page away to a different tab; app-style fixed bottom-right button, hidden
+   on desktop/tablet where the tab bar is already in easy reach. */
 #pd2Root .pd2-fab{display:none}
 @media (max-width:760px){
   #pd2Root .pd2-fab{
@@ -281,7 +281,30 @@
     transition:transform .15s ease,background .15s ease;
   }
   #pd2Root .pd2-fab:active{transform:scale(.92)}
-  #pd2Root .pd2-fab.on-calc{background:var(--brand-dark)}
+}
+#pd2Root .pd2-calc-modal-overlay{display:none}
+#pd2Root .pd2-calc-modal-overlay.open{
+  display:flex;flex-direction:column;position:fixed;inset:0;z-index:2500;
+  background:var(--page-bg);
+}
+#pd2Root .pd2-calc-modal-sheet{display:flex;flex-direction:column;width:100%;height:100%;min-height:0}
+#pd2Root .pd2-calc-modal-head{
+  flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;gap:10px;
+  padding:calc(12px + env(safe-area-inset-top,0px)) 16px 12px;background:#fff;border-bottom:1px solid var(--line);
+}
+#pd2Root .pd2-calc-modal-head strong{font-size:16px;color:var(--ink);display:flex;align-items:center;gap:8px}
+#pd2Root .pd2-calc-modal-close{
+  width:34px;height:34px;border-radius:50%;border:0;background:var(--head-bg);color:var(--ink);
+  font-size:20px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;
+}
+#pd2Root .pd2-calc-modal-close:active{background:var(--line)}
+#pd2Root .pd2-calc-modal-body{flex:1 1 auto;overflow-y:auto;padding:12px 12px calc(16px + env(safe-area-inset-bottom,0px))}
+#pd2Root .pd2-calc-modal-body #pd2-pane-calc{display:block!important}
+#pd2Root .pd2-calc-modal-body .pd2-calc-shell{border-radius:10px;max-height:none;min-height:0}
+@media (min-width:481px) and (max-width:760px){
+  #pd2Root .pd2-calc-modal-overlay.open{align-items:center;justify-content:center;background:rgba(15,23,42,.45)}
+  #pd2Root .pd2-calc-modal-overlay.open .pd2-calc-modal-sheet{width:min(560px,92vw);max-height:88vh;background:var(--page-bg);border-radius:14px;display:flex;flex-direction:column;overflow:hidden}
+  #pd2Root .pd2-calc-modal-overlay.open .pd2-calc-modal-head{border-radius:14px 14px 0 0}
 }
 </style>
 
@@ -295,6 +318,19 @@
 </div>
 
 <button type="button" class="pd2-fab" id="pd2Fab" aria-label="Open Calculators"><i class="bx bx-calculator"></i></button>
+
+<!-- Mobile calculator popup: the FAB moves #pd2-pane-calc in here (and back
+     out to pd2CalcAnchor's spot on close) rather than cloning it, so the
+     Calculators tab keeps one single, always-live copy of its state. -->
+<div class="pd2-calc-modal-overlay" id="pd2CalcModalOverlay">
+  <div class="pd2-calc-modal-sheet">
+    <div class="pd2-calc-modal-head">
+      <strong><i class="bx bx-calculator"></i>Calculators</strong>
+      <button type="button" class="pd2-calc-modal-close" id="pd2CalcModalClose" aria-label="Close"><i class="bx bx-x"></i></button>
+    </div>
+    <div class="pd2-calc-modal-body" id="pd2CalcModalBody"></div>
+  </div>
+</div>
 
 <!-- ======= PRICE LIST ======= -->
 <section id="pd2-pane-prices" class="pd2-pane">
@@ -350,6 +386,7 @@
 </section>
 
 <!-- ======= CALCULATORS ======= -->
+<div id="pd2CalcAnchor" class="hide"></div>
 <section id="pd2-pane-calc" class="pd2-pane hide">
   <div class="pd2-calc-shell">
     <div class="pd2-cat">
@@ -558,24 +595,31 @@ function showPane(t){
   if(t==='calc'&&!calcInited){calcInited=true;initCalcTab()}
   if(t==='admin'&&CAN_MANAGE)renderAdmin();
   LS.set('spd_tab',t);
-  updFab(t);
 }
 $('#pd2Tabs').addEventListener('click',e=>{const b=e.target.closest('button[data-t]');if(b)showPane(b.dataset.t)});
 
-/* mobile FAB: a quick-jump button between Price List and Calculators,
-   the two tabs worth a one-tap shortcut on a phone. */
-function updFab(t){
-  const fab=$('#pd2Fab'); if(!fab)return;
-  const onCalc=t==='calc';
-  fab.classList.toggle('on-calc',onCalc);
-  fab.innerHTML=`<i class="bx ${onCalc?'bx-list-ul':'bx-calculator'}"></i>`;
-  fab.setAttribute('aria-label',onCalc?'Open Price List':'Open Calculators');
-  fab.dataset.target=onCalc?'prices':'calc';
+/* mobile FAB: opens the Calculators pane as a popup on top of the current
+   tab (Price List stays exactly as the user left it underneath), rather
+   than navigating away — closing just puts the pane back where it lives
+   in the normal tab flow. */
+function openCalcModal(){
+  if(!calcInited){calcInited=true;initCalcTab()}
+  const pane=$('#pd2-pane-calc');
+  pane.classList.remove('hide');
+  $('#pd2CalcModalBody').appendChild(pane);
+  $('#pd2CalcModalOverlay').classList.add('open');
+  document.body.style.overflow='hidden';
 }
-$('#pd2Fab').addEventListener('click',()=>{
-  showPane($('#pd2Fab').dataset.target||'calc');
-  window.scrollTo({top:0,behavior:'smooth'});
-});
+function closeCalcModal(){
+  const pane=$('#pd2-pane-calc');
+  $('#pd2CalcAnchor').insertAdjacentElement('afterend',pane);
+  if(!$('#pd2Tabs button.active[data-t="calc"]'))pane.classList.add('hide');
+  $('#pd2CalcModalOverlay').classList.remove('open');
+  document.body.style.overflow='';
+}
+$('#pd2Fab').addEventListener('click',openCalcModal);
+$('#pd2CalcModalClose').addEventListener('click',closeCalcModal);
+$('#pd2CalcModalOverlay').addEventListener('click',e=>{if(e.target.id==='pd2CalcModalOverlay')closeCalcModal()});
 
 /* ================= PRICE LIST ================= */
 let curList='vci', selIdx=null, pdPage=1, pdPageSize=25;
@@ -1197,7 +1241,7 @@ function refreshAll(full){
 }
 renderFamTabs();fillCats();refreshAll(true);
 const lt=LS.get('spd_tab');
-if(lt==='calc'||lt==='admin')showPane(lt); else updFab('prices');
+if(lt==='calc'||lt==='admin')showPane(lt);
 })();
 </script>
 </div>
