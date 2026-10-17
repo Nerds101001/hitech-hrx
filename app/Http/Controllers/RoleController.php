@@ -49,6 +49,7 @@ class RoleController extends Controller
     'Sales Field Ops' => 'Sales Field Ops',
     'CCare Attendance' => 'Sales Field Ops',
     'Kingo Bingo' => 'Sales Field Ops',
+    'Pricing Desk' => 'Sales Field Ops',
     'Telephony' => 'Telephony',
     'Intelligent Vault' => 'Intelligent Vault',
     'Asset Management' => 'Asset Management',

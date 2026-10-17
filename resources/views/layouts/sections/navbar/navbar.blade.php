@@ -8,6 +8,7 @@
     $initial = Auth::user()?->getInitials() ?? 'U';
     $addonService = app(IAddonService::class);
     $isSuperAdmin = Auth::user()?->hasRole('admin') ?? false;
+    $showPricingDesk = Auth::check() && \App\Support\PricingDeskAccess::canView(Auth::user());
 @endphp
 
 <style>
@@ -63,6 +64,27 @@
         @include('layouts.sections.delegate_strip')
 
         <ul class="navbar-nav flex-row align-items-center ms-auto">
+        <!-- Pricing Desk: quick-view popup, or open the full tool in a new tab -->
+        @if ($showPricingDesk)
+          <li class="nav-item dropdown me-2 me-xl-0">
+            <a class="nav-link dropdown-toggle hide-arrow" href="javascript:void(0);" data-bs-toggle="dropdown"
+               title="Pricing Desk" aria-label="Pricing Desk">
+              <i class="bx bx-calculator bx-md"></i>
+            </a>
+            <ul class="dropdown-menu dropdown-menu-end">
+              <li>
+                <a class="dropdown-item" href="javascript:void(0);" data-bs-toggle="modal" data-bs-target="#quickCalcModal">
+                  <i class="bx bx-calculator me-1"></i> Quick Calculator
+                </a>
+              </li>
+              <li>
+                <a class="dropdown-item" href="{{ route('sales-visits.pricing-desk.index') }}" target="_blank" rel="noopener">
+                  <i class="bx bx-link-external me-1"></i> Open full Pricing Desk
+                </a>
+              </li>
+            </ul>
+          </li>
+        @endif
         <!-- Search icon moved to right -->
         @if ($configData['displaySearch'] == true)
           <li class="nav-item me-2 me-xl-0">
@@ -398,3 +420,7 @@
 </nav>
 
 <!-- / Navbar -->
+
+@if ($showPricingDesk)
+  @include('layouts.sections.navbar._quick_calculator_modal')
+@endif
