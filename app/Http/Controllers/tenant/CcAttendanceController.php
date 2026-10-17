@@ -30,10 +30,11 @@ class CcAttendanceController extends Controller
         $date = $request->input('date', Carbon::today()->format('Y-m-d'));
 
         if ($this->isAttendanceAdmin($user)) {
-            $mappings = \App\Models\CcSalespersonMap::where('role', 'ccare')->with(['salesUser' => function ($q) {
-                // Terminated staff must not appear on the attendance register.
+            $mappings = \App\Models\CcSalespersonMap::where('role', 'ccare')->with(['salesUser' => function ($q) use ($date) {
+                // Terminated staff drop off the register once $date is past
+                // their last working day; attendance from their tenure stays visible.
                 $q->select('id', 'first_name', 'last_name', 'code', 'status', 'designation_id', 'department_id', 'profile_picture')
-                  ->notTerminated()
+                  ->notTerminatedAsOf($date)
                   ->with('designation');
             }, 'ccUser'])->get();
             $salespeople = $mappings->pluck('salesUser')->filter()->map(function($salesUser) use ($mappings) {
@@ -43,10 +44,11 @@ class CcAttendanceController extends Controller
             })->unique('id')->values();
         } else {
             // Fetch salespeople tagged to this CCARE user
-            $salespeople = $user->mappedSalespersons()->where('role', 'ccare')->with(['salesUser' => function ($q) {
-                // Terminated staff must not appear on the attendance register.
+            $salespeople = $user->mappedSalespersons()->where('role', 'ccare')->with(['salesUser' => function ($q) use ($date) {
+                // Terminated staff drop off the register once $date is past
+                // their last working day; attendance from their tenure stays visible.
                 $q->select('id', 'first_name', 'last_name', 'code', 'status', 'designation_id', 'department_id', 'profile_picture')
-                  ->notTerminated()
+                  ->notTerminatedAsOf($date)
                   ->with('designation');
             }])->get()->pluck('salesUser')->filter()->unique('id')->values();
         }
@@ -855,10 +857,11 @@ class CcAttendanceController extends Controller
         $daysInMonth = $startOfMonth->daysInMonth;
 
         if ($this->isAttendanceAdmin($user)) {
-            $mappings = \App\Models\CcSalespersonMap::where('role', 'ccare')->with(['salesUser' => function ($q) {
-                // Terminated staff must not appear on the attendance register.
+            $mappings = \App\Models\CcSalespersonMap::where('role', 'ccare')->with(['salesUser' => function ($q) use ($startOfMonth) {
+                // Terminated staff drop off the register once this month is past
+                // their last working day; attendance from their tenure stays visible.
                 $q->select('id', 'first_name', 'last_name', 'code', 'status', 'designation_id', 'department_id', 'profile_picture')
-                  ->notTerminated()
+                  ->notTerminatedAsOf($startOfMonth)
                   ->with('designation');
             }, 'ccUser'])->get();
             $salespeople = $mappings->pluck('salesUser')->filter()->map(function($salesUser) use ($mappings) {
@@ -867,10 +870,11 @@ class CcAttendanceController extends Controller
                 return $salesUser;
             })->unique('id')->values();
         } else {
-            $salespeople = $user->mappedSalespersons()->where('role', 'ccare')->with(['salesUser' => function ($q) {
-                // Terminated staff must not appear on the attendance register.
+            $salespeople = $user->mappedSalespersons()->where('role', 'ccare')->with(['salesUser' => function ($q) use ($startOfMonth) {
+                // Terminated staff drop off the register once this month is past
+                // their last working day; attendance from their tenure stays visible.
                 $q->select('id', 'first_name', 'last_name', 'code', 'status', 'designation_id', 'department_id', 'profile_picture')
-                  ->notTerminated()
+                  ->notTerminatedAsOf($startOfMonth)
                   ->with('designation');
             }])->get()->pluck('salesUser')->filter()->unique('id')->values();
         }

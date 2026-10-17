@@ -119,6 +119,33 @@ class User extends Authenticatable implements JWTSubject, AuditableContract
   }
 
   /**
+   * Like notTerminated(), but for attendance reports/exports: a terminated
+   * employee must still show up for any date on or before their last working
+   * day (falls back to exit_date), so their attendance during their actual
+   * tenure stays visible/exportable after they leave. Pass the date being
+   * viewed (a single day, or the first of the month for a monthly view).
+   */
+  public function scopeNotTerminatedAsOf($query, $date)
+  {
+    $table = $this->getTable();
+    $date = $date instanceof \DateTimeInterface ? $date->format('Y-m-d') : (string) $date;
+    return $query->where(function ($q) use ($table, $date) {
+      $q->where($table . '.status', '!=', UserAccountStatus::TERMINATED->value)
+        ->orWhereNull($table . '.status')
+        ->orWhere(function ($q2) use ($table, $date) {
+          $q2->where($table . '.status', UserAccountStatus::TERMINATED->value)
+            ->where(function ($q3) use ($table, $date) {
+              $q3->whereDate($table . '.last_working_day', '>=', $date)
+                ->orWhere(function ($q4) use ($table, $date) {
+                  $q4->whereNull($table . '.last_working_day')
+                    ->whereDate($table . '.exit_date', '>=', $date);
+                });
+            });
+        });
+    });
+  }
+
+  /**
    * The attributes that are mass assignable.
    *
    * @var array<int, string>
