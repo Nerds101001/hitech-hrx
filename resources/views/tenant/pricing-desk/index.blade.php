@@ -265,6 +265,24 @@
 #pd2Root .pd2-importrow.err{background:var(--bad-bg);color:var(--bad-text)}
 #pd2Root .pd2-importrow.warn{background:var(--gm-bg);color:var(--gm-text)}
 #pd2Root .pd2-importrow.ok{background:var(--ok-bg);color:var(--ok-text)}
+
+/* mobile floating action button — jumps straight to the Calculators tab (or
+   back to the Price List) without hunting for the top-level tab bar; app-style
+   fixed bottom-right button, hidden on desktop/tablet where the tabs are
+   already in easy reach. */
+#pd2Root .pd2-fab{display:none}
+@media (max-width:760px){
+  #pd2Root .pd2-fab{
+    display:flex;align-items:center;justify-content:center;
+    position:fixed;right:18px;bottom:calc(18px + env(safe-area-inset-bottom,0px));
+    width:58px;height:58px;border-radius:50%;border:0;z-index:1200;
+    background:var(--brand);color:#fff;font-size:26px;cursor:pointer;
+    box-shadow:0 10px 24px rgba(0,107,104,.38),0 2px 6px rgba(0,0,0,.15);
+    transition:transform .15s ease,background .15s ease;
+  }
+  #pd2Root .pd2-fab:active{transform:scale(.92)}
+  #pd2Root .pd2-fab.on-calc{background:var(--brand-dark)}
+}
 </style>
 
 <!-- ======= Top-level tabs ======= -->
@@ -275,6 +293,8 @@
   <button type="button" data-t="admin"><i class="bx bx-cog"></i> Admin</button>
   @endif
 </div>
+
+<button type="button" class="pd2-fab" id="pd2Fab" aria-label="Open Calculators"><i class="bx bx-calculator"></i></button>
 
 <!-- ======= PRICE LIST ======= -->
 <section id="pd2-pane-prices" class="pd2-pane">
@@ -538,8 +558,24 @@ function showPane(t){
   if(t==='calc'&&!calcInited){calcInited=true;initCalcTab()}
   if(t==='admin'&&CAN_MANAGE)renderAdmin();
   LS.set('spd_tab',t);
+  updFab(t);
 }
 $('#pd2Tabs').addEventListener('click',e=>{const b=e.target.closest('button[data-t]');if(b)showPane(b.dataset.t)});
+
+/* mobile FAB: a quick-jump button between Price List and Calculators,
+   the two tabs worth a one-tap shortcut on a phone. */
+function updFab(t){
+  const fab=$('#pd2Fab'); if(!fab)return;
+  const onCalc=t==='calc';
+  fab.classList.toggle('on-calc',onCalc);
+  fab.innerHTML=`<i class="bx ${onCalc?'bx-list-ul':'bx-calculator'}"></i>`;
+  fab.setAttribute('aria-label',onCalc?'Open Price List':'Open Calculators');
+  fab.dataset.target=onCalc?'prices':'calc';
+}
+$('#pd2Fab').addEventListener('click',()=>{
+  showPane($('#pd2Fab').dataset.target||'calc');
+  window.scrollTo({top:0,behavior:'smooth'});
+});
 
 /* ================= PRICE LIST ================= */
 let curList='vci', selIdx=null, pdPage=1, pdPageSize=25;
@@ -1161,7 +1197,7 @@ function refreshAll(full){
 }
 renderFamTabs();fillCats();refreshAll(true);
 const lt=LS.get('spd_tab');
-if(lt==='calc'||lt==='admin')showPane(lt);
+if(lt==='calc'||lt==='admin')showPane(lt); else updFab('prices');
 })();
 </script>
 </div>
