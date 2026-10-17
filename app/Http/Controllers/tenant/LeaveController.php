@@ -77,7 +77,13 @@ class LeaveController extends Controller
   {
     try {
       $user = auth()->user();
-      $isManager = $user->hasRole('manager') && !$user->hasRole(['admin', 'hr']);
+      // Was role-only, out of step with canApproveFor() below which also
+      // honours the leave.approve.team permission — someone holding only
+      // that permission (e.g. a delegate for a vacant manager seat, with no
+      // reports of their own) fell through to the unscoped branch and saw
+      // every pending leave in the company, though canApproveFor() still
+      // correctly refused to let them act on any outside their own scope.
+      $isManager = ($user->hasRole('manager') || $user->can('leave.approve.team')) && !$user->hasRole(['admin', 'hr']);
       $isAccounts = $user->hasRole('accounts') && !$user->hasRole(['admin', 'hr']);
       
       $leaveQuery = LeaveRequest::query()->with(['user', 'user.department', 'approvedBy', 'leaveType' => function ($q) {
@@ -266,7 +272,7 @@ class LeaveController extends Controller
   {
     try {
       $user = auth()->user();
-      $isManager = $user->hasRole('manager') && !$user->hasRole(['admin', 'hr']);
+      $isManager = ($user->hasRole('manager') || $user->can('leave.approve.team')) && !$user->hasRole(['admin', 'hr']);
 
       $month = (int) ($request->input('summaryMonth') ?: now()->month);
       $year  = (int) ($request->input('summaryYear') ?: now()->year);
@@ -546,7 +552,7 @@ class LeaveController extends Controller
     // Mirror getListAjax's scope exactly rather than inventing a new one, and
     // 404 (not 403) so an id outside someone's remit doesn't confirm it exists.
     $user       = auth()->user();
-    $isManager  = $user->hasRole('manager') && !$user->hasRole(['admin', 'hr']);
+    $isManager  = ($user->hasRole('manager') || $user->can('leave.approve.team')) && !$user->hasRole(['admin', 'hr']);
     $isAccounts = $user->hasRole('accounts') && !$user->hasRole(['admin', 'hr']);
 
     if ($isManager) {
