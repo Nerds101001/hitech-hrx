@@ -234,8 +234,9 @@ class AuthController extends Controller
         // so it cannot work on production even if this file were deployed there. The password
         // step has already been passed by this point. (This replaces the always-on bypass the
         // 2026-08-31 QA pass removed.)
-        $localBypass = app()->environment('local')
-            && in_array($request->getHost(), ['localhost', '127.0.0.1', '::1', '[::1]'], true)
+        // LOCAL EDIT (not committed): also honoured through a developer's tunnel, but only for a request that has
+        // already passed the TUNNEL_ACCESS_PASSWORD wall -- see App\Http\Middleware\TunnelAccessGate.
+        $localBypass = \App\Http\Middleware\TunnelAccessGate::isLocalShortcutAllowed($request)
             && (string) $request->otp === '123456';
 
         if ($localBypass || ($user->otp_code == $request->otp && $user->otp_expires_at && now()->lt($user->otp_expires_at))) {

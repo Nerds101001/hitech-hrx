@@ -69,6 +69,10 @@ return Application::configure(basePath: dirname(__DIR__))
     $schedule->command('ninety-day:remind-add-customers')->hourly()->withoutOverlapping();
   })
   ->withMiddleware(function (Middleware $middleware) {
+    // Passphrase wall for a developer's temporary tunnel to a LOCAL instance (see TunnelAccessGate). Inert
+    // unless TUNNEL_ACCESS_PASSWORD is set, which only a developer's own .env does. (Anything that reads .env
+    // has to happen inside the gate at request time, not here: this closure runs before .env is loaded.)
+    $middleware->prepend(\App\Http\Middleware\TunnelAccessGate::class);
     // $middleware->web(LicenseChecker::class);
     $middleware->web(LocaleMiddleware::class);
     $middleware->web(LoadSettings::class);

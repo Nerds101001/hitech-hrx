@@ -1,49 +1,99 @@
+# HRX — build and auto-deploy to the Hostinger production server.
+#
+# On every push to a listed branch: Azure builds the frontend, packages the
+# COMMITTED code (so nothing uncommitted on anyone's laptop can ever reach prod),
+# copies it to the server over SSH, then extracts + migrates + rebuilds caches
+# there. No one runs anything by hand.
+#
+# ── ONE-TIME SETUP (done once, in the Azure DevOps web UI, by someone with access) ──
+#   Project Settings → Service connections → New service connection → "SSH" →
+#       Host name:  89.117.188.10
+#       Port:       65002
+#       User name:  u989061032
+#       Password:   <the production SSH password>
+#       Service connection name:  hrx-prod-ssh      ← must match the name below
+#   Azure stores that password encrypted; it is never in this file or the repo.
+#
+#   If the pipeline says "no hosted parallelism", request the free grant once at
+#   https://aka.ms/azpipelines-parallelism-request (Microsoft approves it in ~2 days),
+#   or point `pool:` at a self-hosted agent.
+
 trigger:
-  - main
-  - master
+  branches:
+    include:
+      - main
+      - master
+      - menu-restructure
 
 pool:
   vmImage: 'ubuntu-latest'
 
 variables:
-  phpVersion: '8.2'
+  phpVersion: '8.4'
+  sshEndpoint: 'hrx-prod-ssh'
+  appRoot: '/home/u989061032/domains/hitechgroup.in/public_html/hrx'
+  remotePhp: '/opt/alt/php84/usr/bin/php'
 
 steps:
-- script: |
-    sudo update-alternatives --set php /usr/bin/php$(phpVersion)
-    sudo update-alternatives --set phar /usr/bin/phar$(phpVersion)
-    sudo update-alternatives --set phpdbg /usr/bin/phpdbg$(phpVersion)
-    sudo update-alternatives --set php-cgi /usr/bin/php-cgi$(phpVersion)
-    sudo update-alternatives --set php-config /usr/bin/php-config$(phpVersion)
-    sudo update-alternatives --set phpize /usr/bin/phpize$(phpVersion)
-  displayName: 'Use PHP version $(phpVersion)'
+  - checkout: self
+    displayName: 'Checkout committed code'
 
-- script: composer install --no-interaction --prefer-dist --optimize-autoloader
-  displayName: 'Install Composer dependencies'
+  - task: NodeTool@0
+    inputs:
+      versionSpec: '18.x'
+    displayName: 'Install Node.js 18'
 
-- task: NodeTool@0
-  inputs:
-    versionSpec: '18.x'
-  displayName: 'Install Node.js'
+  - script: |
+      set -e
+      npm ci || npm install
+      npm run build
+    displayName: 'Build frontend assets (public/build)'
 
-- script: |
-    npm install
-    npm run build
-  displayName: 'Install NPM dependencies and build assets'
+  - script: |
+      set -e
+      tar -czf "$(Build.ArtifactStagingDirectory)/hrx-release.tar.gz" \
+        --exclude-from=deployment/hostinger/exclude.lst .
+      echo "Packaged:"; ls -la "$(Build.ArtifactStagingDirectory)"
+    displayName: 'Package release (exclusions from exclude.lst applied)'
 
-- task: ArchiveFiles@2
-  inputs:
-    rootFolderOrFile: '$(System.DefaultWorkingDirectory)'
-    includeRootFolder: false
-    archiveType: 'tar'
-    tarCompression: 'gzip'
-    archiveFile: '$(Build.ArtifactStagingDirectory)/hrx-release.tar.gz'
-    replaceExistingArchive: true
-  displayName: 'Archive files'
+  - task: CopyFilesOverSSH@0
+    inputs:
+      sshEndpoint: '$(sshEndpoint)'
+      sourceFolder: '$(Build.ArtifactStagingDirectory)'
+      contents: 'hrx-release.tar.gz'
+      targetFolder: '/tmp'
+      overwrite: true
+    displayName: 'Upload release to the server'
 
-- task: PublishBuildArtifacts@1
-  inputs:
-    PathtoPublish: '$(Build.ArtifactStagingDirectory)/hrx-release.tar.gz'
-    ArtifactName: 'drop'
-    publishLocation: 'Container'
-  displayName: 'Publish Build Artifacts'
+  - task: SSH@0
+    inputs:
+      sshEndpoint: '$(sshEndpoint)'
+      runOptions: 'inline'
+      inline: |
+        set -uo pipefail
+        APP="$(appRoot)"
+        PHP="$(remotePhp)"
+        cd "$APP" || { echo "FATAL: app root missing"; exit 1; }
+
+        STAMP="$(date +%Y%m%d-%H%M%S)"
+        echo "== Extracting release (overwrite only — .env and storage are left untouched, nothing is deleted) =="
+        tar xzf /tmp/hrx-release.tar.gz -C "$APP" \
+          --exclude='.env' --exclude='storage/*' --exclude='bootstrap/cache/*'
+        rm -f /tmp/hrx-release.tar.gz
+
+        echo "== Clearing every compiled cache (incl. any stale route cache) =="
+        $PHP artisan optimize:clear
+
+        echo "== Migrations (idempotent; already-applied ones are skipped) =="
+        $PHP artisan migrate --force --no-interaction || echo "   migrate reported an issue — review the log above"
+
+        echo "== Rebuilding config + view caches (routes left uncached so files load fresh) =="
+        $PHP artisan config:cache
+        $PHP artisan view:cache
+
+        echo "== Self-test: the Tally push endpoint (401 = live & gated correctly; 404 = problem) =="
+        curl -s -m 20 -o /dev/null -w "   /api/tally-push/sync -> HTTP %{http_code}\n" \
+          -X POST https://hrx.hitechgroup.in/api/tally-push/sync -H "Content-Type: application/json" -d '{}'
+
+        echo "== Deploy finished at $STAMP =="
+    displayName: 'Deploy on the server (extract, migrate, cache, self-test)'
