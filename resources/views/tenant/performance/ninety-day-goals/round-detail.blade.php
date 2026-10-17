@@ -271,11 +271,11 @@
               @forelse($goals as $i => $g)
                 @php $ck = $g->checkins->firstWhere('week_no', $selectedWeek); @endphp
                 <tr class="ndg-wk-row" data-goal="{{ $g->id }}">
-                  <td class="ps-3 text-muted">{{ $i + 1 }}</td>
-                  <td class="fw-semibold text-dark">{{ $g->client_name }}</td>
-                  <td class="small text-muted">{{ $g->product }}</td>
-                  <td class="text-end">{{ $fmtL($g->monthly_potential) }}</td>
-                  <td>
+                  <td class="ps-3 text-muted" data-label="#">{{ $i + 1 }}</td>
+                  <td class="fw-semibold text-dark" data-label="Customer">{{ $g->client_name }}</td>
+                  <td class="small text-muted" data-label="Product">{{ $g->product }}</td>
+                  <td class="text-end" data-label="Target (₹ L)">{{ $fmtL($g->monthly_potential) }}</td>
+                  <td data-label="Expected Stage">
                     @php $curStage = $g->goal ?: 'Order'; @endphp
                     <select class="form-select form-select-hitech ndg-wk-expected" data-orig="{{ $curStage }}" {{ $canEdit && $isActive ? '' : 'disabled' }}>
                       @foreach($stageChoices($curStage) as $stage)
@@ -283,18 +283,20 @@
                       @endforeach
                     </select>
                   </td>
-                  <td>
-                    <select class="form-select form-select-hitech ndg-wk-status" {{ $canEdit && $isActive ? '' : 'disabled' }}>
-                      <option value="">Choose…</option>
-                      @foreach($statuses as $s)<option value="{{ $s }}" {{ optional($ck)->status === $s ? 'selected' : '' }}>{{ $s }}</option>@endforeach
-                    </select>
-                    @if($rowsByGoal->has($g->id))<div class="mt-1">@include('tenant.performance.ninety-day-goals.partials.order-check', ['r' => $rowsByGoal[$g->id]])</div>@endif
+                  <td data-label="Status (W{{ $selectedWeek + 1 }})">
+                    <div class="ndg-td-value">
+                      <select class="form-select form-select-hitech ndg-wk-status" {{ $canEdit && $isActive ? '' : 'disabled' }}>
+                        <option value="">Choose…</option>
+                        @foreach($statuses as $s)<option value="{{ $s }}" {{ optional($ck)->status === $s ? 'selected' : '' }}>{{ $s }}</option>@endforeach
+                      </select>
+                      @if($rowsByGoal->has($g->id))<div class="mt-1">@include('tenant.performance.ninety-day-goals.partials.order-check', ['r' => $rowsByGoal[$g->id]])</div>@endif
+                    </div>
                   </td>
-                  <td><input type="text" class="form-control ndg-wk-comment" maxlength="1000" placeholder="Optional note" value="{{ optional($ck)->comment }}" {{ $canEdit && $isActive ? '' : 'disabled' }}></td>
-                  <td><input type="text" class="form-control ndg-wk-next-action" maxlength="255" placeholder="e.g. Share quotation" value="{{ optional($ck)->next_action }}" {{ $canEdit && $isActive ? '' : 'disabled' }}></td>
-                  <td class="pe-3 text-end">
+                  <td data-label="Comment"><input type="text" class="form-control ndg-wk-comment" maxlength="1000" placeholder="Optional note" value="{{ optional($ck)->comment }}" {{ $canEdit && $isActive ? '' : 'disabled' }}></td>
+                  <td data-label="Next Action"><input type="text" class="form-control ndg-wk-next-action" maxlength="255" placeholder="e.g. Share quotation" value="{{ optional($ck)->next_action }}" {{ $canEdit && $isActive ? '' : 'disabled' }}></td>
+                  <td class="pe-3 text-end ndg-td-actions">
                     @if($canEdit && $isActive)
-                      <button type="button" class="btn btn-sm btn-hitech-cancel ndg-wk-save">Save</button>
+                      <button type="button" class="btn btn-sm btn-hitech-cancel ndg-wk-save w-100">Save</button>
                     @endif
                   </td>
                 </tr>
@@ -423,26 +425,26 @@
               $bucketColor = ['dropped' => ['#ede9fe', '#5b21b6'], 'orders' => ['#dcfce7', '#166534'], 'risk' => ['#fee2e2', '#b42318'], 'progress' => ['#e0f2fe', '#0369a1']][$bucket];
             @endphp
             <tr class="ndg-rd-row" data-goal="{{ $g->id }}" data-q="{{ strtolower($g->client_name . ' ' . $g->product) }}" data-status="{{ $status }}" data-brand="{{ $g->brand }}">
-              <td class="ps-3"><button type="button" class="ndg-rd-expand" data-target="ndgRdExp{{ $g->id }}"><i class="bx bx-chevron-down"></i></button></td>
-              <td class="text-muted">{{ $i + 1 }}</td>
-              <td class="fw-semibold text-dark">{{ $g->client_name }}@if($g->pendingDeleteRequest)<span class="badge badge-hitech ms-1" style="background:#fee2e2;color:#b42318;font-size:.6rem" title="Removal requested">Removal pending</span>@endif</td>
-              <td class="small text-muted">{{ $g->product }}</td>
-              <td class="text-end">{{ $fmtL($g->monthly_potential) }}</td>
-              <td class="small text-muted">{{ $g->expected_order_date ? $g->expected_order_date->format('d M Y') : '—' }}</td>
+              <td class="ps-3 ndg-td-actions"><button type="button" class="ndg-rd-expand" data-target="ndgRdExp{{ $g->id }}"><i class="bx bx-chevron-down"></i></button></td>
+              <td class="text-muted" data-label="#">{{ $i + 1 }}</td>
+              <td class="fw-semibold text-dark" data-label="Customer">{{ $g->client_name }}@if($g->pendingDeleteRequest)<span class="badge badge-hitech ms-1" style="background:#fee2e2;color:#b42318;font-size:.6rem" title="Removal requested">Removal pending</span>@endif</td>
+              <td class="small text-muted" data-label="Product">{{ $g->product }}</td>
+              <td class="text-end" data-label="Goal (₹ L)">{{ $fmtL($g->monthly_potential) }}</td>
+              <td class="small text-muted" data-label="Expected Order">{{ $g->expected_order_date ? $g->expected_order_date->format('d M Y') : '—' }}</td>
               @for($w = 0; $w < $weeks; $w++)
                 @php
                   $ck = $cks->get($w);
                   $st = optional($ck)->status;
                   [$bg, $fg] = $st ? ($G::STATUS_COLORS[$st] ?? ['#94a3b8', '#fff']) : [null, null];
                 @endphp
-                <td class="text-center">
+                <td class="text-center" data-label="W{{ $w + 1 }}">
                   @if($st)<span class="ndg-chip" style="background:{{ $bg }};color:{{ $fg }};font-size:.62rem;padding:2px 6px" title="{{ $st }}">{{ \Illuminate\Support\Str::limit($st, 8, '') }}</span>
                   @else<span class="ndg-none">-</span>@endif
                 </td>
               @endfor
-              <td class="text-end fw-semibold">{{ $r ? $fmtL($r->achieved) : 0 }}</td>
-              <td><span class="ndg-chip" style="background:{{ $bucketColor[0] }};color:{{ $bucketColor[1] }}">{{ $bucketLabel }}</span></td>
-              <td class="pe-3 text-end">
+              <td class="text-end fw-semibold" data-label="Actual Order (₹ L)">{{ $r ? $fmtL($r->achieved) : 0 }}</td>
+              <td data-label="Status"><span class="ndg-chip" style="background:{{ $bucketColor[0] }};color:{{ $bucketColor[1] }}">{{ $bucketLabel }}</span></td>
+              <td class="pe-3 text-end ndg-td-actions">
                 <div class="dropdown">
                   <button class="btn btn-sm btn-icon" data-bs-toggle="dropdown"><i class="bx bx-dots-vertical-rounded"></i></button>
                   <ul class="dropdown-menu dropdown-menu-end">
@@ -782,6 +784,51 @@
   .ndg-upsell-row { display: flex; align-items: center; gap: 12px; padding: 12px 20px; border-bottom: 1px solid #f1f5f9; }
   .ndg-upsell-row:last-child { border-bottom: none; }
   .ndg-note-del { border: 0; background: none; color: #ef4444; float: right; line-height: 1; font-size: 1rem; padding: 0 2px; }
+
+  /* ── Phone layout ──
+     Below 768px the two dense data tables (#ndgWeeklyTable, #ndgRdTable) stop being tables
+     a finger can use — most columns sit off-screen behind a horizontal scroll nobody finds.
+     Turn every row into its own stacked card instead: thead disappears, each <td> becomes a
+     label/value line using its data-label attribute, and inputs/selects go full width. */
+  @media (max-width: 767.98px) {
+    .ndg-infobox { min-width: 0; flex: 1 1 auto; padding: 8px 10px; }
+    .ndg-kpi3 { padding: 10px 12px; gap: 8px; }
+    .ndg-kpi3-icon { width: 34px; height: 34px; font-size: 1rem; }
+    .ndg-kpi3-v { font-size: 1.05rem; }
+
+    .ndg-mx-scroll { overflow-x: visible; }
+    #ndgWeeklyTable, #ndgRdTable { min-width: 0 !important; width: 100% !important; }
+    #ndgWeeklyTable thead, #ndgRdTable thead { display: none; }
+    #ndgWeeklyTable tbody, #ndgRdTable tbody,
+    #ndgWeeklyTable tr, #ndgRdTable tr,
+    #ndgWeeklyTable td, #ndgRdTable td { display: block; width: 100%; }
+    #ndgWeeklyTable tr.ndg-wk-row, #ndgRdTable tr.ndg-rd-row {
+      border: 1px solid #e2e8f0; border-radius: 12px; padding: 4px 0; margin-bottom: 12px; background: #fff;
+    }
+    #ndgRdTable tr.ndg-rd-exp { border: none; }
+    #ndgWeeklyTable td, #ndgRdTable td {
+      display: flex; align-items: center; justify-content: space-between; gap: 10px;
+      padding: 8px 12px; text-align: right; border-bottom: 1px solid #f1f5f9;
+    }
+    #ndgWeeklyTable td:last-child, #ndgRdTable td:last-child { border-bottom: none; }
+    #ndgWeeklyTable td[data-label]::before, #ndgRdTable td[data-label]::before {
+      content: attr(data-label); font-weight: 700; font-size: .68rem; text-transform: uppercase;
+      color: #64748b; text-align: left; flex-shrink: 0;
+    }
+    #ndgWeeklyTable td select, #ndgWeeklyTable td input,
+    #ndgRdTable td select, #ndgRdTable td input { max-width: 62%; margin-left: auto; }
+    #ndgWeeklyTable td .ndg-td-value { max-width: 62%; margin-left: auto; display: flex; flex-direction: column; align-items: flex-end; }
+    #ndgWeeklyTable td .ndg-td-value select { max-width: 100%; }
+    #ndgWeeklyTable td.ndg-td-actions, #ndgRdTable td.ndg-td-actions {
+      justify-content: center; padding: 10px 12px;
+    }
+    #ndgWeeklyTable td.ndg-td-actions::before, #ndgRdTable td.ndg-td-actions::before { content: none; }
+    #ndgRdTable td[colspan] { display: block; padding: 0; }
+    .ndg-rd-weekly { padding: 14px 16px; }
+
+    .ndg-week-pill { min-width: 68px; }
+    .ndg-subtab { padding: 7px 12px; font-size: .75rem; }
+  }
 </style>
 @endsection
 
