@@ -13,7 +13,7 @@
     since this popup is a separate, smaller surface loaded on every page.
 --}}
 <div class="modal fade" id="quickCalcModal" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog modal-dialog-centered modal-xl">
+  <div class="modal-dialog modal-dialog-centered modal-xl modal-fullscreen-md-down">
     <div class="modal-content qc-modal">
       <div class="modal-header qc-header">
         <div class="d-flex align-items-center gap-3">
@@ -29,12 +29,24 @@
         <div id="qcLoading" class="text-muted small py-5 text-center">Loading…</div>
         <div id="qcWrap" class="d-none">
 
-          <!-- Sidebar: product catalogue -->
-          <div class="qc-sidebar">
+          <!-- Mobile: the catalogue (search box + list) lives inside one
+               collapsed dropdown instead of its own always-visible sidebar
+               panel, which ate most of the screen on a phone. Tapping the
+               trigger opens the exact same search+list the desktop sidebar
+               uses — one component, shown two different ways. -->
+          <button type="button" class="qc-mobile-trigger d-md-none" id="qcMobileTrigger">
+            <i class="bx bx-search"></i>
+            <span id="qcMobileTriggerLabel">Search and select a product…</span>
+            <i class="bx bx-chevron-down qc-mobile-trigger-chevron"></i>
+          </button>
+
+          <!-- Sidebar: product catalogue (desktop: static column; mobile: a
+               dropdown panel opened by qcMobileTrigger, see JS below) -->
+          <div class="qc-sidebar" id="qcSidebar">
             <div class="qc-sidebar-head">
-              <div class="fw-bold">Product Catalogue</div>
-              <div class="text-muted small">Search and select a product</div>
-              <div class="position-relative mt-2">
+              <div class="fw-bold d-none d-md-block">Product Catalogue</div>
+              <div class="text-muted small d-none d-md-block">Search and select a product</div>
+              <div class="position-relative mt-md-2">
                 <i class="bx bx-search qc-search-icon"></i>
                 <input type="text" id="qcSearch" class="form-control form-control-sm ps-4" placeholder="Search product, category…" autocomplete="off">
               </div>
@@ -115,12 +127,13 @@
   #qcFields label, #qcRateSection label { font-size:.78rem; font-weight:600; color:#4a525c; }
   #qcFields .req, #qcRateSection .req { color:#e35b5b; }
 
-  .qc-hero { border:1px solid transparent; border-radius:12px; padding:14px 16px; height:100%; display:flex; align-items:center; gap:14px; }
+  .qc-hero { border:1px solid transparent; border-radius:12px; padding:14px 16px; height:100%; display:flex; align-items:center; gap:14px; overflow:hidden; box-sizing:border-box; }
   .qc-hero.a, .qc-hero.b { background:var(--hitech-primary-light, rgba(0,128,128,.07)); border-color:rgba(0,128,128,.16); }
   .qc-hero-icon { width:42px; height:42px; border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:1.2rem; flex-shrink:0; background:#fff; }
   .qc-hero-icon.a, .qc-hero-icon.b { color:var(--hitech-primary, #008080); }
-  .qc-hero .qc-k { font-size:.78rem; color:#8a94a6; font-weight:600; }
-  .qc-hero .qc-v { font-size:1.15rem; font-weight:700; color:#1f2937; }
+  .qc-hero-txt { min-width:0; }
+  .qc-hero .qc-k { font-size:.78rem; color:#8a94a6; font-weight:600; overflow-wrap:break-word; }
+  .qc-hero .qc-v { font-size:1.15rem; font-weight:700; color:#1f2937; overflow-wrap:break-word; }
 
   .qc-pill { display:inline-flex; align-items:center; gap:6px; border-radius:999px; padding:6px 14px; font-size:.95rem; font-weight:600; }
   .qc-pill i { font-size:1.1rem; }
@@ -137,7 +150,58 @@
   .qc-btn-primary { background:var(--hitech-primary, #008080); border-color:var(--hitech-primary, #008080); color:#fff; }
   .qc-btn-primary:hover { background:#006666; border-color:#006666; color:#fff; }
 
-  @media (max-width:767px){ #qcWrap{ flex-direction:column; max-height:none; } .qc-sidebar{ width:100%; max-height:240px; } }
+  .qc-mobile-trigger{ display:none; }
+
+  @media (max-width:767px){
+    /* The modal is modal-fullscreen-md-down here, so #qcWrap owns the full
+       viewport height (minus the header) instead of the fixed 78vh used on
+       desktop, and the whole thing becomes a single scrollable column. */
+    #qcWrap{ flex-direction:column; max-height:none; height:100%; overflow-y:auto; position:relative; }
+    .qc-panel{ padding:18px 16px; overflow-y:visible; }
+    .qc-header{ padding:14px 16px; }
+    .qc-product-icon{ width:46px; height:46px; font-size:1.2rem; }
+    #qcTitle{ font-size:1.05rem; }
+
+    /* Catalogue collapses into one dropdown trigger instead of an
+       always-visible list — picking a product this way needs far less
+       screen than scrolling a nested list on a phone. Tapping it opens the
+       same search+list the desktop sidebar uses, as a floating panel. */
+    .qc-mobile-trigger{
+      display:flex; align-items:center; gap:8px; width:calc(100% - 32px); margin:14px 16px 0;
+      height:44px; padding:0 14px; border:1px solid var(--hitech-border, #dee2e6); border-radius:8px;
+      background:#fff; color:#4a525c; font-size:.86rem; text-align:left;
+    }
+    .qc-mobile-trigger i:first-child{ color:#9aa5b1; font-size:1rem; }
+    .qc-mobile-trigger span{ flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .qc-mobile-trigger-chevron{ color:#9aa5b1; transition:transform .15s ease; }
+    .qc-mobile-trigger.open .qc-mobile-trigger-chevron{ transform:rotate(180deg); }
+
+    .qc-sidebar{ display:none; }
+    .qc-sidebar.qc-sidebar-open{
+      display:flex; position:absolute; top:66px; left:16px; right:16px; width:auto; z-index:80;
+      max-height:min(60vh,420px); background:#fff; border:1px solid var(--hitech-border, #dee2e6);
+      border-radius:10px; box-shadow:0 12px 32px rgba(23,43,77,.18);
+    }
+    .qc-sidebar.qc-sidebar-open .qc-sidebar-head{ padding:12px; }
+    .qc-sidebar.qc-sidebar-open .qc-list{ max-height:340px; }
+
+    /* Bootstrap's col-md-6/col-md-4 fall back to col-12 below the md
+       breakpoint, stacking every dimension field and result card into one
+       column on a phone — force two per row here instead, since that's
+       exactly the width a phone screen has room for. */
+    #qcFields > [class*="col-"],
+    #qcResults > [class*="col-"]{
+      flex:0 0 calc(50% - 6px); max-width:calc(50% - 6px);
+    }
+    #qcRateSection .row > .col-12.col-md-6{ flex:0 0 100%; max-width:100%; }
+    /* A half-width phone card has no room to sit the icon beside the text —
+       stack it above instead, so the label/value get the card's full width
+       to wrap into rather than overflowing past the rounded corner. */
+    .qc-hero{ flex-direction:column; align-items:flex-start; padding:12px; gap:8px; }
+    .qc-hero-icon{ width:34px; height:34px; font-size:1rem; }
+    .qc-hero .qc-k{ font-size:.72rem; }
+    .qc-hero .qc-v{ font-size:1rem; word-break:break-word; }
+  }
 </style>
 
 <script>
@@ -337,7 +401,7 @@
       : icons.generic;
     return `<div class="qc-hero ${variant}">
       <div class="qc-hero-icon ${variant}"><i class="bx ${icon}"></i></div>
-      <div><div class="qc-k">${esc(label)}</div><div class="qc-v">${value}</div></div>
+      <div class="qc-hero-txt"><div class="qc-k">${esc(label)}</div><div class="qc-v">${value}</div></div>
     </div>`;
   }
   // Cards per row depends on how many there are, so a count like 3 fills one
@@ -375,6 +439,18 @@
     box.innerHTML = html;
   }
 
+  // The mobile trigger button mirrors whatever's currently selected, and
+  // closes its dropdown the moment a product is picked (the desktop sidebar
+  // stays open — it's not a dropdown there, just the permanent left column).
+  function closeMobileDropdown(){
+    document.getElementById('qcSidebar')?.classList.remove('qc-sidebar-open');
+    document.getElementById('qcMobileTrigger')?.classList.remove('open');
+  }
+  function syncMobileTrigger(){
+    const label = document.getElementById('qcMobileTriggerLabel');
+    if (label) label.textContent = curCalc ? curCalc.t : 'Search and select a product…';
+  }
+
   function selectCalc(id){
     curCalc = CALCS.find(c => c.id===id);
     if (!curCalc) return;
@@ -386,6 +462,8 @@
     const meta = GROUP_META[curCalc.g] || {icon:'bx-cube', color:'var(--hitech-primary, #008080)'};
     document.getElementById('qcProductIcon').innerHTML = `<i class="bx ${meta.icon}"></i>`;
     renderList(document.getElementById('qcSearch').value);
+    syncMobileTrigger();
+    closeMobileDropdown();
 
     const unitSeg = document.getElementById('qcUnitSeg');
     if (curCalc.noUnits) { unitSeg.innerHTML=''; }
@@ -493,6 +571,21 @@
   // ---- wiring ----
   document.getElementById('qcSearch').addEventListener('input', e => renderList(e.target.value));
 
+  document.getElementById('qcMobileTrigger')?.addEventListener('click', e => {
+    e.stopPropagation();
+    const sidebar = document.getElementById('qcSidebar');
+    const trigger = document.getElementById('qcMobileTrigger');
+    const willOpen = !sidebar.classList.contains('qc-sidebar-open');
+    sidebar.classList.toggle('qc-sidebar-open', willOpen);
+    trigger.classList.toggle('open', willOpen);
+    if (willOpen) setTimeout(() => document.getElementById('qcSearch')?.focus(), 0);
+  });
+  document.addEventListener('click', e => {
+    const sidebar = document.getElementById('qcSidebar');
+    if (!sidebar || !sidebar.classList.contains('qc-sidebar-open')) return;
+    if (!sidebar.contains(e.target) && e.target.id !== 'qcMobileTrigger' && !e.target.closest('#qcMobileTrigger')) closeMobileDropdown();
+  });
+
   document.getElementById('qcList').addEventListener('click', e => {
     const g = e.target.closest('.qc-group-head');
     if (g) { collapsed[g.dataset.g] = !collapsed[g.dataset.g]; renderList(document.getElementById('qcSearch').value); return; }
@@ -530,6 +623,7 @@
       document.getElementById('qcLoading').classList.add('d-none');
       document.getElementById('qcWrap').classList.remove('d-none');
       renderList('');
+      syncMobileTrigger();
     }).catch(e => {
       document.getElementById('qcLoading').innerHTML = '<span class="text-danger">Could not load calculator data: '+esc(e.message)+'</span>';
     });
