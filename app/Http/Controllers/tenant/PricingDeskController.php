@@ -9,25 +9,29 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 /**
- * The Sales Pricing Desk: price list, discount-approval finder and the
- * product calculators. Price-list editing (the former Admin tab) has been
- * retired — this is now a read-only quoting tool handed to one salesperson
- * (plus the admin account, for support) rather than the department-wide
- * roster PricingDeskAccess governs; edits to prices/factors/rules happen
- * directly in the pricing_desk_data table until that need resurfaces.
+ * The Sales Pricing Desk: price list, discount-approval finder, product
+ * calculators, and — for admins — the price/discount/factor editor (the
+ * Admin tab). Viewing is locked to one salesperson (mukul@rustx.com) plus
+ * whoever already has PricingDeskAccess::canManage() (admin role or the
+ * pricing_desk.manage permission), rather than the wider department-based
+ * roster PricingDeskAccess::canView() normally allows; the Admin tab itself
+ * still follows canManage() exactly as before the redesign, so Mukul never
+ * sees it while every admin does.
  */
 class PricingDeskController extends Controller
 {
     public function index()
     {
-        $allowed = ['mukul@rustx.com', 'ai@rustx.com'];
-        abort_unless(in_array(strtolower(auth()->user()->email ?? ''), $allowed, true), 404);
+        $user = auth()->user();
+        $canManage = PricingDeskAccess::canManage($user);
+        $isMukul = strtolower($user->email ?? '') === 'mukul@rustx.com';
+        abort_unless($canManage || $isMukul, 404);
 
         $row = PricingDeskData::current();
 
         return view('tenant.pricing-desk.index', [
             'seedJson' => $this->safeJson($row->data),
-            'canManage' => false,
+            'canManage' => $canManage,
         ]);
     }
 

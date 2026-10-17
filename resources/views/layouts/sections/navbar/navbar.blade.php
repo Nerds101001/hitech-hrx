@@ -9,11 +9,14 @@
     $addonService = app(IAddonService::class);
     $isSuperAdmin = Auth::user()?->hasRole('admin') ?? false;
     $showPricingDesk = Auth::check() && \App\Support\PricingDeskAccess::canView(Auth::user());
-    // The full Pricing Desk page is now locked to one salesperson (plus
-    // admin) — see PricingDeskController@index — so the link to it is
+    // The full Pricing Desk page is now locked to one salesperson plus
+    // admins — see PricingDeskController@index — so the link to it is
     // hidden for everyone else; the Quick Calculator popup above stays
     // available to the broader $showPricingDesk audience as before.
-    $showFullPricingDesk = Auth::check() && in_array(strtolower(Auth::user()->email ?? ''), ['mukul@rustx.com', 'ai@rustx.com'], true);
+    $showFullPricingDesk = Auth::check() && (
+        \App\Support\PricingDeskAccess::canManage(Auth::user())
+        || strtolower(Auth::user()->email ?? '') === 'mukul@rustx.com'
+    );
 @endphp
 
 <style>
