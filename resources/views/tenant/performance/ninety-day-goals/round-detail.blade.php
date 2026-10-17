@@ -38,6 +38,40 @@
   // uses, so "what we're aiming for" reads the same everywhere in this module.
   $stageOptions = ['Order', 'New Order', 'Regular Order', 'Repeat Order', 'Trial Order', 'Renewal', 'Upsell'];
   $stageChoices = fn ($current) => $current && !in_array($current, $stageOptions, true) ? array_merge($stageOptions, [$current]) : $stageOptions;
+
+  // ── Phone app shell (below) reuses all of the above, plus: ──
+  // "This week" per-goal classification — same three-way rule the controller already used to
+  // build $weekSummary (NinetyDayGoalController.php roundDetail(), ~line 855), just kept
+  // per-goal instead of only summed, so the mobile lists and that donut always agree.
+  $thisWeekDue = $dates[$currentWeek];
+  $weekState = function ($g) use ($currentWeek, $thisWeekDue, $today) {
+    $ck = $g->checkins->firstWhere('week_no', $currentWeek);
+    if (!$ck) {
+      return 'notStarted';
+    }
+    if ($ck->status !== null && $ck->status !== '') {
+      return 'submitted';
+    }
+    return $thisWeekDue->lt($today) ? 'overdue' : 'pending';
+  };
+  // The mockup's funnel stepper (Enquiry/Trial Order/Order/Upsell) has no real field behind it —
+  // derive it from signals this module already treats as meaningful: the same "converted"
+  // statuses used client-side (ORDER_STATUSES, further down this file), plus the existing
+  // repeat/upsell flag already shown on the Orders & Results tab.
+  $stepLabels = ['Enquiry', 'Trial Order', 'Order', 'Upsell'];
+  $stepOf = function ($g) use ($rowsByGoal) {
+    $r = $rowsByGoal->get($g->id);
+    $ever = $g->checkins->pluck('status')->filter()->all();
+    if ($r && $r->repeat) {
+      return 4;
+    }
+    if (($r && $r->achieved > 0) || in_array('Regular Order', $ever, true)) {
+      return 3;
+    }
+    return in_array('Trial Order', $ever, true) ? 2 : 1;
+  };
+  $topThisWeek = $rowsByGoal->sortByDesc(fn ($r) => (float) $r->achieved)->take(5);
+  $pendingGoals = $goals->filter(fn ($g) => in_array($weekState($g), ['pending', 'overdue'], true));
 @endphp
 <div class="layout-full-width animate__animated animate__fadeIn">
 
@@ -66,6 +100,12 @@
   </div>
 
   <div class="px-4">
+
+  {{-- This whole stretch — the desktop KPI row, the pending-upsell banner, the customer-rules
+       strip — is recreated (the parts that matter) in the phone app shell further down, so it
+       would otherwise show twice on a phone. Nothing here is ever toggled by JS, so a plain
+       d-none/d-md-block pair is safe (unlike .ndg-rd-section below, which JS does toggle). --}}
+  <div class="d-none d-md-block">
 
   {{-- Order detected from the Sales Report a second time for a customer that already had one:
        never assumed to be an upsell, confirmed here first. --}}
@@ -205,6 +245,8 @@
         </div>
       </div>
     </div>
+  </div>
+
   </div>
 
   {{-- Sub-tabs --}}
@@ -492,12 +534,67 @@
         </table>
       </div>
     </div>
+  </div>
 
-    {{-- Bottom detail panel: one per customer, shown/hidden by the expand toggle --}}
-    <div id="ndgRdDetail">
+  {{-- Bottom detail panel: one per customer, shown/hidden by the expand toggle (desktop) or
+       tapping a customer card (phone, where it becomes a full-screen overlay — see the
+       @media(max-width:767.98px) block below). Lives OUTSIDE the Customer Summary section so a
+       phone-width media query can hide that section's table/filters while still showing this —
+       display:none on an ancestor can't be selectively undone for a child, so it has to be a
+       sibling. It still carries data-section="customers" so the desktop sub-tab JS
+       (querySelectorAll('.ndg-rd-section')) keeps toggling it together with that tab, same as
+       before this file was ever split. --}}
+  <div class="ndg-rd-section d-none" data-section="customers" id="ndgRdDetail">
       @foreach($goals as $g)
-        @php $r = $rowsByGoal->get($g->id); @endphp
+        @php $r = $rowsByGoal->get($g->id); $step = $stepOf($g); @endphp
         <div class="ndg-rd-detail-panel d-none" data-goal="{{ $g->id }}">
+          <div class="ndg-mob-detail-head d-md-none">
+            <button type="button" class="ndg-mob-back"><i class="bx bx-arrow-back"></i></button>
+            <div class="flex-grow-1">
+              <div class="fw-bold text-dark">{{ $g->client_name }}@if(optional($r)->status)<span class="ndg-chip ms-2" style="background:{{ $G::STATUS_COLORS[$r->status][0] ?? '#e2e8f0' }};color:{{ $G::STATUS_COLORS[$r->status][1] ?? '#475569' }}">{{ $r->status }}</span>@endif</div>
+              <div class="small text-muted">{{ $g->brand }} · {{ $g->product }}</div>
+            </div>
+          </div>
+          <div class="ndg-mob-stepper d-md-none">
+            @foreach($stepLabels as $i => $lbl)
+              <div class="ndg-mob-step {{ $i + 1 <= $step ? 'on' : '' }}"><span>{{ $i + 1 }}</span><small>{{ $lbl }}</small></div>
+              @if(!$loop->last)<div class="ndg-mob-step-line {{ $i + 1 < $step ? 'on' : '' }}"></div>@endif
+            @endforeach
+          </div>
+          <div class="hitech-card mb-3 d-md-none">
+            <div class="card-body p-3">
+              <div class="fw-bold text-dark mb-2">Targets &amp; Achievement</div>
+              <div class="d-flex justify-content-between small"><span class="text-muted">Target</span><b>₹{{ $fmtL(optional($r)->target ?? $g->monthly_potential) }} L</b></div>
+              <div class="d-flex justify-content-between small"><span class="text-muted">Achieved</span><b>₹{{ $fmtL(optional($r)->achieved ?? 0) }} L</b></div>
+              <div class="mt-2"><div class="ndg-track"><div class="ndg-fill" style="width:{{ optional($r)->pct === null ? 0 : min(100, $r->pct) }}%;background:{{ $pctColor(optional($r)->pct) }}"></div></div></div>
+            </div>
+          </div>
+          @if($canEdit && $isActive)
+          @php $gck = $g->checkins->firstWhere('week_no', $selectedWeek); @endphp
+          <div class="hitech-card mb-3 d-md-none ndg-mob-edit-card" data-goal="{{ $g->id }}">
+            <div class="card-body p-3">
+              <div class="d-flex align-items-center justify-content-between mb-2">
+                <div class="fw-bold text-dark">Week {{ $selectedWeek + 1 }} ({{ $weekDue->format('d M') }})</div>
+                <div class="d-flex gap-1">
+                  <a href="?w={{ max(0, $selectedWeek - 1) }}" class="btn btn-sm btn-icon btn-hitech-cancel"><i class="bx bx-chevron-left"></i></a>
+                  @if($selectedWeek < $currentWeek)<a href="?w={{ $selectedWeek + 1 }}" class="btn btn-sm btn-icon btn-hitech-cancel"><i class="bx bx-chevron-right"></i></a>@endif
+                </div>
+              </div>
+              <label class="small text-muted fw-semibold mb-1">Expected Stage</label>
+              <select class="form-select form-select-hitech ndg-mob-stage mb-2">
+                @foreach($stageChoices($g->goal ?: 'Order') as $stage)<option value="{{ $stage }}" {{ ($g->goal ?: 'Order') === $stage ? 'selected' : '' }}>{{ $stage }}</option>@endforeach
+              </select>
+              <label class="small text-muted fw-semibold mb-1">Status</label>
+              <select class="form-select form-select-hitech ndg-mob-status mb-2">
+                <option value="">Choose…</option>
+                @foreach($statuses as $s)<option value="{{ $s }}" {{ optional($gck)->status === $s ? 'selected' : '' }}>{{ $s }}</option>@endforeach
+              </select>
+              <label class="small text-muted fw-semibold mb-1">Comment / Remark</label>
+              <textarea class="form-control ndg-mob-comment mb-2" rows="2" maxlength="1000" placeholder="Optional note">{{ optional($gck)->comment }}</textarea>
+              <button type="button" class="btn-hitech rounded-pill w-100 ndg-mob-save">Save Update</button>
+            </div>
+          </div>
+          @endif
           <div class="d-flex gap-2 flex-wrap mb-3 ndg-rd-dtabs" data-goal="{{ $g->id }}">
             @foreach(['progress' => 'Details & Progress', 'comments' => 'Weekly Comments', 'orders' => 'Orders', 'documents' => 'Documents'] as $dk => $dl)
               <button type="button" class="ndg-subtab ndg-rd-dtab {{ $dk === 'progress' ? 'on' : '' }}" data-dtab="{{ $dk }}">{{ $dl }}</button>
@@ -596,7 +693,6 @@
       @if($goals->isEmpty())
         <div class="hitech-card"><div class="card-body p-5 text-center text-muted">Add a customer above to see their details here.</div></div>
       @endif
-    </div>
   </div>
 
   {{-- ═══════════════════ Orders & Results ═══════════════════ --}}
@@ -676,6 +772,190 @@
           </tbody>
         </table>
       </div>
+    </div>
+  </div>
+
+  {{-- ═══════════════════ Phone app shell (<768px) ═══════════════════
+       A parallel presentation of the SAME data above (no new queries, every action posts to the
+       same endpoints already used higher up this file) as a bottom-tab app, since the sections
+       above — even the stacked-card tables — are still a lot of desktop-shaped UI to work
+       through on a phone. Desktop is untouched: see the max-width:767.98px media query below,
+       which hides #ndgRdTabs/.ndg-rd-section here and shows this block instead. --}}
+  <div class="ndg-mobile-app d-md-none" id="ndgMobileApp">
+
+    <div class="ndg-mscreen" data-mscreen="overview">
+      <div class="row g-3 mb-4">
+        <div class="col-6"><div class="ndg-kpi3"><div class="ndg-kpi3-icon" style="background:#e0f2fe;color:#0369a1"><i class="bx bx-group"></i></div><div><div class="small text-muted fw-semibold">My Customers</div><div class="ndg-kpi3-v">{{ $counts['total'] }}</div></div></div></div>
+        <div class="col-6"><div class="ndg-kpi3"><div class="ndg-kpi3-icon" style="background:#fff7ed;color:#c2540c"><i class="bx bx-rupee"></i></div><div><div class="small text-muted fw-semibold">My Target</div><div class="ndg-kpi3-v">₹{{ $fmtL($target) }} L</div></div></div></div>
+        <div class="col-6"><div class="ndg-kpi3"><div class="ndg-kpi3-icon" style="background:#dcfce7;color:#166534"><i class="bx bx-bar-chart-alt-2"></i></div><div><div class="small text-muted fw-semibold">My Achieved</div><div class="ndg-kpi3-v">₹{{ $fmtL($achieved) }} L</div><b class="small" style="color:{{ $pctColor($pct) }}">{{ $pctText($pct) }}</b></div></div></div>
+        <div class="col-6"><div class="ndg-kpi3"><div class="ndg-kpi3-icon" style="background:#fee2e2;color:#b42318"><i class="bx bx-hourglass"></i></div><div><div class="small text-muted fw-semibold">Pending Updates</div><div class="ndg-kpi3-v">{{ $pendingGoals->count() }}</div></div></div></div>
+      </div>
+
+      @if(!$window['meets_min'] && $isActive)
+        {{-- $w got reassigned to an int by the @for/@foreach loops further up this file (Customer
+             Summary table, compliance-by-week), so this re-reads $window directly rather than
+             the now-stale $w alias. $canAddNow/$addAttrs are untouched and still safe to reuse. --}}
+        <div class="ndg-alert-red mb-4 {{ $canAddNow ? 'ndg-alert-click' : '' }}" {!! $addAttrs !!}>
+          <i class="bx bx-error-circle fs-3"></i>
+          <div class="flex-grow-1">
+            <div class="fw-bold">Add {{ $window['short_by'] }} more {{ \Illuminate\Support\Str::plural('customer', $window['short_by']) }} (minimum {{ $window['min'] }})</div>
+            <div class="small">This round doesn't count yet.</div>
+          </div>
+        </div>
+      @endif
+
+      @if(($pendingUpsells ?? collect())->isNotEmpty() && ($canEdit ?? false))
+        <div class="hitech-card mb-4" style="border-color:#f5a623">
+          <div class="card-body p-3">
+            <div class="fw-bold text-dark small mb-2"><i class="bx bx-receipt" style="color:#f5a623"></i> {{ $pendingUpsells->count() }} order{{ $pendingUpsells->count() === 1 ? '' : 's' }} need confirming</div>
+            @foreach($pendingUpsells as $ck)
+              <div class="ndg-upsell-row" data-checkin="{{ $ck->id }}" style="padding:8px 0">
+                <div class="flex-grow-1 small">{{ optional($ck->goal)->client_name }} <span class="text-muted">· W{{ $ck->week_no + 1 }}</span></div>
+                <div class="d-flex gap-2">
+                  <button type="button" class="btn btn-sm btn-hitech ndg-upsell-yes">Yes</button>
+                  <button type="button" class="btn btn-sm btn-hitech-cancel ndg-upsell-no">No</button>
+                </div>
+              </div>
+            @endforeach
+          </div>
+        </div>
+      @endif
+
+      <div class="hitech-card mb-4">
+        <div class="card-body p-4 border-bottom"><div class="fw-bold text-dark">Week {{ $currentWeek + 1 }} Progress</div></div>
+        <div class="card-body p-3 text-center"><div id="ndgMobOverviewDonut"></div></div>
+      </div>
+
+      <div class="hitech-card mb-4">
+        <div class="card-body p-4 border-bottom"><div class="fw-bold text-dark">Top Customers this Week</div></div>
+        <div class="card-body p-0">
+          @forelse($topThisWeek as $i => $r)
+            <div class="ndg-mob-rank-row ndg-mob-open-goal" data-goal="{{ $r->goal->id }}">
+              <span class="ndg-mob-rank">{{ $i + 1 }}</span>
+              <div class="flex-grow-1 min-w-0">
+                <div class="fw-semibold text-dark small text-truncate">{{ $r->goal->client_name }}</div>
+                <div class="ndg-track mt-1"><div class="ndg-fill" style="width:{{ $r->pct === null ? 0 : min(100, $r->pct) }}%;background:{{ $pctColor($r->pct) }}"></div></div>
+              </div>
+              <span class="small text-muted text-nowrap">₹{{ $fmtL($r->achieved) }}L / ₹{{ $fmtL($r->target) }}L</span>
+            </div>
+          @empty
+            <div class="small text-muted p-3">No customers yet.</div>
+          @endforelse
+        </div>
+      </div>
+
+      <div class="hitech-card mb-4">
+        <div class="card-body p-4 border-bottom d-flex align-items-center justify-content-between">
+          <div class="fw-bold text-dark">Pending Updates ({{ $pendingGoals->count() }})</div>
+          @if($pendingGoals->count() > 3)<button type="button" class="btn btn-link btn-sm p-0 ndg-mob-goto-pending">See all</button>@endif
+        </div>
+        <div class="card-body p-0">
+          @forelse($pendingGoals->take(3) as $g)
+            <div class="ndg-mob-pending-row ndg-mob-open-goal" data-goal="{{ $g->id }}">
+              <i class="bx bx-hourglass" style="color:#b42318"></i>
+              <div class="flex-grow-1"><div class="fw-semibold text-dark small">{{ $g->client_name }}</div><div class="small text-muted">{{ $g->product }}</div></div>
+              <i class="bx bx-chevron-right text-muted"></i>
+            </div>
+          @empty
+            <div class="small text-muted p-3">Nothing pending — nice work.</div>
+          @endforelse
+        </div>
+      </div>
+
+      @if($canEdit && $isActive)
+      <div class="hitech-card mb-3" style="background:#fffbeb;border-color:#fde68a">
+        <div class="card-body p-3 small"><i class="bx bx-bulb" style="color:#f5a623"></i> Please submit your weekly updates by Monday, 11:59 PM.</div>
+      </div>
+      <button type="button" class="btn-hitech rounded-pill w-100 d-flex align-items-center justify-content-center gap-2 mb-3" id="ndgMobSubmitAll"><i class="bx bx-send"></i> Submit All Updates</button>
+      @endif
+    </div>
+
+    <div class="ndg-mscreen d-none" data-mscreen="customers">
+      <div class="hitech-card mb-3">
+        <div class="card-body p-3">
+          <input type="search" id="ndgMobSearch" class="form-control mb-2" placeholder="Search customers…">
+          <div class="d-flex gap-2 flex-wrap">
+            <button type="button" class="ndg-mob-chip on" data-filter="all">All {{ $counts['total'] }}</button>
+            <button type="button" class="ndg-mob-chip" data-filter="pending">Pending {{ $pendingGoals->count() }}</button>
+            <button type="button" class="ndg-mob-chip" data-filter="overdue">Overdue {{ $goals->filter(fn ($g) => $weekState($g) === 'overdue')->count() }}</button>
+            <button type="button" class="ndg-mob-chip" data-filter="submitted">Submitted {{ $goals->filter(fn ($g) => $weekState($g) === 'submitted')->count() }}</button>
+          </div>
+        </div>
+      </div>
+      <div id="ndgMobCustomerList">
+        @forelse($goals as $g)
+          @php $r = $rowsByGoal->get($g->id); @endphp
+          <div class="ndg-mob-cust-card ndg-mob-open-goal" data-goal="{{ $g->id }}" data-q="{{ strtolower($g->client_name . ' ' . $g->product) }}" data-state="{{ $weekState($g) }}">
+            <div class="d-flex justify-content-between align-items-start gap-2">
+              <div class="min-w-0"><div class="fw-semibold text-dark text-truncate">{{ $g->client_name }}</div><div class="small text-muted text-truncate">{{ $g->product }} · {{ $g->brand }}</div></div>
+              @if(optional($r)->status)<span class="ndg-chip flex-shrink-0" style="background:{{ $G::STATUS_COLORS[$r->status][0] ?? '#e2e8f0' }};color:{{ $G::STATUS_COLORS[$r->status][1] ?? '#475569' }}">{{ $r->status }}</span>@endif
+            </div>
+            <div class="d-flex justify-content-between align-items-center mt-2">
+              <div class="ndg-track flex-grow-1 me-2"><div class="ndg-fill" style="width:{{ optional($r)->pct === null ? 0 : min(100, $r->pct) }}%;background:{{ $pctColor(optional($r)->pct) }}"></div></div>
+              <span class="small text-muted text-nowrap">₹{{ $fmtL(optional($r)->achieved ?? 0) }}L / ₹{{ $fmtL($g->monthly_potential) }}L</span>
+            </div>
+          </div>
+        @empty
+          <div class="hitech-card"><div class="card-body p-5 text-center text-muted">No customers yet.</div></div>
+        @endforelse
+      </div>
+    </div>
+
+    <div class="ndg-mscreen d-none" data-mscreen="orders">
+      <div class="small text-muted mb-3">Real Sales Report sales only, never typed in</div>
+      @forelse($d['rows']->filter(fn ($r) => $r->achieved > 0)->sortByDesc('achieved') as $r)
+        <div class="hitech-card mb-2">
+          <div class="card-body p-3">
+            <div class="d-flex justify-content-between"><div class="fw-semibold text-dark">{{ $r->goal->client_name }}</div><div class="fw-bold">₹{{ $fmtL($r->achieved) }}L</div></div>
+            <div class="small text-muted">{{ $r->goal->product }}</div>
+            <div class="mt-1">
+              @if($r->status)<span class="ndg-chip" style="background:{{ $G::STATUS_COLORS[$r->status][0] ?? '#e2e8f0' }};color:{{ $G::STATUS_COLORS[$r->status][1] ?? '#475569' }}">{{ $r->status }}</span>@endif
+              @if($r->repeat)<span class="badge bg-label-info rounded-pill ms-1" style="font-size:.6rem">repeat</span>@endif
+            </div>
+          </div>
+        </div>
+      @empty
+        <div class="hitech-card"><div class="card-body p-5 text-center text-muted">No qualifying orders yet.</div></div>
+      @endforelse
+    </div>
+
+    <div class="ndg-mscreen d-none" data-mscreen="insights">
+      <div class="hitech-card mb-4">
+        <div class="card-body p-4 border-bottom"><div class="fw-bold text-dark">Latest status, all customers</div></div>
+        <div class="card-body p-3"><div id="ndgMobInsightsDonut"></div></div>
+      </div>
+      <div class="hitech-card mb-4">
+        <div class="card-body p-4 border-bottom"><div class="fw-bold text-dark">Top customers by target</div></div>
+        <div class="card-body p-4">
+          @php $maxCustMob = max(1, (float) optional($d['topCustomers']->first())->potential); @endphp
+          @forelse($d['topCustomers'] as $tc)
+            <div class="ndg-bar">
+              <div class="ndg-bar-top"><span class="ndg-bar-name">{{ $tc->goal->client_name }}<em>{{ $tc->brand }}</em></span><span class="ndg-bar-val">{{ $fmtL($tc->potential) }} L</span></div>
+              <div class="ndg-track"><div class="ndg-fill" style="width:{{ round($tc->potential / $maxCustMob * 100) }}%"></div></div>
+            </div>
+          @empty
+            <div class="small text-muted">No customers yet.</div>
+          @endforelse
+        </div>
+      </div>
+      <div class="hitech-card mb-4">
+        <div class="card-body p-4 border-bottom"><div class="fw-bold text-dark">Compliance by week</div></div>
+        <div class="card-body p-0">
+          @foreach($d['strip'] as $w => $s)
+            <div class="ndg-mob-compliance-row">
+              <span class="fw-semibold">W{{ $w + 1 }}</span>
+              <span class="small text-muted">{{ $s['done'] }}/{{ $s['total'] }} submitted</span>
+              <span class="small {{ $s['total'] - $s['done'] ? 'text-danger fw-bold' : 'text-muted' }}">{{ $s['total'] > 0 ? round($s['done'] / $s['total'] * 100) : 0 }}%</span>
+            </div>
+          @endforeach
+        </div>
+      </div>
+    </div>
+
+    <div class="ndg-mob-tabbar">
+      @foreach(['overview' => ['Overview', 'bx-grid-alt'], 'customers' => ['Customers', 'bx-group'], 'orders' => ['Orders', 'bx-cart'], 'insights' => ['Insights', 'bx-bar-chart-alt-2']] as $key => [$lbl, $ic])
+        <button type="button" class="ndg-mob-tab {{ $key === 'overview' ? 'on' : '' }}" data-mscreen="{{ $key }}"><i class="bx {{ $ic }}"></i><span>{{ $lbl }}</span></button>
+      @endforeach
     </div>
   </div>
 
@@ -828,6 +1108,78 @@
 
     .ndg-week-pill { min-width: 68px; }
     .ndg-subtab { padding: 7px 12px; font-size: .75rem; }
+
+    /* ── Phone app shell ──
+       Below 768px the page becomes a bottom-tab app instead: hide the desktop sub-tabs and all
+       four of their sections entirely (display:none on an ancestor can't be selectively undone
+       for a child — which is exactly why #ndgRdDetail was moved out to be a sibling of these,
+       not a descendant: it needs to stay reachable here as the full-screen customer overlay). */
+    #ndgRdTabs, .ndg-rd-section { display: none !important; }
+    #ndgRdDetail { display: block !important; }
+    #ndgRdDetail .ndg-rd-detail-panel.d-none { display: none !important; }
+    #ndgRdDetail .ndg-rd-detail-panel:not(.d-none) {
+      display: block !important; position: fixed; top: 62px; left: 0; right: 0; bottom: 0; z-index: 1035;
+      background: #f8fafc; overflow-y: auto; padding: 16px 16px 90px;
+    }
+
+    .ndg-mobile-app { padding-bottom: 76px; }
+    .min-w-0 { min-width: 0; }
+
+    .ndg-mob-tabbar {
+      position: fixed; left: 0; right: 0; bottom: 0; z-index: 1030; display: flex;
+      background: #fff; border-top: 1px solid #e2e8f0; padding: 6px 4px calc(6px + env(safe-area-inset-bottom));
+      box-shadow: 0 -4px 14px rgba(15, 23, 42, .06);
+    }
+    .ndg-mob-tab {
+      flex: 1 1 0; border: 0; background: none; display: flex; flex-direction: column; align-items: center;
+      gap: 2px; padding: 6px 2px; color: #94a3b8; font-size: .66rem; font-weight: 700;
+    }
+    .ndg-mob-tab i { font-size: 1.25rem; }
+    .ndg-mob-tab.on { color: #007a7a; }
+
+    .ndg-mob-rank-row, .ndg-mob-pending-row {
+      display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid #f1f5f9;
+    }
+    .ndg-mob-rank-row:last-child, .ndg-mob-pending-row:last-child { border-bottom: none; }
+    .ndg-mob-rank {
+      width: 22px; height: 22px; border-radius: 50%; background: #e0f2f1; color: #007a7a; font-weight: 800;
+      font-size: .72rem; display: flex; align-items: center; justify-content: center; flex: none;
+    }
+    .ndg-mob-pending-row { cursor: pointer; }
+
+    .ndg-mob-chip {
+      border: 1px solid #d5e3e1; background: #fff; color: #334155; border-radius: 999px; padding: 5px 12px;
+      font-size: .72rem; font-weight: 700;
+    }
+    .ndg-mob-chip.on { background: #007a7a; border-color: #007a7a; color: #fff; }
+
+    .ndg-mob-cust-card {
+      border: 1px solid #e2e8f0; border-radius: 12px; padding: 12px 14px; background: #fff;
+      margin-bottom: 10px; cursor: pointer;
+    }
+
+    .ndg-mob-compliance-row {
+      display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 16px;
+      border-bottom: 1px solid #f1f5f9;
+    }
+    .ndg-mob-compliance-row:last-child { border-bottom: none; }
+
+    .ndg-mob-detail-head { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+    .ndg-mob-back {
+      width: 36px; height: 36px; border-radius: 10px; border: 1px solid #e2e8f0; background: #fff;
+      color: #334155; flex: none; display: flex; align-items: center; justify-content: center;
+    }
+
+    .ndg-mob-stepper { display: flex; align-items: flex-start; margin-bottom: 16px; }
+    .ndg-mob-step { display: flex; flex-direction: column; align-items: center; flex: none; width: 60px; }
+    .ndg-mob-step span {
+      width: 26px; height: 26px; border-radius: 50%; background: #e2e8f0; color: #64748b; font-weight: 800;
+      font-size: .74rem; display: flex; align-items: center; justify-content: center;
+    }
+    .ndg-mob-step.on span { background: #007a7a; color: #fff; }
+    .ndg-mob-step small { font-size: .62rem; color: #64748b; text-align: center; margin-top: 4px; line-height: 1.1; }
+    .ndg-mob-step-line { flex: 1 1 auto; height: 2px; background: #e2e8f0; margin-top: 13px; }
+    .ndg-mob-step-line.on { background: #007a7a; }
   }
 </style>
 @endsection
@@ -1062,7 +1414,7 @@
   });
   function rowEls() { return Array.prototype.slice.call(document.querySelectorAll('.ndg-wk-row')); }
   function allRows() { return rowEls().map(readRow).filter(function (e) { return e.status; }); }
-  ['ndgSubmitAllTop', 'ndgSubmitAllBottom'].forEach(function (id) {
+  ['ndgSubmitAllTop', 'ndgSubmitAllBottom', 'ndgMobSubmitAll'].forEach(function (id) {
     var btn = document.getElementById(id);
     if (btn) { btn.addEventListener('click', function () {
       var entries = allRows();
@@ -1095,8 +1447,13 @@
       }
     });
   });
+  // Desktop only: the Customer Summary tab opens showing the first customer's detail panel
+  // already expanded. On phone #ndgRdDetail's active panel is a full-screen overlay (see the
+  // max-width:767.98px CSS), so auto-opening one here would cover the Overview screen on load.
   var firstRow = document.querySelector('.ndg-rd-row');
-  if (firstRow) { document.querySelector('.ndg-rd-detail-panel[data-goal="' + firstRow.dataset.goal + '"]')?.classList.remove('d-none'); }
+  if (firstRow && window.matchMedia('(min-width: 768px)').matches) {
+    document.querySelector('.ndg-rd-detail-panel[data-goal="' + firstRow.dataset.goal + '"]')?.classList.remove('d-none');
+  }
 
   document.querySelectorAll('.ndg-rd-detail-panel').forEach(function (panel) {
     panel.querySelectorAll('.ndg-rd-dtab').forEach(function (t) {
@@ -1106,6 +1463,80 @@
       });
     });
   });
+
+  // ── Phone app shell: bottom tabs, opening a customer's detail as a full-screen overlay
+  // (reusing selectGoal() above — same panels the desktop expand view uses), filtering the
+  // Customers list, and saving a status straight from the overlay. ──
+  var mobileApp = document.getElementById('ndgMobileApp');
+  if (mobileApp) {
+    function showMobScreen(key) {
+      document.querySelectorAll('.ndg-mscreen').forEach(function (s) { s.classList.toggle('d-none', s.dataset.mscreen !== key); });
+      document.querySelectorAll('.ndg-mob-tab').forEach(function (t) { t.classList.toggle('on', t.dataset.mscreen === key); });
+    }
+    document.querySelectorAll('.ndg-mob-tab').forEach(function (t) {
+      t.addEventListener('click', function () { showMobScreen(t.dataset.mscreen); });
+    });
+
+    document.querySelectorAll('.ndg-mob-open-goal').forEach(function (el) {
+      el.addEventListener('click', function () { selectGoal(el.dataset.goal); });
+    });
+    document.addEventListener('click', function (e) {
+      var back = e.target.closest ? e.target.closest('.ndg-mob-back') : null;
+      if (back) {
+        document.querySelectorAll('.ndg-rd-detail-panel').forEach(function (p) { p.classList.add('d-none'); });
+        document.querySelectorAll('.ndg-rd-row, .ndg-rd-expand').forEach(function (x) { x.classList.remove('on'); });
+      }
+    });
+    var gotoPending = document.querySelector('.ndg-mob-goto-pending');
+    if (gotoPending) {
+      gotoPending.addEventListener('click', function () {
+        showMobScreen('customers');
+        var chip = document.querySelector('.ndg-mob-chip[data-filter="pending"]');
+        if (chip) { chip.click(); }
+      });
+    }
+
+    // ── Customers screen: search + status chips ──
+    var mobSearch = document.getElementById('ndgMobSearch');
+    var mobChips = document.querySelectorAll('.ndg-mob-chip');
+    function applyMobFilter() {
+      var q = (mobSearch ? mobSearch.value : '').trim().toLowerCase();
+      var filter = document.querySelector('.ndg-mob-chip.on') ? document.querySelector('.ndg-mob-chip.on').dataset.filter : 'all';
+      document.querySelectorAll('.ndg-mob-cust-card').forEach(function (card) {
+        var matchesQ = !q || card.dataset.q.indexOf(q) !== -1;
+        var matchesFilter = filter === 'all' || filter === card.dataset.state;
+        card.style.display = matchesQ && matchesFilter ? '' : 'none';
+      });
+    }
+    if (mobSearch) { mobSearch.addEventListener('input', applyMobFilter); }
+    mobChips.forEach(function (chip) {
+      chip.addEventListener('click', function () {
+        mobChips.forEach(function (c) { c.classList.toggle('on', c === chip); });
+        applyMobFilter();
+      });
+    });
+
+    // ── Customer detail overlay: save this week's status straight from the stepper card ──
+    document.querySelectorAll('.ndg-mob-save').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var card = btn.closest('.ndg-mob-edit-card');
+        var goalId = parseInt(card.dataset.goal, 10);
+        var status = card.querySelector('.ndg-mob-status').value;
+        var stage = card.querySelector('.ndg-mob-stage').value;
+        var comment = card.querySelector('.ndg-mob-comment').value.trim();
+        if (!status) { alert('Pick a status first.'); return; }
+        btn.disabled = true;
+        Promise.all([
+          post(URLS.checkin, 'POST', { user_id: ROUND_USER_ID, week_no: SELECTED_WEEK, entries: [{ goal_id: goalId, status: status, comment: comment, next_action: '', expected_stage: null }] }),
+          post(URLS.update + '/' + goalId, 'PUT', { goal: stage }),
+        ]).then(function (res) {
+          if (res[0].success) { location.reload(); return; }
+          btn.disabled = false;
+          alert(res[0].message || 'Could not save.');
+        }).catch(function () { btn.disabled = false; alert('Request failed. Try again.'); });
+      });
+    });
+  }
 
   // ── filter the customer table ──
   var search = document.getElementById('ndgRdSearch'), statusSel = document.getElementById('ndgRdStatus'), brandSel = document.getElementById('ndgRdBrand'), countEl = document.getElementById('ndgRdCount');
@@ -1130,34 +1561,31 @@
   document.addEventListener('DOMContentLoaded', function () {
     if (typeof ApexCharts === 'undefined') { return; }
     var teal = '#007a7a';
-    var donutEl = document.querySelector('#ndgRdStatusDonut');
-    if (donutEl) {
-      var statuses = @json($d['statuses']);
-      var colorMap = @json(collect($G::STATUS_COLORS)->map(fn ($c) => $c[0]));
-      var labels = Object.keys(statuses).filter(function (k) { return statuses[k] > 0; });
-      new ApexCharts(donutEl, {
-        chart: { type: 'donut', height: 260, fontFamily: 'inherit' },
-        series: labels.map(function (l) { return statuses[l]; }),
-        labels: labels,
-        colors: labels.map(function (l) { return colorMap[l] || '#94a3b8'; }),
+    function renderDonut(id, series, labels, colors, height) {
+      var el = document.querySelector(id);
+      if (!el) { return; }
+      new ApexCharts(el, {
+        chart: { type: 'donut', height: height, fontFamily: 'inherit' },
+        series: series, labels: labels, colors: colors,
         legend: { position: 'bottom', fontSize: '11px' },
         dataLabels: { enabled: false },
         plotOptions: { pie: { donut: { size: '68%' } } },
       }).render();
     }
-    var weekDonutEl = document.querySelector('#ndgWeekDonut');
-    if (weekDonutEl) {
-      var ws = @json($weekSummary);
-      new ApexCharts(weekDonutEl, {
-        chart: { type: 'donut', height: 220, fontFamily: 'inherit' },
-        series: [ws.submitted, ws.pending, ws.overdue, ws.notStarted],
-        labels: ['Submitted', 'Pending', 'Overdue', 'Not Started'],
-        colors: [teal, '#f5a623', '#ef4444', '#cbd5e1'],
-        legend: { position: 'bottom', fontSize: '11px' },
-        dataLabels: { enabled: false },
-        plotOptions: { pie: { donut: { size: '68%' } } },
-      }).render();
-    }
+    var statuses = @json($d['statuses']);
+    var colorMap = @json(collect($G::STATUS_COLORS)->map(fn ($c) => $c[0]));
+    var statusLabels = Object.keys(statuses).filter(function (k) { return statuses[k] > 0; });
+    var statusSeries = statusLabels.map(function (l) { return statuses[l]; });
+    var statusColors = statusLabels.map(function (l) { return colorMap[l] || '#94a3b8'; });
+    renderDonut('#ndgRdStatusDonut', statusSeries, statusLabels, statusColors, 260);
+    renderDonut('#ndgMobInsightsDonut', statusSeries, statusLabels, statusColors, 240);
+
+    var ws = @json($weekSummary);
+    var weekSeries = [ws.submitted, ws.pending, ws.overdue, ws.notStarted];
+    var weekLabels = ['Submitted', 'Pending', 'Overdue', 'Not Started'];
+    var weekColors = [teal, '#f5a623', '#ef4444', '#cbd5e1'];
+    renderDonut('#ndgWeekDonut', weekSeries, weekLabels, weekColors, 220);
+    renderDonut('#ndgMobOverviewDonut', weekSeries, weekLabels, weekColors, 220);
   });
 
   // ── edit-goal modal (product/brand/goal/potential/expected order date) ──
