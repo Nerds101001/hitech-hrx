@@ -595,6 +595,32 @@
             </div>
           </div>
           @endif
+          @if($canEdit || $managesAll)
+          <div class="hitech-card mb-3 d-md-none">
+            <div class="card-body p-3">
+              <div class="fw-bold text-dark mb-2">Quick Actions</div>
+              <div class="d-grid gap-2">
+                @if($canEdit)
+                  <button type="button" class="btn btn-hitech-cancel rounded-pill text-start ndg-edit-goal" data-id="{{ $g->id }}" data-product="{{ e($g->product) }}" data-brand="{{ e($g->brand) }}" data-goal="{{ e($g->goal ?: $g->goal_type) }}" data-potential="{{ $g->monthly_potential }}" data-expected="{{ optional($g->expected_order_date)->format('Y-m-d') }}" data-title="{{ e($g->client_name) }}"><i class="bx bx-edit"></i> Edit Customer</button>
+                @endif
+                @if($managesAll)
+                  @if($g->pendingDeleteRequest)
+                    <button type="button" class="btn btn-hitech-cancel rounded-pill text-start text-success ndg-decide-delete" data-id="{{ $g->pendingDeleteRequest->id }}" data-status="approved" data-title="{{ e($g->client_name) }}"><i class="bx bx-check"></i> Approve Removal Request</button>
+                    <button type="button" class="btn btn-hitech-cancel rounded-pill text-start text-danger ndg-decide-delete" data-id="{{ $g->pendingDeleteRequest->id }}" data-status="rejected" data-title="{{ e($g->client_name) }}"><i class="bx bx-x"></i> Reject Removal Request</button>
+                  @else
+                    <button type="button" class="btn btn-hitech-cancel rounded-pill text-start text-danger ndg-remove-goal" data-id="{{ $g->id }}" data-title="{{ e($g->client_name) }}"><i class="bx bx-trash"></i> Remove Customer</button>
+                  @endif
+                @elseif($canEdit)
+                  @if($g->pendingDeleteRequest)
+                    <div class="small text-muted">Removal requested</div>
+                  @else
+                    <button type="button" class="btn btn-hitech-cancel rounded-pill text-start text-danger ndg-request-delete" data-id="{{ $g->id }}" data-title="{{ e($g->client_name) }}"><i class="bx bx-trash"></i> Request Removal</button>
+                  @endif
+                @endif
+              </div>
+            </div>
+          </div>
+          @endif
           <div class="d-flex gap-2 flex-wrap mb-3 ndg-rd-dtabs" data-goal="{{ $g->id }}">
             @foreach(['progress' => 'Details & Progress', 'comments' => 'Weekly Comments', 'orders' => 'Orders', 'documents' => 'Documents'] as $dk => $dl)
               <button type="button" class="ndg-subtab ndg-rd-dtab {{ $dk === 'progress' ? 'on' : '' }}" data-dtab="{{ $dk }}">{{ $dl }}</button>
@@ -871,6 +897,16 @@
     </div>
 
     <div class="ndg-mscreen d-none" data-mscreen="customers">
+      @if(($canEdit && $isActive && ($window['open'] || $managesAll)) || $isAdmin)
+      <div class="d-flex gap-2 mb-3">
+        @if($canEdit && $isActive && ($window['open'] || $managesAll))
+          <button type="button" class="btn-hitech rounded-pill px-4 flex-grow-1 d-flex align-items-center justify-content-center gap-2" data-bs-toggle="modal" data-bs-target="#ndgRdAddModal"><i class="bx bx-plus"></i> Add Customer</button>
+        @endif
+        @if($isAdmin)
+          <a href="{{ route('performance.ninety-day-goals.admin-view.export', ['user_id' => $round->user_id, 'round_id' => $round->id]) }}" class="btn btn-hitech-cancel rounded-pill px-3 d-flex align-items-center justify-content-center"><i class="bx bx-download"></i></a>
+        @endif
+      </div>
+      @endif
       <div class="hitech-card mb-3">
         <div class="card-body p-3">
           <input type="search" id="ndgMobSearch" class="form-control mb-2" placeholder="Search customers…">
