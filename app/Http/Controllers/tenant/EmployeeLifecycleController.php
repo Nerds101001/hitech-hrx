@@ -671,6 +671,51 @@ class EmployeeLifecycleController extends Controller
     }
 
     /**
+     * The signed-in employee replies to a warning issued to them, from the
+     * "Read more" popup. One reply per record — posting again overwrites it
+     * rather than threading, to match what the popup shows. Visible to
+     * HR/Admin on the same popup immediately; no notification is sent.
+     */
+    public function replyToWarning(Request $request, EmployeeWarning $warning): RedirectResponse
+    {
+        if ($warning->user_id !== Auth::id()) {
+            abort(403);
+        }
+
+        $validated = $request->validate([
+            'employee_remarks' => 'required|string|max:1000',
+        ]);
+
+        $warning->update([
+            'employee_remarks' => $validated['employee_remarks'],
+            'employee_remarks_at' => now(),
+        ]);
+
+        return redirect()->back()->with('success', 'Your reply was posted.');
+    }
+
+    /**
+     * The signed-in employee replies to a complaint recorded against them.
+     */
+    public function replyToComplaint(Request $request, EmployeeComplaint $complaint): RedirectResponse
+    {
+        if ($complaint->respondent_id !== Auth::id()) {
+            abort(403);
+        }
+
+        $validated = $request->validate([
+            'employee_remarks' => 'required|string|max:1000',
+        ]);
+
+        $complaint->update([
+            'employee_remarks' => $validated['employee_remarks'],
+            'employee_remarks_at' => now(),
+        ]);
+
+        return redirect()->back()->with('success', 'Your reply was posted.');
+    }
+
+    /**
      * Whether $user may view this record's attachment: the employee it
      * concerns, their reporting manager (direct, not grand-manager), or
      * HR/Admin.

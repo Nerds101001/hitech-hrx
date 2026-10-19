@@ -312,20 +312,20 @@
                     <td>{{ $fmt($r->warning_date ?? $r->created_at ?? null) }}</td>
                     <td>
                       <small class="text-muted">{{ \Illuminate\Support\Str::limit($r->description ?: '—', 40) }}</small>
-                      @if($r->description && strlen($r->description) > 40)
-                        <button type="button" class="btn btn-sm btn-link p-0 ms-1 lc-view-detail"
-                          data-bs-toggle="modal" data-bs-target="#warningDetailModal"
-                          data-employee="{{ e(trim(($r->user->first_name ?? '') . ' ' . ($r->user->last_name ?? ''))) }}"
-                          data-type="{{ e(str_replace('_', ' ', ucfirst($r->warning_type ?? '—'))) }}"
-                          data-severity="{{ e(ucfirst($r->severity ?? '—')) }}"
-                          data-date="{{ $fmt($r->warning_date ?? $r->created_at ?? null) }}"
-                          data-description="{{ e($r->description ?? '') }}"
-                          data-action-taken="{{ e($r->action_taken ?: '—') }}"
-                          data-notes="{{ e($r->notes ?: '—') }}"
-                          data-issued-by="{{ e(optional($r->givenBy)->getFullName() ?? 'System') }}"
-                          data-attachment="{{ $r->attachment_path ? route('employee-lifecycle.warnings.attachment', $r->id) : '' }}"
-                        >Read more</button>
-                      @endif
+                      <button type="button" class="btn btn-sm btn-link p-0 ms-1 lc-view-detail"
+                        data-bs-toggle="modal" data-bs-target="#warningDetailModal"
+                        data-employee="{{ e(trim(($r->user->first_name ?? '') . ' ' . ($r->user->last_name ?? ''))) }}"
+                        data-type="{{ e(str_replace('_', ' ', ucfirst($r->warning_type ?? '—'))) }}"
+                        data-severity="{{ e(ucfirst($r->severity ?? '—')) }}"
+                        data-date="{{ $fmt($r->warning_date ?? $r->created_at ?? null) }}"
+                        data-description="{{ e($r->description ?? '') }}"
+                        data-action-taken="{{ e($r->action_taken ?: '—') }}"
+                        data-notes="{{ e($r->notes ?: '—') }}"
+                        data-issued-by="{{ e(optional($r->givenBy)->getFullName() ?? 'System') }}"
+                        data-attachment="{{ $r->attachment_path ? route('employee-lifecycle.warnings.attachment', $r->id) : '' }}"
+                        data-remarks="{{ e($r->employee_remarks ?? '') }}"
+                        data-remarks-at="{{ $r->employee_remarks_at ? $fmt($r->employee_remarks_at) : '' }}"
+                      >Read more</button>
                     </td>
                     <td>{!! $pill($r->status ?? null) !!}</td>
                     <td>
@@ -377,20 +377,20 @@
                     <td>{!! $who($r) !!}</td>
                     <td>
                       <small class="text-muted">{{ \Illuminate\Support\Str::limit($r->description ?: '—', 40) }}</small>
-                      @if($r->description && strlen($r->description) > 40)
-                        <button type="button" class="btn btn-sm btn-link p-0 ms-1 lc-view-detail"
-                          data-bs-toggle="modal" data-bs-target="#complaintDetailModal"
-                          data-employee="{{ e(trim(($r->user->first_name ?? '') . ' ' . ($r->user->last_name ?? ''))) }}"
-                          data-type="{{ e(str_replace('_', ' ', ucfirst($r->complaint_type ?? '—'))) }}"
-                          data-severity="{{ e(ucfirst($r->severity ?? '—')) }}"
-                          data-date="{{ $fmt($r->complaint_date ?? $r->created_at ?? null) }}"
-                          data-description="{{ e($r->description ?? '') }}"
-                          data-action-taken="{{ e($r->resolution ?: '—') }}"
-                          data-notes="{{ e($r->notes ?: '—') }}"
-                          data-issued-by="{{ e(optional($r->complainant)->getFullName() ?? '—') }}"
-                          data-attachment="{{ $r->attachment_path ? route('employee-lifecycle.complaints.attachment', $r->id) : '' }}"
-                        >Read more</button>
-                      @endif
+                      <button type="button" class="btn btn-sm btn-link p-0 ms-1 lc-view-detail"
+                        data-bs-toggle="modal" data-bs-target="#complaintDetailModal"
+                        data-employee="{{ e(trim(($r->user->first_name ?? '') . ' ' . ($r->user->last_name ?? ''))) }}"
+                        data-type="{{ e(str_replace('_', ' ', ucfirst($r->complaint_type ?? '—'))) }}"
+                        data-severity="{{ e(ucfirst($r->severity ?? '—')) }}"
+                        data-date="{{ $fmt($r->complaint_date ?? $r->created_at ?? null) }}"
+                        data-description="{{ e($r->description ?? '') }}"
+                        data-action-taken="{{ e($r->resolution ?: '—') }}"
+                        data-notes="{{ e($r->notes ?: '—') }}"
+                        data-issued-by="{{ e(optional($r->complainant)->getFullName() ?? '—') }}"
+                        data-attachment="{{ $r->attachment_path ? route('employee-lifecycle.complaints.attachment', $r->id) : '' }}"
+                        data-remarks="{{ e($r->employee_remarks ?? '') }}"
+                        data-remarks-at="{{ $r->employee_remarks_at ? $fmt($r->employee_remarks_at) : '' }}"
+                      >Read more</button>
                     </td>
                     <td class="text-capitalize">{{ str_replace('_', ' ', $r->complaint_type ?? '—') }}</td>
                     <td>{{ $fmt($r->complaint_date ?? $r->created_at ?? null) }}</td>
@@ -891,8 +891,13 @@
           <small class="text-muted d-block">Notes</small>
           <p class="lc-detail-notes mb-0" style="white-space: pre-wrap;"></p>
         </div>
-        <div class="lc-detail-attachment-wrap">
+        <div class="lc-detail-attachment-wrap mb-3">
           <a href="#" target="_blank" class="btn btn-sm btn-hitech-modal-cancel lc-detail-attachment"><i class="bx bx-paperclip me-1"></i>View Attachment</a>
+        </div>
+        <div class="lc-detail-remarks-wrap" style="display:none;">
+          <hr>
+          <small class="text-muted d-block">Employee's Reply <span class="lc-detail-remarks-at"></span></small>
+          <p class="lc-detail-remarks mb-0" style="white-space: pre-wrap;"></p>
         </div>
       </div>
       <div class="modal-footer border-0">
@@ -930,8 +935,13 @@
           <small class="text-muted d-block">Notes</small>
           <p class="lc-detail-notes mb-0" style="white-space: pre-wrap;"></p>
         </div>
-        <div class="lc-detail-attachment-wrap">
+        <div class="lc-detail-attachment-wrap mb-3">
           <a href="#" target="_blank" class="btn btn-sm btn-hitech-modal-cancel lc-detail-attachment"><i class="bx bx-paperclip me-1"></i>View Attachment</a>
+        </div>
+        <div class="lc-detail-remarks-wrap" style="display:none;">
+          <hr>
+          <small class="text-muted d-block">Employee's Reply <span class="lc-detail-remarks-at"></span></small>
+          <p class="lc-detail-remarks mb-0" style="white-space: pre-wrap;"></p>
         </div>
       </div>
       <div class="modal-footer border-0">
@@ -1039,6 +1049,13 @@
         const attachmentUrl = btn.dataset.attachment;
         modal.querySelector('.lc-detail-attachment-wrap').style.display = attachmentUrl ? '' : 'none';
         if (attachmentUrl) set('lc-detail-attachment', attachmentUrl, true);
+
+        const remarks = btn.dataset.remarks;
+        modal.querySelector('.lc-detail-remarks-wrap').style.display = remarks ? '' : 'none';
+        if (remarks) {
+          set('lc-detail-remarks', remarks);
+          set('lc-detail-remarks-at', btn.dataset.remarksAt ? '(' + btn.dataset.remarksAt + ')' : '');
+        }
       });
     });
 

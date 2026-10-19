@@ -767,6 +767,8 @@ Route::middleware([
     Route::get('employee-lifecycle/complaints/{complaint}/attachment', [EmployeeLifecycleController::class, 'downloadComplaintAttachment'])->name('employee-lifecycle.complaints.attachment');
     Route::post('employee-lifecycle/warnings/{warning}/acknowledge', [EmployeeLifecycleController::class, 'acknowledgeWarning'])->name('employee-lifecycle.warnings.acknowledge');
     Route::post('employee-lifecycle/complaints/{complaint}/acknowledge', [EmployeeLifecycleController::class, 'acknowledgeComplaint'])->name('employee-lifecycle.complaints.acknowledge');
+    Route::post('employee-lifecycle/warnings/{warning}/reply', [EmployeeLifecycleController::class, 'replyToWarning'])->name('employee-lifecycle.warnings.reply');
+    Route::post('employee-lifecycle/complaints/{complaint}/reply', [EmployeeLifecycleController::class, 'replyToComplaint'])->name('employee-lifecycle.complaints.reply');
 
     // Approvals (HR/Admin)
     Route::middleware(['role_or_permission:hr|admin|approvals.manage'])->prefix('approvals')->name('approvals.')->group(function () {
