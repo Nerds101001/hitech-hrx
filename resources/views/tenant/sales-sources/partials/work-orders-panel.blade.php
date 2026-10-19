@@ -6,32 +6,22 @@
      JS, its own fetch to panel-data (not financial-data -- that one carries the credit/outstanding join
      this doesn't need). --}}
 <div id="woPanel-{{ $panelTab }}" class="wopanel">
+  {{-- Explicit layout request: 6 stat cards in one row, then all 4 charts (including By sales group,
+       which used to be its own separate full-width row below) together in a second row of 4. --}}
   <div class="row g-3 mb-3 wopanel-stats"></div>
 
-  <div class="row g-3 mb-3">
-    <div class="col-12 col-lg-6"><div class="hitech-card-white p-3"><h6 class="fw-bold mb-2">Order value by day</h6><div class="wopanel-trend"></div></div></div>
-    <div class="col-12 col-lg-3"><div class="hitech-card-white p-3"><h6 class="fw-bold mb-2">By unit <span class="text-muted small">(click to filter)</span></h6><div class="wopanel-byunit"></div></div></div>
-    <div class="col-12 col-lg-3"><div class="hitech-card-white p-3"><h6 class="fw-bold mb-2">By dispatch status</h6><div class="wopanel-bydispatch"></div></div></div>
-  </div>
-
-  {{-- Tally's own customer ledger GROUP -- for this company routinely a salesperson, territory or brand
-       bucket (e.g. "ISHAN SIKKA", "PUNJAB", "Fillezy"), confirmed against real data 2026-10-19. Top 20 by
-       value; click to filter the table below to that one group. --}}
-  <div class="row g-3 mb-3">
-    <div class="col-12"><div class="hitech-card-white p-3"><h6 class="fw-bold mb-2">By sales group <span class="text-muted small fw-normal">(salesperson / territory / brand, per Tally's own ledger groups &middot; click to filter)</span></h6><div class="wopanel-bygroup"></div></div></div>
-  </div>
-
-  {{-- Per-customer pending rollup -- explicit request: "per customer pending order". Lists every customer
-       with at least one pending line in the current filter, highest pending value first. Click a row to
-       filter the table below to just that customer. --}}
-  <div class="hitech-card-white p-3 mb-3">
-    <h6 class="fw-bold mb-2">Pending by customer <span class="text-muted small fw-normal">(click a row to filter)</span></h6>
-    <div class="table-responsive" style="max-height:260px;">
-      <table class="table table-sm ss-table mb-0">
-        <thead class="table-light"><tr><th>Party</th><th class="ss-num">Orders</th><th class="ss-num">Pending lines</th><th class="ss-num">Pending value</th></tr></thead>
-        <tbody class="wopanel-byparty-body"><tr><td colspan="4" class="text-center text-muted py-3">Loading…</td></tr></tbody>
-      </table>
-    </div>
+  {{-- h-100 on each card -- a Bootstrap row's columns are already equal-height (flex default), but the
+       white card inside one wasn't told to fill that height, so it sized to its own content instead and
+       the 4 cards ended up with visibly different bottom edges (the sales-group list is naturally taller
+       than a fixed-height donut). h-100 makes every card stretch to match the tallest one in the row. --}}
+  <div class="row g-3 mb-3 align-items-stretch">
+    <div class="col-12 col-lg-3"><div class="hitech-card-white p-3 h-100"><h6 class="fw-bold mb-2">Order value by day</h6><div class="wopanel-trend"></div></div></div>
+    <div class="col-12 col-lg-3"><div class="hitech-card-white p-3 h-100"><h6 class="fw-bold mb-2">By unit <span class="text-muted small">(click to filter)</span></h6><div class="wopanel-byunit"></div></div></div>
+    <div class="col-12 col-lg-3"><div class="hitech-card-white p-3 h-100"><h6 class="fw-bold mb-2">By dispatch status</h6><div class="wopanel-bydispatch"></div></div></div>
+    {{-- Tally's own customer ledger GROUP -- for this company routinely a salesperson, territory or brand
+         bucket (e.g. "ISHAN SIKKA", "PUNJAB", "Fillezy"), confirmed against real data 2026-10-19. Top 20 by
+         value; click to filter the table below to that one group. --}}
+    <div class="col-12 col-lg-3"><div class="hitech-card-white p-3 h-100"><h6 class="fw-bold mb-2">By sales group <span class="text-muted small fw-normal">(click to filter)</span></h6><div class="wopanel-bygroup"></div></div></div>
   </div>
 
   <div class="hitech-card-white overflow-hidden mb-3 position-relative">
@@ -107,10 +97,9 @@
              the moment any one column was hidden, because the browser had never been told how to
              re-distribute their share. --}}
         <colgroup>
-          <col style="width:6%"><col style="width:7%"><col style="width:10%"><col style="width:8%">
-          <col style="width:7%"><col style="width:5%"><col style="width:6%"><col style="width:5%">
+          <col style="width:6%"><col style="width:7%"><col style="width:8%"><col style="width:7%">
           <col style="width:6%"><col style="width:5%"><col style="width:5%"><col style="width:5%">
-          <col style="width:6%"><col style="width:6%">
+          <col style="width:6%"><col style="width:7%"><col style="width:7%"><col style="width:7%">
           @if($panelTab === 'dispatch')<col style="width:6%"><col style="width:6%">@endif
           <col style="width:6%"><col style="width:5%"><col style="width:5%">
         </colgroup>
@@ -126,13 +115,12 @@
             <th class="ss-num wopanel-sortable" data-sort="quantity">Qty</th>
             <th class="ss-num wopanel-sortable" data-sort="amount">Amount</th>
             {{-- Whole-ORDER totals, one column each -- every line of a multi-item order repeats the same
-                 numbers, same as Party/Sales group already do. Explicit request for these as separate
-                 columns, not one combined cell. --}}
-            <th class="ss-num" title="Total ordered quantity across every item on this order">Order qty</th>
-            <th class="ss-num" title="Total already-dispatched quantity across every item on this order">Dispatched</th>
-            <th class="ss-num" title="Total still-pending quantity across every item on this order">Pending qty</th>
-            <th class="ss-num" title="Total value of this whole order, every item">Order amt</th>
-            <th class="ss-num" title="Value of only the still-pending portion of this order">Pending amt</th>
+                 numbers, same as Party/Sales group already do. Order qty/Order amt were dropped (same as
+                 Qty/Amount when an order has one line, and redundant with summing Qty/Amount per order
+                 otherwise) -- only the two that actually differ from the line-level columns stay. --}}
+            <th class="ss-num wop-col-orderroll" title="WHOLE ORDER's already-dispatched quantity, summed across every item on it -- not just this line">Order: dispatched</th>
+            <th class="ss-num wop-col-orderroll" title="WHOLE ORDER's still-pending quantity, summed across every item on it -- not just this line">Order: pending</th>
+            <th class="ss-num wop-col-orderroll" title="Value of only the still-pending portion of the whole order">Order: pending ₹</th>
             <th class="wop-col-status">Dispatch</th>
             @if($panelTab === 'dispatch')
               <th class="wop-col-category">Transporter</th>
@@ -142,25 +130,26 @@
             <th class="wop-col-remarks">Remarks</th>
           </tr>
         </thead>
-        <tbody class="wopanel-table-body"><tr><td colspan="{{ $panelTab === 'dispatch' ? 19 : 17 }}" class="text-center text-muted py-5">Loading…</td></tr></tbody>
-        {{-- Totals row, across the WHOLE filtered set (not just the current page) -- explicit request:
-             "it is not showing total order qty total pending total sent". --}}
-        <tfoot>
-          <tr class="wopanel-totals-row fw-semibold">
-            <td colspan="7">Totals (all filtered lines, every page)</td>
-            <td class="ss-num wopanel-tot-qty"></td>
-            <td class="ss-num wopanel-tot-amount"></td>
-            <td></td><td></td><td></td><td></td><td></td>
-            <td class="wopanel-tot-dispatch"></td>
-            @if($panelTab === 'dispatch')<td></td><td></td>@endif
-            <td></td><td></td>
-          </tr>
-        </tfoot>
+        <tbody class="wopanel-table-body"><tr><td colspan="{{ $panelTab === 'dispatch' ? 17 : 15 }}" class="text-center text-muted py-5">Loading…</td></tr></tbody>
       </table>
     </div>
     <div class="p-3 d-flex flex-wrap justify-content-between align-items-center gap-2">
       <div class="small text-muted wopanel-table-summary"></div>
       <div class="wopanel-pager"></div>
+    </div>
+  </div>
+
+  {{-- Per-customer pending rollup -- explicit request: "per customer pending order". Moved to the bottom
+       of the page (below the main table), out of the way of the stat cards/charts up top. Lists every
+       customer with at least one pending line in the current filter, highest pending value first. Click a
+       row to filter the table above to just that customer. --}}
+  <div class="hitech-card-white p-3 mb-3">
+    <h6 class="fw-bold mb-2">Pending by customer <span class="text-muted small fw-normal">(click a row to filter)</span></h6>
+    <div class="table-responsive" style="max-height:260px;">
+      <table class="table table-sm ss-table mb-0">
+        <thead class="table-light"><tr><th>Party</th><th class="ss-num">Orders</th><th class="ss-num">Pending lines</th><th class="ss-num">Pending value</th></tr></thead>
+        <tbody class="wopanel-byparty-body"><tr><td colspan="4" class="text-center text-muted py-3">Loading…</td></tr></tbody>
+      </table>
     </div>
   </div>
 </div>
@@ -198,13 +187,18 @@
   .wop-col-status { width: 7%; }
   .wop-col-remarks { width: 7%; }
   .wop-ellip { max-width: 1px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* Visually marks the 3 whole-ORDER columns as a distinct kind of number from the line-level Qty/Amount
+     right next to them -- renaming the headers to "Order: ..." wasn't enough on its own since a narrow
+     column truncates the header text and the "Order:" prefix (the actual distinguishing part) is exactly
+     what gets cut off first. A tint survives truncation; text doesn't. */
+  .wop-col-orderroll { background: #f3f8f7 !important; }
+  .wop-row:hover .wop-col-orderroll { background: #eaf2f1 !important; }
   .wop-row { cursor: pointer; }
   .wop-row:hover { background: #f8fafc; }
   .wopanel-byparty-body tr { cursor: pointer; }
   .wopanel-byparty-body tr:hover { background: #f8fafc; }
   /* Column show/hide -- same class name as the Sales Report page's "Columns" dropdown. */
   .wop-table .sr-col-hidden { display: none !important; }
-  .wopanel-totals-row td { background: #eaf6f3; border-top: 2px solid #cfe8e1; color: #0e5f52; }
   /* Excel-style column resize handle -- same mechanism as the Sales Report page's pipelineTable, adapted
      to resize the <colgroup> <col> (which actually governs width under table-layout:fixed) instead of the
      th itself. */
@@ -427,18 +421,20 @@ window.__woPanelDataUrl = window.__woPanelDataUrl || {!! json_encode(route('sale
             ['Avg. order → delivery', ltDel && ltDel.avg_days != null ? ltDel.avg_days + ' days' : '—', ltDel ? ltDel.n + ' orders, this filter' : ''],
         ]);
         root.querySelector('.wopanel-stats').innerHTML = labels.map(([lbl, val, sub]) =>
-            '<div class="col-6 col-lg-3"><div class="ss-stat"><div class="lbl">' + esc(lbl) + '</div><div class="val">' + val + '</div>' + (sub ? '<div class="ss-sub">' + esc(sub) + '</div>' : '') + '</div></div>'
+            '<div class="col-6 col-lg-2"><div class="ss-stat"><div class="lbl">' + esc(lbl) + '</div><div class="val">' + val + '</div>' + (sub ? '<div class="ss-sub">' + esc(sub) + '</div>' : '') + '</div></div>'
         ).join('');
 
-        root.querySelector('.wopanel-tot-qty').textContent = qty(s.qty_ordered);
-        root.querySelector('.wopanel-tot-amount').textContent = inr(s.total_value);
-        root.querySelector('.wopanel-tot-dispatch').innerHTML = 'Sent ' + qty(s.qty_sent) + ' &middot; Pending ' + qty(s.qty_pending);
-
         if (trendChart) trendChart.destroy();
+        // Short DD/MM axis labels, not every single one shown (tickAmount lets ApexCharts pick an evenly-
+        // spaced subset instead of cramming ~30 daily labels into a now-quarter-width card), and no
+        // always-on bar labels (same overlap problem the sales-group chart had -- the value shows on
+        // hover via the tooltip instead, which already had the full formatted amount).
+        const fdateShort = (s) => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s || ''); return m ? m[3] + '/' + m[2] : ''; };
         trendChart = chart(root.querySelector('.wopanel-trend'), {
             chart: { type: 'bar', height: 300, toolbar: { show: false } },
             series: [{ name: 'Order value', data: d.trend.map(t => Number(t.value)) }],
-            xaxis: { categories: d.trend.map(t => fdate(t.d)) },
+            dataLabels: { enabled: false },
+            xaxis: { categories: d.trend.map(t => fdateShort(t.d)), tickAmount: Math.min(10, d.trend.length - 1 || 1), labels: { rotate: -45 } },
             yaxis: { labels: { formatter: (v) => crore(v) } },
             colors: ['#127464'], plotOptions: { bar: { borderRadius: 3, columnWidth: '60%' } },
             tooltip: { y: { formatter: (v) => inr(v) } },
@@ -446,14 +442,14 @@ window.__woPanelDataUrl = window.__woPanelDataUrl || {!! json_encode(route('sale
 
         if (unitChart) unitChart.destroy();
         unitChart = chart(root.querySelector('.wopanel-byunit'), {
-            chart: { type: 'donut', height: 280, events: { dataPointSelection: (e, c, cfg) => { const u = d.by_unit[cfg.dataPointIndex]; if (u) { state.unit = u.unit; elUnit.value = u.unit; state.page = 1; load(); } } } },
+            chart: { type: 'donut', height: 340, events: { dataPointSelection: (e, c, cfg) => { const u = d.by_unit[cfg.dataPointIndex]; if (u) { state.unit = u.unit; elUnit.value = u.unit; state.page = 1; load(); } } } },
             series: d.by_unit.map(u => Number(u.value)), labels: d.by_unit.map(u => d.unit_labels[u.unit] || u.unit),
             legend: { position: 'bottom', fontSize: '11px' }, tooltip: { y: { formatter: (v) => inr(v) } },
         });
 
         if (dispatchChart) dispatchChart.destroy();
         dispatchChart = chart(root.querySelector('.wopanel-bydispatch'), {
-            chart: { type: 'donut', height: 280 },
+            chart: { type: 'donut', height: 340 },
             series: d.by_dispatch.map(x => Number(x.value)), labels: d.by_dispatch.map(x => x.status),
             colors: ['#15803d', '#f59e0b', '#94a3b8'],
             legend: { position: 'bottom', fontSize: '11px' }, tooltip: { y: { formatter: (v) => inr(v) } },
@@ -525,16 +521,14 @@ window.__woPanelDataUrl = window.__woPanelDataUrl || {!! json_encode(route('sale
                 + '<td class="wop-ellip" title="' + esc(r.stock_group || '') + '">' + esc(r.stock_group || '—') + '</td>'
                 + '<td class="ss-num">' + qty(r.quantity) + '</td>'
                 + '<td class="ss-num fw-semibold">' + inr(r.amount) + '</td>'
-                + '<td class="ss-num">' + qty(r.order_qty) + '</td>'
-                + '<td class="ss-num">' + qty(r.order_dispatched_qty) + '</td>'
-                + '<td class="ss-num">' + qty(r.order_pending_qty) + '</td>'
-                + '<td class="ss-num">' + inr(r.order_amount) + '</td>'
-                + '<td class="ss-num">' + inr(r.order_pending_amount) + '</td>'
+                + '<td class="ss-num wop-col-orderroll">' + qty(r.order_dispatched_qty) + '</td>'
+                + '<td class="ss-num wop-col-orderroll">' + qty(r.order_pending_qty) + '</td>'
+                + '<td class="ss-num wop-col-orderroll">' + inr(r.order_pending_amount) + '</td>'
                 + '<td>' + dispatchHtml + '</td>'
                 + dispatchExtraCols
                 + '<td><span class="ss-flag ' + approvalBadge + '">' + esc(approval) + '</span></td>'
                 + '<td class="wop-ellip small" title="' + esc(r.remarks || '') + '">' + esc(r.remarks || '') + '</td></tr>';
-        }).join('') : '<tr><td colspan="' + (PANEL_TAB === 'dispatch' ? 19 : 17) + '" class="text-center text-muted py-5">No work order lines match these filters.</td></tr>';
+        }).join('') : '<tr><td colspan="' + (PANEL_TAB === 'dispatch' ? 17 : 15) + '" class="text-center text-muted py-5">No work order lines match these filters.</td></tr>';
         if (root.__applyColumnVisibility) root.__applyColumnVisibility(); // tbody was just replaced wholesale -- re-apply hidden columns
 
         const from = (t.page - 1) * t.per + 1, to = Math.min(t.page * t.per, t.total);

@@ -4,30 +4,19 @@
      Sale Order Tally reports. Self-contained: its own fetch-driven JS, not sharing analytics-script.blade.php
      (a different page). --}}
 <div id="woFin">
+  {{-- Explicit layout request: 6 stat cards in one row, then all 4 charts (including By sales group, which
+       used to be its own separate full-width row below) together in a second row of 4. --}}
   <div class="row g-3 mb-3" id="woFinStats"></div>
 
-  <div class="row g-3 mb-3">
-    <div class="col-12 col-lg-6"><div class="hitech-card-white p-3"><h6 class="fw-bold mb-2">Order value by day</h6><div id="woFinTrend"></div></div></div>
-    <div class="col-12 col-lg-3"><div class="hitech-card-white p-3"><h6 class="fw-bold mb-2">By unit <span class="text-muted small">(click to filter)</span></h6><div id="woFinByUnit"></div></div></div>
-    <div class="col-12 col-lg-3"><div class="hitech-card-white p-3"><h6 class="fw-bold mb-2">By approval <span class="text-muted small">(click to filter)</span></h6><div id="woFinByApproval"></div></div></div>
-  </div>
-
-  {{-- Tally's own customer ledger GROUP -- see work-orders-panel.blade.php's identical card for why this
-       is a real salesperson/territory/brand bucket, not a guess. --}}
-  <div class="row g-3 mb-3">
-    <div class="col-12"><div class="hitech-card-white p-3"><h6 class="fw-bold mb-2">By sales group <span class="text-muted small fw-normal">(salesperson / territory / brand, per Tally's own ledger groups &middot; click to filter)</span></h6><div id="woFinByGroup"></div></div></div>
-  </div>
-
-  {{-- Per-customer rollup: on-hold value (what Finance needs to chase) plus each party's own ledger
-       outstanding/credit limit from Tally -- one row per party, not summed across their order lines. --}}
-  <div class="hitech-card-white p-3 mb-3">
-    <h6 class="fw-bold mb-2">By customer <span class="text-muted small fw-normal">(click a row to filter &middot; sorted by value on hold)</span></h6>
-    <div class="table-responsive" style="max-height:260px;">
-      <table class="table table-sm ss-table mb-0">
-        <thead class="table-light"><tr><th>Party</th><th class="ss-num">Orders</th><th class="ss-num">On hold</th><th class="ss-num">Total outstanding</th><th class="ss-num">Credit limit</th></tr></thead>
-        <tbody id="woFinByPartyBody"><tr><td colspan="5" class="text-center text-muted py-3">Loading…</td></tr></tbody>
-      </table>
-    </div>
+  {{-- h-100 on each card -- see work-orders-panel.blade.php's identical note: a row's columns are already
+       equal-height, but the card inside wasn't told to fill that height. --}}
+  <div class="row g-3 mb-3 align-items-stretch">
+    <div class="col-12 col-lg-3"><div class="hitech-card-white p-3 h-100"><h6 class="fw-bold mb-2">Order value by day</h6><div id="woFinTrend"></div></div></div>
+    <div class="col-12 col-lg-3"><div class="hitech-card-white p-3 h-100"><h6 class="fw-bold mb-2">By unit <span class="text-muted small">(click to filter)</span></h6><div id="woFinByUnit"></div></div></div>
+    <div class="col-12 col-lg-3"><div class="hitech-card-white p-3 h-100"><h6 class="fw-bold mb-2">By approval <span class="text-muted small">(click to filter)</span></h6><div id="woFinByApproval"></div></div></div>
+    {{-- Tally's own customer ledger GROUP -- see work-orders-panel.blade.php's identical card for why this
+         is a real salesperson/territory/brand bucket, not a guess. --}}
+    <div class="col-12 col-lg-3"><div class="hitech-card-white p-3 h-100"><h6 class="fw-bold mb-2">By sales group <span class="text-muted small fw-normal">(click to filter)</span></h6><div id="woFinByGroup"></div></div></div>
   </div>
 
   <div class="hitech-card-white overflow-hidden mb-3 position-relative">
@@ -101,11 +90,14 @@
              table-layout:fixed never has to auto-distribute leftover space -- hiding a column later toggles
              its <col>, which is what actually avoids the header-overlap corruption that happened when td/th
              alone were hidden on columns with no defined width. --}}
+        {{-- Exactly 18 <col> tags, matching the 18 <th> below one-for-one -- a stray 19th <col> here
+             previously (from an earlier edit removing 2 columns but only shrinking the list by 1) meant
+             table-layout:fixed was quietly ignoring it, functionally harmless but incorrect. Also widens
+             the 3 whole-order columns, which were too narrow for their renamed headers to read at all. --}}
         <colgroup>
           <col style="width:5%"><col style="width:6%"><col style="width:8%"><col style="width:7%">
-          <col style="width:6%"><col style="width:4%"><col style="width:5%"><col style="width:4%">
           <col style="width:5%"><col style="width:4%"><col style="width:4%"><col style="width:4%">
-          <col style="width:5%"><col style="width:5%">
+          <col style="width:5%"><col style="width:6%"><col style="width:6%"><col style="width:6%">
           <col style="width:5%"><col style="width:5%">
           <col style="width:5%"><col style="width:5%">
           <col style="width:5%"><col style="width:4%">
@@ -120,31 +112,34 @@
               <th class="wofin-sortable wofin-col-category" data-sort="stock_group">Stock group</th>
               <th class="ss-num wofin-sortable" data-sort="quantity">Qty</th>
               <th class="ss-num wofin-sortable" data-sort="amount">Amount</th>
-              {{-- Whole-ORDER totals, one column each -- see work-orders-panel.blade.php's identical note. --}}
-              <th class="ss-num" title="Total ordered quantity across every item on this order">Order qty</th>
-              <th class="ss-num" title="Total already-dispatched quantity across every item on this order">Dispatched</th>
-              <th class="ss-num" title="Total still-pending quantity across every item on this order">Pending qty</th>
-              <th class="ss-num" title="Total value of this whole order, every item">Order amt</th>
-              <th class="ss-num" title="Value of only the still-pending portion of this order">Pending amt</th>
+              {{-- Whole-ORDER totals, one column each -- see work-orders-panel.blade.php's identical note.
+                   Order qty/Order amt dropped (redundant with Qty/Amount). --}}
+              <th class="ss-num wofin-col-orderroll" title="WHOLE ORDER's already-dispatched quantity, summed across every item on it -- not just this line">Order: dispatched</th>
+              <th class="ss-num wofin-col-orderroll" title="WHOLE ORDER's still-pending quantity, summed across every item on it -- not just this line">Order: pending</th>
+              <th class="ss-num wofin-col-orderroll" title="Value of only the still-pending portion of the whole order">Order: pending ₹</th>
               <th class="ss-num wofin-sortable" data-sort="credit_period">Credit</th><th class="ss-num wofin-sortable" data-sort="outstanding_days">O/S days</th>
               <th class="ss-num wofin-sortable" data-sort="total_outstanding">O/S amt</th><th class="ss-num wofin-sortable" data-sort="credit_limit">Credit limit</th>
               <th class="wofin-sortable" data-sort="financial_approval">Approval</th><th class="wofin-col-remarks">Remarks</th></tr>
         </thead>
-        <tbody id="woFinTableBody"><tr><td colspan="20" class="text-center text-muted py-5">Loading…</td></tr></tbody>
-        {{-- Totals row, across the WHOLE filtered set (not just the current page). --}}
-        <tfoot>
-          <tr class="wofin-totals-row fw-semibold">
-            <td colspan="7">Totals (all filtered lines, every page)</td>
-            <td class="ss-num" id="woFinTotQty"></td>
-            <td class="ss-num" id="woFinTotAmount"></td>
-            <td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td>
-          </tr>
-        </tfoot>
+        <tbody id="woFinTableBody"><tr><td colspan="18" class="text-center text-muted py-5">Loading…</td></tr></tbody>
       </table>
     </div>
     <div class="p-3 d-flex flex-wrap justify-content-between align-items-center gap-2">
       <div class="small text-muted" id="woFinTableSummary"></div>
       <div id="woFinPager"></div>
+    </div>
+  </div>
+
+  {{-- Per-customer rollup: on-hold value (what Finance needs to chase) plus each party's own ledger
+       outstanding/credit limit from Tally -- one row per party, not summed across their order lines.
+       Moved to the bottom of the page (below the main table), out of the way of the stat cards/charts. --}}
+  <div class="hitech-card-white p-3 mb-3">
+    <h6 class="fw-bold mb-2">By customer <span class="text-muted small fw-normal">(click a row to filter &middot; sorted by value on hold)</span></h6>
+    <div class="table-responsive" style="max-height:260px;">
+      <table class="table table-sm ss-table mb-0">
+        <thead class="table-light"><tr><th>Party</th><th class="ss-num">Orders</th><th class="ss-num">On hold</th><th class="ss-num">Total outstanding</th><th class="ss-num">Credit limit</th></tr></thead>
+        <tbody id="woFinByPartyBody"><tr><td colspan="5" class="text-center text-muted py-3">Loading…</td></tr></tbody>
+      </table>
     </div>
   </div>
 
@@ -171,6 +166,10 @@
      the whole row opens the order (which always has the full detail). */
   .wofin-table { table-layout: fixed; width: 100%; font-size: .68rem; }
   .wofin-table th, .wofin-table td { padding: .3rem .35rem; overflow: hidden; }
+  /* Marks the 3 whole-ORDER columns as a distinct kind of number from line-level Qty/Amount -- see
+     work-orders-panel.blade.php's identical note. */
+  .wofin-col-orderroll { background: #f3f8f7 !important; }
+  .wofin-row:hover .wofin-col-orderroll { background: #eaf2f1 !important; }
   /* See work-orders-panel.blade.php's identical note: header text needs the same ellipsis clipping as
      data cells, or it visually spills onto the next column's header at narrow widths. */
   .wofin-table th { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -186,7 +185,6 @@
   #woFinByPartyBody tr:hover { background: #f8fafc; }
   /* Column show/hide -- same class name as the Sales Report page's "Columns" dropdown. */
   .wofin-table .sr-col-hidden { display: none !important; }
-  .wofin-totals-row td { background: #eaf6f3; border-top: 2px solid #cfe8e1; color: #0e5f52; }
   /* Excel-style column resize handle -- see work-orders-panel.blade.php's identical note. */
   .wofin-table th { position: relative; }
   .wofin-table .col-resize-handle { position: absolute; top: 0; right: 0; bottom: 0; width: 6px; cursor: col-resize; z-index: 50; user-select: none; }
@@ -388,16 +386,18 @@ window.__woFinCompany = {!! json_encode($company ?: '') !!};
             ['Units involved', s.unit_count, ''],
             ['Avg. order → billing', ltBill && ltBill.avg_days != null ? ltBill.avg_days + ' days' : '—', ltBill ? ltBill.n + ' orders, this filter' : ''],
             ['Avg. order → delivery', ltDel && ltDel.avg_days != null ? ltDel.avg_days + ' days' : '—', ltDel ? ltDel.n + ' orders, this filter' : ''],
-        ].map(([lbl, val, sub]) => '<div class="col-6 col-lg-3"><div class="ss-stat"><div class="lbl">' + esc(lbl) + '</div><div class="val">' + val + '</div>' + (sub ? '<div class="ss-sub">' + esc(sub) + '</div>' : '') + '</div></div>').join('');
-
-        document.getElementById('woFinTotQty').textContent = qty(s.qty_ordered);
-        document.getElementById('woFinTotAmount').textContent = inr(s.total_value);
+        ].map(([lbl, val, sub]) => '<div class="col-6 col-lg-2"><div class="ss-stat"><div class="lbl">' + esc(lbl) + '</div><div class="val">' + val + '</div>' + (sub ? '<div class="ss-sub">' + esc(sub) + '</div>' : '') + '</div></div>').join('');
 
         if (trendChart) trendChart.destroy();
+        // See work-orders-panel.blade.php's identical note: short DD/MM labels (not all ~30 of them,
+        // ApexCharts picks an evenly-spaced subset via tickAmount) and no always-on bar labels (value
+        // shows on hover via the tooltip instead).
+        const fdateShort = (s) => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s || ''); return m ? m[3] + '/' + m[2] : ''; };
         trendChart = chart('woFinTrend', {
             chart: { type: 'bar', height: 300, toolbar: { show: false } },
             series: [{ name: 'Order value', data: d.trend.map(t => Number(t.value)) }],
-            xaxis: { categories: d.trend.map(t => fdate(t.d)) },
+            dataLabels: { enabled: false },
+            xaxis: { categories: d.trend.map(t => fdateShort(t.d)), tickAmount: Math.min(10, d.trend.length - 1 || 1), labels: { rotate: -45 } },
             yaxis: { labels: { formatter: (v) => crore(v) } },
             colors: ['#127464'], plotOptions: { bar: { borderRadius: 3, columnWidth: '60%' } },
             tooltip: { y: { formatter: (v) => inr(v) } },
@@ -406,14 +406,14 @@ window.__woFinCompany = {!! json_encode($company ?: '') !!};
         if (unitChart) unitChart.destroy();
         const unitLabels = d.by_unit.map(u => d.unit_labels[u.unit] || u.unit);
         unitChart = chart('woFinByUnit', {
-            chart: { type: 'donut', height: 280, events: { dataPointSelection: (e, c, cfg) => { const u = d.by_unit[cfg.dataPointIndex]; if (u) { state.unit = u.unit; document.getElementById('woFinUnit').value = u.unit; load(); } } } },
+            chart: { type: 'donut', height: 340, events: { dataPointSelection: (e, c, cfg) => { const u = d.by_unit[cfg.dataPointIndex]; if (u) { state.unit = u.unit; document.getElementById('woFinUnit').value = u.unit; load(); } } } },
             series: d.by_unit.map(u => Number(u.value)), labels: unitLabels,
             legend: { position: 'bottom', fontSize: '11px' }, tooltip: { y: { formatter: (v) => inr(v) } },
         });
 
         if (approvalChart) approvalChart.destroy();
         approvalChart = chart('woFinByApproval', {
-            chart: { type: 'donut', height: 280, events: { dataPointSelection: (e, c, cfg) => { const a = d.by_approval[cfg.dataPointIndex]; if (a) { state.approval = a.status === 'Not set' ? '' : a.status; document.getElementById('woFinApproval').value = state.approval; load(); } } } },
+            chart: { type: 'donut', height: 340, events: { dataPointSelection: (e, c, cfg) => { const a = d.by_approval[cfg.dataPointIndex]; if (a) { state.approval = a.status === 'Not set' ? '' : a.status; document.getElementById('woFinApproval').value = state.approval; load(); } } } },
             series: d.by_approval.map(a => Number(a.value)), labels: d.by_approval.map(a => a.status),
             colors: ['#15803d', '#b91c1c', '#f59e0b', '#94a3b8'],
             legend: { position: 'bottom', fontSize: '11px' }, tooltip: { y: { formatter: (v) => inr(v) } },
@@ -469,16 +469,14 @@ window.__woFinCompany = {!! json_encode($company ?: '') !!};
                 + '<td class="wofin-ellip" title="' + esc(r.stock_group || '') + '">' + esc(r.stock_group || '—') + '</td>'
                 + '<td class="ss-num">' + qty(r.quantity) + '</td>'
                 + '<td class="ss-num fw-semibold">' + inr(r.amount) + '</td>'
-                + '<td class="ss-num">' + qty(r.order_qty) + '</td>'
-                + '<td class="ss-num">' + qty(r.order_dispatched_qty) + '</td>'
-                + '<td class="ss-num">' + qty(r.order_pending_qty) + '</td>'
-                + '<td class="ss-num">' + inr(r.order_amount) + '</td>'
-                + '<td class="ss-num">' + inr(r.order_pending_amount) + '</td>'
+                + '<td class="ss-num wofin-col-orderroll">' + qty(r.order_dispatched_qty) + '</td>'
+                + '<td class="ss-num wofin-col-orderroll">' + qty(r.order_pending_qty) + '</td>'
+                + '<td class="ss-num wofin-col-orderroll">' + inr(r.order_pending_amount) + '</td>'
                 + '<td class="ss-num">' + (r.credit_period != null ? r.credit_period + 'd' : '—') + '</td><td class="ss-num">' + (r.outstanding_days != null ? r.outstanding_days : '—') + '</td>'
                 + '<td class="ss-num">' + (r.total_outstanding != null ? inr(r.total_outstanding) : '—') + '</td><td class="ss-num">' + (r.credit_limit != null ? inr(r.credit_limit) : '—') + '</td>'
                 + '<td><span class="ss-flag ' + badge + '">' + esc(r.financial_approval || 'Not set') + '</span></td>'
                 + '<td class="wofin-ellip small" title="' + esc(r.remarks || '') + '">' + esc(r.remarks || '') + '</td></tr>';
-        }).join('') : '<tr><td colspan="20" class="text-center text-muted py-5">No work order lines match these filters.</td></tr>';
+        }).join('') : '<tr><td colspan="18" class="text-center text-muted py-5">No work order lines match these filters.</td></tr>';
         if (applyColumnVisibility) applyColumnVisibility(); // tbody was just replaced wholesale -- re-apply hidden columns
 
         const from = (t.page - 1) * t.per + 1, to = Math.min(t.page * t.per, t.total);

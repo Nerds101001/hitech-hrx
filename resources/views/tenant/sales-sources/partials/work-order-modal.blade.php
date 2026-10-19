@@ -53,6 +53,11 @@
        instead, full value still on hover via title. Explicit request to reduce/control column width. */
     .wo-lines-table { width: 100%; table-layout: fixed; font-size: .8rem; border-collapse: separate; border-spacing: 0; background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 2px rgba(15,23,42,.04), 0 4px 14px rgba(15,23,42,.05); }
     .wo-lines-table th { text-align: left; font-size: .62rem; text-transform: uppercase; letter-spacing: .03em; color: #0e5f52; font-weight: 700; padding: .5rem .55rem; background: #eaf6f3; border-bottom: 1px solid #cfe8e1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    /* Qty/Rate/Amount headers already carry class="num" in the row templates below, but a header's
+       alignment was never actually overridden to match -- it sat left-aligned while its own column's data
+       sat right-aligned (.wo-lines-table td.num), so the header label visually hovered over the PREVIOUS
+       column's data instead of its own, looking like the numbers were in the wrong column. */
+    .wo-lines-table th.num { text-align: right; }
     .wo-lines-table td { padding: .42rem .55rem; border-bottom: 1px solid #f1f5f9; overflow: hidden; }
     .wo-lines-table tbody tr:last-child td { border-bottom: none; }
     .wo-lines-table tbody tr:hover { background: #f8fafc; }
