@@ -81,6 +81,10 @@ class TallyStockPushCommand extends Command
                 'closing_rate' => $i['closing_rate'] ?? null,
                 'closing_rate_unit' => $i['closing_rate_unit'] ?? null,
                 'gst_rate' => $this->gstRate($i['gst'] ?? null),
+                'item_alias' => $i['alias'] ?? null, 'description' => $i['description'] ?? null, 'narration' => $i['narration'] ?? null,
+                'sku_code' => $i['sku_code'] ?? null, 'colour' => $i['colour'] ?? null, 'size' => $i['size'] ?? null,
+                'lamination' => isset($i['lamination']) ? $i['lamination'] === 'Yes' : null,
+                'printing' => isset($i['printing']) ? $i['printing'] === 'Yes' : null,
             ];
         }
 

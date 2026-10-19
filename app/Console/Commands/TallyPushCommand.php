@@ -369,6 +369,9 @@ class TallyPushCommand extends Command
                 $out['invoices'][] = [
                     'invoice_no' => $number, 'series' => $series, 'invoice_date' => $date,
                     'party_name' => $party ?: null, 'normalized_name' => $normalized, 'amount' => $total,
+                    // The sales order this invoice bills against, when Tally recorded one (REFERENCE field) --
+                    // lets the Work Orders report compute an order-to-billing lead time without re-deriving it.
+                    'order_no' => $v['order_no'] ?? null,
                     'extra' => array_filter(['party_gstin' => $v['party_gstin'], 'place_of_supply' => $v['place_of_supply'], 'reference' => $v['reference']]),
                 ];
                 foreach ($v['lines'] as $line) {
@@ -392,10 +395,15 @@ class TallyPushCommand extends Command
                 }
             } else {
                 foreach ($v['lines'] as $line) {
+                    $item = preg_replace('/\s+/', ' ', trim((string) $line['item']));
                     $out['sale_orders'][] = [
                         'order_date' => $date, 'order_no' => $number,
                         'party_name' => $party ?: null, 'normalized_name' => $normalized,
-                        'quantity' => $line['qty'], 'unit' => $line['unit'], 'amount' => $line['amount'] ?? 0,
+                        'item_name' => $item, 'spec' => $line['spec'], 'hsn' => $line['hsn'],
+                        'quantity' => $line['qty'], 'unit' => $line['unit'], 'rate' => $line['rate'], 'amount' => $line['amount'] ?? 0,
+                        'pack_cases' => $line['pack_cases'], 'pack_gross_qty' => $line['pack_gross_qty'],
+                        'pack_net_wt_qty' => $line['pack_net_wt_qty'], 'pack_qty_number' => $line['pack_qty_number'],
+                        'financial_approval' => $v['financial_approval'] ?? null, 'remarks' => $v['remarks'] ?? null,
                     ];
                 }
             }

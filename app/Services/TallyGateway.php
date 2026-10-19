@@ -381,7 +381,13 @@ class TallyGateway
         return '<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>HRXStock</ID></HEADER><BODY><DESC>'
             . '<STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>' . $name . '</SVCURRENTCOMPANY></STATICVARIABLES>'
             . '<TDL><TDLMESSAGE><COLLECTION NAME="HRXStock" ISMODIFY="No"><TYPE>StockItem</TYPE>'
-            . '<FETCH>Name, Parent, Category, BaseUnits, OpeningBalance, OpeningValue, ClosingBalance, ClosingValue, ClosingRate, GSTDetails</FETCH></COLLECTION></TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>';
+            . '<FETCH>Name, Parent, Category, BaseUnits, OpeningBalance, OpeningValue, ClosingBalance, ClosingValue, ClosingRate, GSTDetails, '
+            // ItemAlias/Description/Narration are plain Tally master fields. SKUCode/Colour/Size/Lamination/
+            // Printing are this company's own custom (UDF) fields on the item master -- confirmed real,
+            // 2026-10-19 probe of two very different items (a bag and an oil): both exposed exactly these 5
+            // and nothing else (printing/sealing/weight/capacity do NOT exist as separate fields -- "Size" is
+            // the one free-text field that carries whatever dimension/grade label a person typed in).
+            . 'Alias, Description, Narration, SKUCode, Colour, Size, Lamination, Printing</FETCH></COLLECTION></TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>';
     }
 
     /** Tally reads dates like 1-May-2025 inside a filter formula; the SVFROMDATE/SVTODATE variables do NOT limit a collection. */
@@ -445,6 +451,41 @@ class TallyGateway
             throw new TallyGatewayException('Tally sent an answer that is not readable XML.');
         }
         return $doc;
+    }
+
+    /**
+     * A Tally custom (UDF) field, read regardless of which way this particular export emitted the "UDF"
+     * namespace: some reports declare it (xmlns:UDF="TallyUDF", e.g. the Day Book voucher export) and some
+     * don't (e.g. the StockItem Collection export), yet both use the identical "UDF:TAG" tag name either
+     * way. SimpleXML needs a DIFFERENT access method for each -- a declared namespace needs children('UDF',
+     * true), an undeclared one only resolves through a literal "UDF:TAG" property name and children() finds
+     * nothing. Confirmed both ways occur live (2026-10-19): a first fix using only the literal-property form
+     * worked for stock items but silently read null for every voucher financial-approval/remarks field,
+     * because Day Book's export DOES declare the namespace. Try both; whichever has a value wins.
+     */
+    private static function udf(\SimpleXMLElement $node, string $tag): string
+    {
+        $v = (string) $node->children('UDF', true)->{$tag};
+        return $v !== '' ? $v : (string) $node->{"UDF:{$tag}"};
+    }
+
+    /** Same as udf(), for a repeatable "UDF:TAG.LIST" wrapper (financial approval/remarks can carry more
+     *  than one entry, e.g. an approval-history trail) -- every non-empty value found, in document order. */
+    private static function udfListValues(\SimpleXMLElement $node, string $tag): array
+    {
+        $wrapTag = "{$tag}.LIST";
+        $wrappers = $node->children('UDF', true)->{$wrapTag};
+        if (count($wrappers) === 0) {
+            $wrappers = $node->{"UDF:{$wrapTag}"};
+        }
+        $out = [];
+        foreach ($wrappers as $wrap) {
+            $v = self::udf($wrap, $tag);
+            if ($v !== '') {
+                $out[] = $v;
+            }
+        }
+        return $out;
     }
 
     /** @return string[] */
@@ -696,12 +737,24 @@ class TallyGateway
             usort($gst, fn($a, $b) => strcmp((string) $b['from'], (string) $a['from']));   // newest first
 
             $category = $s($i->CATEGORY);
+            $notApplicable = fn($v) => in_array($v, ['', 'Not Applicable'], true) ? null : $v;
+            // SKUCode/Colour/Size/Lamination/Printing are this company's own custom (UDF) fields on the item
+            // master -- confirmed real, 2026-10-19 probe of two very different items (a bag and an oil): both
+            // exposed exactly these 5 and nothing else. "Size" is a free-text label (dimensions for a bag,
+            // a grade code for an oil), not a reliable structured length x width.
+            // self::udf(), NOT xpath("//*[local-name()=...]") (silently breaks on this field) and not a plain
+            // $node->{'UDF:TAG'} alone either (this particular export doesn't declare the UDF namespace, but
+            // others do -- see udf()'s own doc comment for why both access paths are needed).
+            $udf = fn($tag) => $notApplicable(self::udf($i, $tag));
             $out[] = [
-                'name' => $name, 'group' => $s($i->PARENT) ?: null, 'category' => in_array($category, ['', 'Not Applicable'], true) ? null : $category,
-                'unit' => in_array($s($i->BASEUNITS), ['', 'Not Applicable'], true) ? null : $s($i->BASEUNITS),
+                'name' => $name, 'group' => $s($i->PARENT) ?: null, 'category' => $notApplicable($category),
+                'unit' => $notApplicable($s($i->BASEUNITS)),
                 'opening_qty' => $openingQty, 'opening_value' => self::heldValue($s($i->OPENINGVALUE)),
                 'closing_qty' => $closingQty, 'closing_unit' => $closingUnit, 'closing_value' => self::heldValue($s($i->CLOSINGVALUE)),
                 'closing_rate' => $closingRate, 'closing_rate_unit' => $rateUnit, 'gst' => $gst[0] ?? null,
+                'alias' => $notApplicable($s($i->ALIAS)), 'description' => $notApplicable($s($i->DESCRIPTION)), 'narration' => $notApplicable($s($i->NARRATION)),
+                'sku_code' => $udf('SKUCODE'), 'colour' => $udf('COLOUR'), 'size' => $udf('SIZE'),
+                'lamination' => $udf('LAMINATION'), 'printing' => $udf('PRINTING'),
             ];
         }
         return $out;
@@ -749,6 +802,18 @@ class TallyGateway
             $lineOrderNo = fn($l) => $notApplicable($s($l->xpath('.//ORDERNO')[0] ?? ''));
             $voucherOrderNo = $notApplicable($s($v->REFERENCE));
 
+            // Financial Approval (Ok / Make and Hold / Partial Qty Ok) and the free-text Remarks column seen
+            // on this company's own "Finance Approval DIO" Tally report -- confirmed real, 2026-10-19, after
+            // an earlier pass wrongly concluded no such field existed (it's wrapped in a repeatable .LIST,
+            // same convention as RATEDETAILS.LIST elsewhere in this file; a naive single-tag scan missed it).
+            // Voucher-level, not per item line -- takes the LAST list entry when more than one is present.
+            // udfListValues(), not a plain foreach over $v->{'UDF:X.LIST'} -- the Day Book export DOES declare
+            // the UDF namespace (unlike the StockItem export above), so the plain form silently finds nothing.
+            $faValues = self::udfListValues($v, 'UDFFINANCIALAPPROVAL');
+            $financialApproval = $faValues === [] ? null : end($faValues);
+            $remarkValues = self::udfListValues($v, 'VCHREMRK');
+            $remarks = $remarkValues === [] ? null : end($remarkValues);
+
             $lines = [];
             foreach (['ALLINVENTORYENTRIES.LIST', 'INVENTORYENTRIES.LIST'] as $tag) {
                 foreach ($v->{$tag} as $l) {
@@ -765,12 +830,27 @@ class TallyGateway
                             $gst[$head] = (float) $s($rd->GSTRATE);
                         }
                     }
+                    // Packaging/size detail: real fields (confirmed live, 2026-10-17 probe of a raw Sales Order
+                    // export) but company-added custom (UDF) fields, not plain Tally tags. self::udf(), NOT a
+                    // bare $node->{'UDF:TAG'} -- the Day Book export declares the UDF namespace, so only the
+                    // namespace-aware access path finds anything here (see udf()'s doc comment). An earlier
+                    // version used the bare form and always read null, wrongly read as "these fields are just
+                    // rare" rather than "this access method doesn't work for this export." Not every line
+                    // carries them regardless (only items packed into cases/cartons do), so still null when absent.
+                    $udf = fn($tag) => $notApplicable(self::udf($l, $tag));
+                    // The item's batch/spec note (confirmed real, 2026-10-19 probe of a real Delivery Note --
+                    // e.g. "(batch-guid)(COMPOSTABLE ISO17088 NOTIFICATION 09/2025 5% GST)"), separate from the
+                    // plain item name. Lives under its own .LIST wrapper, same repeating-list convention as the
+                    // GST rate details just above.
+                    $spec = $notApplicable($s($l->xpath(".//*[local-name()='BASICUSERDESCRIPTION']")[0] ?? ''));
                     $lines[] = [
-                        'item' => $item, 'qty' => $qty, 'unit' => $unit, 'rate' => $rate, 'rate_unit' => $rateUnit,
+                        'item' => $item, 'spec' => $spec, 'qty' => $qty, 'unit' => $unit, 'rate' => $rate, 'rate_unit' => $rateUnit,
                         'amount' => TallyFileReader::amount($s($l->AMOUNT)), 'hsn' => $s($l->GSTHSNNAME) ?: null, 'gst' => $gst,
                         // per-line reference wins when present; a Delivery Note consolidating several orders would
                         // otherwise wrongly attribute every line to just the voucher-level one.
                         'order_no' => $lineOrderNo($l) ?? $voucherOrderNo,
+                        'pack_cases' => $udf('PACKCASES'), 'pack_gross_qty' => $udf('PACKGROSSQTY'),
+                        'pack_net_wt_qty' => $udf('PACKNETWTQTY'), 'pack_qty_number' => $udf('PACKQTYNUMBER'),
                     ];
                 }
             }
@@ -823,6 +903,7 @@ class TallyGateway
                 'reference' => $s($v->REFERENCE) ?: null, 'cancelled' => strcasecmp($s($v->ISCANCELLED), 'Yes') === 0 || strcasecmp($s($v->ISDELETED), 'Yes') === 0,
                 'total' => $total, 'lines' => $lines, 'ledgers' => $ledgers,
                 'order_no' => $voucherOrderNo, 'transport' => $transport, 'consignee' => $consignee,
+                'financial_approval' => $financialApproval, 'remarks' => $remarks,
             ];
         }
         return $out;
