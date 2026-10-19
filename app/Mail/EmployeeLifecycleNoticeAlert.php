@@ -12,8 +12,8 @@ use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
 
 /**
- * Sent to HR and the employee's reporting manager the moment a warning or
- * complaint is recorded against them.
+ * Sent to the employee it concerns, HR, and their reporting manager the
+ * moment a warning or complaint is recorded against them.
  */
 class EmployeeLifecycleNoticeAlert extends Mailable
 {

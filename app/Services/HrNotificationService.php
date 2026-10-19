@@ -530,8 +530,11 @@ class HrNotificationService
     }
 
     /**
-     * Recipients for a warning/complaint alert: HR plus the employee's own
-     * reporting manager, when they have one.
+     * Recipients for a warning/complaint alert: the employee it concerns,
+     * HR, and their own reporting manager, when they have one.
+     *
+     * The employee was missing from this list — the notice went to HR and
+     * the manager but never to the person it was actually about.
      *
      * @return array{to: string[], cc: string[]}
      */
@@ -540,6 +543,10 @@ class HrNotificationService
         $cfg = config('hr_notifications.lifecycle_notify', []);
 
         $to = collect($cfg['emails'] ?? []);
+
+        if (filter_var($employee->email, FILTER_VALIDATE_EMAIL)) {
+            $to->push($employee->email);
+        }
 
         if (!empty($cfg['include_reporting_manager']) && $employee->reporting_to_id) {
             $mgr = User::find($employee->reporting_to_id);
