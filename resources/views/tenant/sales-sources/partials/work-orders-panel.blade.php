@@ -50,7 +50,12 @@
         </select>
         <div class="position-relative wop-f-date">
           <button type="button" class="btn btn-sm btn-outline-secondary w-100 wopanel-date-toggle text-truncate"></button>
-          <div class="wopanel-date-pop card shadow p-2" style="display:none;position:absolute;z-index:20;min-width:260px;top:100%;left:0;">
+          {{-- position:fixed, not absolute -- the filter row scrolls horizontally (.wop-filter-row),
+               and overflow-x:auto on an ancestor implicitly forces overflow-y:auto too (a real CSS
+               quirk), which clipped this popover to the row's own height when it was absolute. Fixed
+               positioning is computed from the button's own rect in JS and isn't clipped by any
+               ancestor's overflow. --}}
+          <div class="wopanel-date-pop card shadow p-2" style="display:none;position:fixed;z-index:1050;min-width:260px;">
             <div class="d-flex flex-wrap gap-1 mb-2">
               @foreach(['mtd' => 'This month', 'lm' => 'Last month', 'last30' => 'Last 30 days', 'qtd' => 'This quarter', 'fytd' => 'Financial year', 'all' => 'All data'] as $k => $label)
                 <button type="button" class="btn btn-sm btn-outline-secondary wopanel-preset" data-preset="{{ $k }}">{{ $label }}</button>
@@ -79,14 +84,15 @@
           <option value="">All sales groups</option>
         </select>
         <button type="button" class="btn btn-sm btn-outline-secondary wopanel-reset" title="Reset filters"><i class="bx bx-reset"></i></button>
-        {{-- Column show/hide -- same dropdown-of-checkboxes pattern as the Sales Report page's "Columns"
-             button (localStorage-remembered, sr-col-hidden class), so this works the same way everywhere
-             in the app. --}}
-        <div class="dropdown">
-          <button type="button" class="btn btn-sm btn-outline-secondary dropdown-toggle wopanel-cols-btn" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
+        {{-- Column show/hide -- same checkbox-list content as the Sales Report page's "Columns" button,
+             but NOT Bootstrap's dropdown/Popper (same clipping problem as the date popover above: Popper
+             still leaves the menu as a DOM descendant of the scrolling row, so it still got clipped).
+             Manually toggled, position:fixed, same as the date popover. --}}
+        <div class="position-relative">
+          <button type="button" class="btn btn-sm btn-outline-secondary wopanel-cols-btn">
             <i class="bx bx-columns me-1"></i>Columns
           </button>
-          <div class="dropdown-menu p-2 wopanel-cols-menu" style="min-width:200px;font-size:.8rem;"></div>
+          <div class="wopanel-cols-menu card shadow p-2" style="display:none;position:fixed;z-index:1050;min-width:200px;font-size:.8rem;"></div>
         </div>
       </div>
     </div>
@@ -101,11 +107,12 @@
              the moment any one column was hidden, because the browser had never been told how to
              re-distribute their share. --}}
         <colgroup>
-          <col style="width:8%"><col style="width:9%"><col style="width:13%"><col style="width:11%">
-          <col style="width:9%"><col style="width:6%"><col style="width:8%"><col style="width:6%">
-          <col style="width:8%"><col style="width:8%">
-          @if($panelTab === 'dispatch')<col style="width:8%"><col style="width:8%">@endif
-          <col style="width:7%"><col style="width:7%">
+          <col style="width:6%"><col style="width:7%"><col style="width:10%"><col style="width:8%">
+          <col style="width:7%"><col style="width:5%"><col style="width:6%"><col style="width:5%">
+          <col style="width:6%"><col style="width:5%"><col style="width:5%"><col style="width:5%">
+          <col style="width:6%"><col style="width:6%">
+          @if($panelTab === 'dispatch')<col style="width:6%"><col style="width:6%">@endif
+          <col style="width:6%"><col style="width:5%"><col style="width:5%">
         </colgroup>
         <thead class="table-light">
           <tr>
@@ -118,6 +125,14 @@
             <th class="wopanel-sortable wop-col-category" data-sort="stock_group">Stock group</th>
             <th class="ss-num wopanel-sortable" data-sort="quantity">Qty</th>
             <th class="ss-num wopanel-sortable" data-sort="amount">Amount</th>
+            {{-- Whole-ORDER totals, one column each -- every line of a multi-item order repeats the same
+                 numbers, same as Party/Sales group already do. Explicit request for these as separate
+                 columns, not one combined cell. --}}
+            <th class="ss-num" title="Total ordered quantity across every item on this order">Order qty</th>
+            <th class="ss-num" title="Total already-dispatched quantity across every item on this order">Dispatched</th>
+            <th class="ss-num" title="Total still-pending quantity across every item on this order">Pending qty</th>
+            <th class="ss-num" title="Total value of this whole order, every item">Order amt</th>
+            <th class="ss-num" title="Value of only the still-pending portion of this order">Pending amt</th>
             <th class="wop-col-status">Dispatch</th>
             @if($panelTab === 'dispatch')
               <th class="wop-col-category">Transporter</th>
@@ -127,7 +142,7 @@
             <th class="wop-col-remarks">Remarks</th>
           </tr>
         </thead>
-        <tbody class="wopanel-table-body"><tr><td colspan="{{ $panelTab === 'dispatch' ? 14 : 12 }}" class="text-center text-muted py-5">Loading…</td></tr></tbody>
+        <tbody class="wopanel-table-body"><tr><td colspan="{{ $panelTab === 'dispatch' ? 19 : 17 }}" class="text-center text-muted py-5">Loading…</td></tr></tbody>
         {{-- Totals row, across the WHOLE filtered set (not just the current page) -- explicit request:
              "it is not showing total order qty total pending total sent". --}}
         <tfoot>
@@ -135,6 +150,7 @@
             <td colspan="7">Totals (all filtered lines, every page)</td>
             <td class="ss-num wopanel-tot-qty"></td>
             <td class="ss-num wopanel-tot-amount"></td>
+            <td></td><td></td><td></td><td></td><td></td>
             <td class="wopanel-tot-dispatch"></td>
             @if($panelTab === 'dispatch')<td></td><td></td>@endif
             <td></td><td></td>
@@ -230,7 +246,24 @@ window.__woPanelDataUrl = window.__woPanelDataUrl || {!! json_encode(route('sale
           elUnit = root.querySelector('.wopanel-unit'), elCategory = root.querySelector('.wopanel-category'),
           elGroup = root.querySelector('.wopanel-group'),
           elDateToggle = root.querySelector('.wopanel-date-toggle'), elDatePop = root.querySelector('.wopanel-date-pop'),
+          elColsBtn = root.querySelector('.wopanel-cols-btn'), elColsMenu = root.querySelector('.wopanel-cols-menu'),
           elLoading = root.querySelector('.wopanel-loading');
+
+    // Opens a position:fixed popover/menu anchored under its trigger button, clamped so it never runs off
+    // the right edge of the viewport. Shared by the date popover and the Columns menu -- both used to be
+    // position:absolute inside .wop-filter-row, which scrolls horizontally; overflow-x:auto on that row
+    // silently forces overflow-y:auto too (a real CSS rule, not a bug in this code), which clipped both
+    // popovers to the row's own height. Fixed positioning, computed here from the button's own rect,
+    // isn't clipped by any ancestor's overflow.
+    function openFixedPopover(btn, pop) {
+        const r = btn.getBoundingClientRect();
+        pop.style.display = '';
+        const popWidth = pop.offsetWidth || 260;
+        let left = r.left;
+        if (left + popWidth > window.innerWidth - 8) left = Math.max(8, window.innerWidth - popWidth - 8);
+        pop.style.top = (r.bottom + 4) + 'px';
+        pop.style.left = left + 'px';
+    }
 
     function updateDateToggleLabel() {
         elDateToggle.innerHTML = esc(state.presetLabel) + ' <i class="bx bx-chevron-down"></i>';
@@ -479,9 +512,10 @@ window.__woPanelDataUrl = window.__woPanelDataUrl || {!! json_encode(route('sale
                 ? '<td class="wop-ellip" title="' + esc(r.transporter_name || '') + '">' + esc(r.transporter_name || '—') + '</td>'
                     + '<td class="wop-ellip" title="' + esc([r.docket_no, r.vehicle_number].filter(Boolean).join(' / ')) + '">' + esc([r.docket_no, r.vehicle_number].filter(Boolean).join(' / ') || '—') + '</td>'
                 : '';
-            // Whole row opens the order detail (the modal already listens document-wide for a click on
-            // any [data-wo-order] element) -- clicking anywhere on the row works, not just a button, which
-            // also frees up width so every other column fits without a horizontal scrollbar cutting one off.
+            // Whole ORDER's totals (not this line's own qty/amount) -- explicit request: separate columns
+            // for order qty / dispatched / pending qty / order amount / pending amount, not one combined
+            // cell. Every line of a multi-item order shows the same order-level numbers, same as Party/
+            // Sales group already repeat per line.
             return '<tr class="wop-row" data-wo-order="' + esc(r.order_no) + '">'
                 + '<td class="text-nowrap">' + fdate(r.order_date) + '</td><td class="fw-semibold text-nowrap">' + esc(r.order_no) + '</td>'
                 + '<td class="wop-ellip" title="' + esc(r.item_name || '') + '">' + esc(r.item_name || '—') + '</td>'
@@ -491,11 +525,16 @@ window.__woPanelDataUrl = window.__woPanelDataUrl || {!! json_encode(route('sale
                 + '<td class="wop-ellip" title="' + esc(r.stock_group || '') + '">' + esc(r.stock_group || '—') + '</td>'
                 + '<td class="ss-num">' + qty(r.quantity) + '</td>'
                 + '<td class="ss-num fw-semibold">' + inr(r.amount) + '</td>'
+                + '<td class="ss-num">' + qty(r.order_qty) + '</td>'
+                + '<td class="ss-num">' + qty(r.order_dispatched_qty) + '</td>'
+                + '<td class="ss-num">' + qty(r.order_pending_qty) + '</td>'
+                + '<td class="ss-num">' + inr(r.order_amount) + '</td>'
+                + '<td class="ss-num">' + inr(r.order_pending_amount) + '</td>'
                 + '<td>' + dispatchHtml + '</td>'
                 + dispatchExtraCols
                 + '<td><span class="ss-flag ' + approvalBadge + '">' + esc(approval) + '</span></td>'
                 + '<td class="wop-ellip small" title="' + esc(r.remarks || '') + '">' + esc(r.remarks || '') + '</td></tr>';
-        }).join('') : '<tr><td colspan="' + (PANEL_TAB === 'dispatch' ? 14 : 12) + '" class="text-center text-muted py-5">No work order lines match these filters.</td></tr>';
+        }).join('') : '<tr><td colspan="' + (PANEL_TAB === 'dispatch' ? 19 : 17) + '" class="text-center text-muted py-5">No work order lines match these filters.</td></tr>';
         if (root.__applyColumnVisibility) root.__applyColumnVisibility(); // tbody was just replaced wholesale -- re-apply hidden columns
 
         const from = (t.page - 1) * t.per + 1, to = Math.min(t.page * t.per, t.total);
@@ -524,8 +563,21 @@ window.__woPanelDataUrl = window.__woPanelDataUrl || {!! json_encode(route('sale
         const partyRow = e.target.closest('.wopanel-byparty-row');
         if (partyRow) { state.q = partyRow.dataset.party; elSearch.value = state.q; state.page = 1; load(); return; }
         const dt = e.target.closest('.wopanel-date-toggle');
-        if (dt) { elDatePop.style.display = elDatePop.style.display === 'none' ? '' : 'none'; return; }
-        if (!e.target.closest('.wopanel-date-pop')) { elDatePop.style.display = 'none'; }
+        if (dt) {
+            const willOpen = elDatePop.style.display === 'none';
+            elColsMenu.style.display = 'none';
+            if (willOpen) openFixedPopover(elDateToggle, elDatePop); else elDatePop.style.display = 'none';
+            return;
+        }
+        const colsBtn = e.target.closest('.wopanel-cols-btn');
+        if (colsBtn) {
+            const willOpen = elColsMenu.style.display === 'none';
+            elDatePop.style.display = 'none';
+            if (willOpen) openFixedPopover(elColsBtn, elColsMenu); else elColsMenu.style.display = 'none';
+            return;
+        }
+        if (!e.target.closest('.wopanel-date-pop')) elDatePop.style.display = 'none';
+        if (!e.target.closest('.wopanel-cols-menu')) elColsMenu.style.display = 'none';
         const reset = e.target.closest('.wopanel-reset');
         if (reset) {
             state.q = ''; state.unit = ''; state.category = ''; state.group = ''; state.page = 1; state.sort = 'order_date'; state.dir = 'desc';

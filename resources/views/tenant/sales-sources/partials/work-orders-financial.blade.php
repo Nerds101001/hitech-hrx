@@ -45,7 +45,10 @@
         </select>
         <div class="position-relative wofin-f-date">
           <button type="button" class="btn btn-sm btn-outline-secondary w-100 text-truncate" id="woFinDateToggle"></button>
-          <div class="card shadow p-2" id="woFinDatePop" style="display:none;position:absolute;z-index:20;min-width:260px;top:100%;left:0;">
+          {{-- position:fixed, not absolute -- see work-orders-panel.blade.php's identical note: the
+               filter row's horizontal scroll (overflow-x:auto) implicitly clips overflow-y too, which cut
+               this popover off. Fixed positioning, computed in JS from the button's rect, escapes it. --}}
+          <div class="card shadow p-2" id="woFinDatePop" style="display:none;position:fixed;z-index:1050;min-width:260px;">
             <div class="d-flex flex-wrap gap-1 mb-2">
               @foreach(['mtd' => 'This month', 'lm' => 'Last month', 'last30' => 'Last 30 days', 'qtd' => 'This quarter', 'fytd' => 'Financial year', 'all' => 'All data'] as $k => $label)
                 <button type="button" class="btn btn-sm btn-outline-secondary wofin-preset" data-preset="{{ $k }}">{{ $label }}</button>
@@ -80,13 +83,14 @@
           <option value="Partial Qty Ok">Partial Qty Ok</option>
         </select>
         <button type="button" class="btn btn-sm btn-outline-secondary" id="woFinReset" title="Reset filters"><i class="bx bx-reset"></i></button>
-        {{-- Column show/hide -- same dropdown-of-checkboxes pattern as the Sales Report page's "Columns"
-             button (localStorage-remembered, sr-col-hidden class). --}}
-        <div class="dropdown">
-          <button type="button" class="btn btn-sm btn-outline-secondary dropdown-toggle" id="woFinColsBtn" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
+        {{-- Column show/hide -- same checkbox-list content as the Sales Report page's "Columns" button,
+             but NOT Bootstrap's dropdown/Popper (same clipping problem as the date popover: Popper still
+             leaves the menu as a DOM descendant of the scrolling row). Manually toggled, position:fixed. --}}
+        <div class="position-relative">
+          <button type="button" class="btn btn-sm btn-outline-secondary" id="woFinColsBtn">
             <i class="bx bx-columns me-1"></i>Columns
           </button>
-          <div class="dropdown-menu p-2" id="woFinColsMenu" style="min-width:200px;font-size:.8rem;"></div>
+          <div class="card shadow p-2" id="woFinColsMenu" style="display:none;position:fixed;z-index:1050;min-width:200px;font-size:.8rem;"></div>
         </div>
       </div>
     </div>
@@ -98,10 +102,13 @@
              its <col>, which is what actually avoids the header-overlap corruption that happened when td/th
              alone were hidden on columns with no defined width. --}}
         <colgroup>
-          <col style="width:6%"><col style="width:8%"><col style="width:10%"><col style="width:9%">
-          <col style="width:7%"><col style="width:6%"><col style="width:6%"><col style="width:6%">
-          <col style="width:7%"><col style="width:6%"><col style="width:6%"><col style="width:7%">
-          <col style="width:7%"><col style="width:6%"><col style="width:6%">
+          <col style="width:5%"><col style="width:6%"><col style="width:8%"><col style="width:7%">
+          <col style="width:6%"><col style="width:4%"><col style="width:5%"><col style="width:4%">
+          <col style="width:5%"><col style="width:4%"><col style="width:4%"><col style="width:4%">
+          <col style="width:5%"><col style="width:5%">
+          <col style="width:5%"><col style="width:5%">
+          <col style="width:5%"><col style="width:5%">
+          <col style="width:5%"><col style="width:4%">
         </colgroup>
         <thead class="table-light">
           <tr>
@@ -113,18 +120,24 @@
               <th class="wofin-sortable wofin-col-category" data-sort="stock_group">Stock group</th>
               <th class="ss-num wofin-sortable" data-sort="quantity">Qty</th>
               <th class="ss-num wofin-sortable" data-sort="amount">Amount</th>
+              {{-- Whole-ORDER totals, one column each -- see work-orders-panel.blade.php's identical note. --}}
+              <th class="ss-num" title="Total ordered quantity across every item on this order">Order qty</th>
+              <th class="ss-num" title="Total already-dispatched quantity across every item on this order">Dispatched</th>
+              <th class="ss-num" title="Total still-pending quantity across every item on this order">Pending qty</th>
+              <th class="ss-num" title="Total value of this whole order, every item">Order amt</th>
+              <th class="ss-num" title="Value of only the still-pending portion of this order">Pending amt</th>
               <th class="ss-num wofin-sortable" data-sort="credit_period">Credit</th><th class="ss-num wofin-sortable" data-sort="outstanding_days">O/S days</th>
               <th class="ss-num wofin-sortable" data-sort="total_outstanding">O/S amt</th><th class="ss-num wofin-sortable" data-sort="credit_limit">Credit limit</th>
               <th class="wofin-sortable" data-sort="financial_approval">Approval</th><th class="wofin-col-remarks">Remarks</th></tr>
         </thead>
-        <tbody id="woFinTableBody"><tr><td colspan="15" class="text-center text-muted py-5">Loading…</td></tr></tbody>
+        <tbody id="woFinTableBody"><tr><td colspan="20" class="text-center text-muted py-5">Loading…</td></tr></tbody>
         {{-- Totals row, across the WHOLE filtered set (not just the current page). --}}
         <tfoot>
           <tr class="wofin-totals-row fw-semibold">
             <td colspan="7">Totals (all filtered lines, every page)</td>
             <td class="ss-num" id="woFinTotQty"></td>
             <td class="ss-num" id="woFinTotAmount"></td>
-            <td></td><td></td><td></td><td></td><td></td><td></td>
+            <td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td>
           </tr>
         </tfoot>
       </table>
@@ -208,7 +221,21 @@ window.__woFinCompany = {!! json_encode($company ?: '') !!};
           elFrom = document.getElementById('woFinFrom'), elTo = document.getElementById('woFinTo'),
           elGroup = document.getElementById('woFinGroup'),
           elDateToggle = document.getElementById('woFinDateToggle'), elDatePop = document.getElementById('woFinDatePop'),
+          elColsBtn = document.getElementById('woFinColsBtn'), elColsMenu = document.getElementById('woFinColsMenu'),
           elLoading = document.getElementById('woFinLoading');
+
+    // Opens a position:fixed popover/menu anchored under its trigger button -- see work-orders-panel.blade.php's
+    // identical helper for why this escapes the filter row's overflow-x:auto (which implicitly clips
+    // overflow-y too) instead of using position:absolute.
+    function openFixedPopover(btn, pop) {
+        const r = btn.getBoundingClientRect();
+        pop.style.display = '';
+        const popWidth = pop.offsetWidth || 260;
+        let left = r.left;
+        if (left + popWidth > window.innerWidth - 8) left = Math.max(8, window.innerWidth - popWidth - 8);
+        pop.style.top = (r.bottom + 4) + 'px';
+        pop.style.left = left + 'px';
+    }
 
     function updateDateToggleLabel() { elDateToggle.innerHTML = esc(state.presetLabel) + ' <i class="bx bx-chevron-down"></i>'; }
 
@@ -442,11 +469,16 @@ window.__woFinCompany = {!! json_encode($company ?: '') !!};
                 + '<td class="wofin-ellip" title="' + esc(r.stock_group || '') + '">' + esc(r.stock_group || '—') + '</td>'
                 + '<td class="ss-num">' + qty(r.quantity) + '</td>'
                 + '<td class="ss-num fw-semibold">' + inr(r.amount) + '</td>'
+                + '<td class="ss-num">' + qty(r.order_qty) + '</td>'
+                + '<td class="ss-num">' + qty(r.order_dispatched_qty) + '</td>'
+                + '<td class="ss-num">' + qty(r.order_pending_qty) + '</td>'
+                + '<td class="ss-num">' + inr(r.order_amount) + '</td>'
+                + '<td class="ss-num">' + inr(r.order_pending_amount) + '</td>'
                 + '<td class="ss-num">' + (r.credit_period != null ? r.credit_period + 'd' : '—') + '</td><td class="ss-num">' + (r.outstanding_days != null ? r.outstanding_days : '—') + '</td>'
                 + '<td class="ss-num">' + (r.total_outstanding != null ? inr(r.total_outstanding) : '—') + '</td><td class="ss-num">' + (r.credit_limit != null ? inr(r.credit_limit) : '—') + '</td>'
                 + '<td><span class="ss-flag ' + badge + '">' + esc(r.financial_approval || 'Not set') + '</span></td>'
                 + '<td class="wofin-ellip small" title="' + esc(r.remarks || '') + '">' + esc(r.remarks || '') + '</td></tr>';
-        }).join('') : '<tr><td colspan="15" class="text-center text-muted py-5">No work order lines match these filters.</td></tr>';
+        }).join('') : '<tr><td colspan="20" class="text-center text-muted py-5">No work order lines match these filters.</td></tr>';
         if (applyColumnVisibility) applyColumnVisibility(); // tbody was just replaced wholesale -- re-apply hidden columns
 
         const from = (t.page - 1) * t.per + 1, to = Math.min(t.page * t.per, t.total);
@@ -475,8 +507,21 @@ window.__woFinCompany = {!! json_encode($company ?: '') !!};
         const partyRow = e.target.closest('.wofin-byparty-row');
         if (partyRow) { state.q = partyRow.dataset.party; elSearch.value = state.q; state.page = 1; load(); return; }
         const dt = e.target.closest('#woFinDateToggle');
-        if (dt) { elDatePop.style.display = elDatePop.style.display === 'none' ? '' : 'none'; return; }
-        if (!e.target.closest('#woFinDatePop')) { elDatePop.style.display = 'none'; }
+        if (dt) {
+            const willOpen = elDatePop.style.display === 'none';
+            elColsMenu.style.display = 'none';
+            if (willOpen) openFixedPopover(elDateToggle, elDatePop); else elDatePop.style.display = 'none';
+            return;
+        }
+        const colsBtn = e.target.closest('#woFinColsBtn');
+        if (colsBtn) {
+            const willOpen = elColsMenu.style.display === 'none';
+            elDatePop.style.display = 'none';
+            if (willOpen) openFixedPopover(elColsBtn, elColsMenu); else elColsMenu.style.display = 'none';
+            return;
+        }
+        if (!e.target.closest('#woFinDatePop')) elDatePop.style.display = 'none';
+        if (!e.target.closest('#woFinColsMenu')) elColsMenu.style.display = 'none';
         const reset = e.target.closest('#woFinReset');
         if (reset) {
             state.q = ''; state.unit = ''; state.category = ''; state.group = ''; state.approval = ''; state.page = 1; state.sort = 'order_date'; state.dir = 'desc';

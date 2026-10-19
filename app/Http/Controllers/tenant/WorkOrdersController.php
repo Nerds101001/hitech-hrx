@@ -224,6 +224,9 @@ class WorkOrdersController extends Controller
         foreach ($rows as $r) {
             $r->tracking = $trackingNotes[$r->company . '|' . $r->order_no] ?? null;
         }
+        // Per-ORDER totals, not per-line -- explicit request: "for each work order total order qty
+        // dispatched qty pending qty, and amount for pending order". See orderRollups()'s own doc comment.
+        $this->attachOrderRollups($rows);
 
         $orderCount = $all->pluck('order_no')->unique()->count();
         $dispatchedAmount = $all->filter(fn($r) => $r->delivered_qty !== null && $r->pending_qty <= 0.0001)->sum('amount');
@@ -288,6 +291,65 @@ class WorkOrdersController extends Controller
     {
         return DB::table('tally_ledgers')->groupBy('company', 'normalized_name')
             ->selectRaw('company, normalized_name, MAX(ledger_group) AS ledger_group');
+    }
+
+    /**
+     * Per-ORDER rollup (qty/amount/dispatched/pending), for the "Order qty / Order dispatched / Order
+     * pending / Order amount / Order pending value" columns -- explicit request: every line of a
+     * multi-item order should show the WHOLE order's totals, not just that one line's own numbers, even
+     * for lines a tab filter hid (the Pending tab only lists an order's still-pending lines, but its
+     * order-level totals still need to count the lines that already shipped).
+     *
+     * Matched per ITEM within the order (same as the line-level pending_qty everywhere else on this page),
+     * not a crude whole-order quantity sum -- a multi-item order where one item shipped in full and
+     * another didn't needs its pending VALUE to come from the unshipped item's own rate, not an average
+     * across mismatched units. A line's pending share of its own amount is pending_qty/quantity * amount.
+     *
+     * @param  \Illuminate\Support\Collection<int,string>  $orderNos
+     * @return \Illuminate\Support\Collection<string,array{qty:float,amount:float,dispatched_qty:float,pending_qty:float,pending_amount:float}>
+     */
+    private function orderRollups($orderNos)
+    {
+        if ($orderNos->isEmpty()) {
+            return collect();
+        }
+        $lines = DB::table('tally_sale_orders')->whereIn('order_no', $orderNos)->get(['order_no', 'item_name', 'quantity', 'amount']);
+        $delivered = DB::table('tally_deliveries')->whereIn('order_no', $orderNos)->groupBy('order_no', 'item_name')
+            ->selectRaw('order_no, item_name, SUM(quantity) AS delivered_qty')->get()
+            ->keyBy(fn($d) => $d->order_no . '|' . $d->item_name);
+
+        return $lines->groupBy('order_no')->map(function ($group) use ($delivered) {
+            $qty = 0.0; $amount = 0.0; $pendingQty = 0.0; $pendingAmount = 0.0;
+            foreach ($group as $l) {
+                $lineQty = (float) $l->quantity;
+                $lineAmount = (float) $l->amount;
+                $deliveredQty = (float) ($delivered[$l->order_no . '|' . $l->item_name]->delivered_qty ?? 0);
+                $linePending = max(0, $lineQty - $deliveredQty);
+                $qty += $lineQty;
+                $amount += $lineAmount;
+                $pendingQty += $linePending;
+                $pendingAmount += $lineQty > 0 ? ($linePending / $lineQty) * $lineAmount : 0;
+            }
+            return [
+                'qty' => $qty, 'amount' => $amount, 'dispatched_qty' => max(0, $qty - $pendingQty),
+                'pending_qty' => $pendingQty, 'pending_amount' => $pendingAmount,
+            ];
+        });
+    }
+
+    /** Attaches the orderRollups() figures onto each row as order_qty/order_dispatched_qty/
+     *  order_pending_qty/order_amount/order_pending_amount. */
+    private function attachOrderRollups($rows): void
+    {
+        $rollups = $this->orderRollups($rows->pluck('order_no')->unique());
+        foreach ($rows as $r) {
+            $roll = $rollups[$r->order_no] ?? ['qty' => 0, 'amount' => 0, 'dispatched_qty' => 0, 'pending_qty' => 0, 'pending_amount' => 0];
+            $r->order_qty = $roll['qty'];
+            $r->order_amount = $roll['amount'];
+            $r->order_dispatched_qty = $roll['dispatched_qty'];
+            $r->order_pending_qty = $roll['pending_qty'];
+            $r->order_pending_amount = $roll['pending_amount'];
+        }
     }
 
     /** A LEAN version of the panelData()/financialData() filter -- only joins tally_stock_items when a
@@ -547,6 +609,9 @@ class WorkOrdersController extends Controller
         $total = $all->count();
         $rows = $this->sortRows($all, $sort, $dir)->values()
             ->slice(($page - 1) * $per, $per)->values();
+
+        // Per-ORDER totals -- see orderRollups()'s doc comment (panelData() uses the same helper).
+        $this->attachOrderRollups($rows);
 
         $orderCount = $all->pluck('order_no')->unique()->count();
         $okValue = $all->filter(fn($r) => $r->financial_approval === 'Ok')->sum('amount');
