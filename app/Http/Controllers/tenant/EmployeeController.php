@@ -986,6 +986,15 @@ class EmployeeController extends Controller
           }
       }
 
+      // Direct reports of a terminated manager must not dangle with
+      // reporting_to_id pointing at someone no longer active - skip up to
+      // this manager's own manager, same as a promotion/transfer would leave
+      // them. A manager with no manager of their own (top of the chain)
+      // leaves their reports with reporting_to_id = null rather than guessing.
+      User::where('reporting_to_id', $user->id)
+          ->where('status', '!=', UserAccountStatus::TERMINATED)
+          ->update(['reporting_to_id' => $user->reporting_to_id]);
+
       // Log this action (using a generic activity logger or specific audit)
       Log::info("User ID {$user->id} terminated by User ID {$adminUserId}. Reason: {$validatedData['exitReason']}");
       // Or use JobApplicationActivity if termination stems from recruitment flow? Less likely here.

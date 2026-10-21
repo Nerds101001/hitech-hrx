@@ -503,6 +503,15 @@ class EmployeeLifecycleController extends Controller
                 }
             }
 
+            // 4. Direct reports of a terminated manager must not dangle with
+            // reporting_to_id pointing at someone no longer active - skip up
+            // to this manager's own manager. A manager with no manager of
+            // their own leaves their reports with reporting_to_id = null
+            // rather than guessing.
+            User::where('reporting_to_id', $user->id)
+                ->where('status', '!=', \App\Enums\UserAccountStatus::TERMINATED)
+                ->update(['reporting_to_id' => $user->reporting_to_id]);
+
             DB::commit();
 
             // Raise the IT / HR / Finance / Accounts NOCs and alert everyone.
