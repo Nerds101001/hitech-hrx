@@ -1231,7 +1231,13 @@ class TrainingController extends Controller
         if (! empty($data['content_body'])) {
             $data['content_body'] = \App\Helpers\HtmlSanitizer::clean(
                 $data['content_body'],
-                'p,br,b,strong,i,em,u,s,a[href|title|target],ul,ol,li,h1,h2,h3,h4,h5,h6,span,blockquote,pre,code,hr,img[src|alt|width|height],table,thead,tbody,tr,td,th,div,figure,figcaption'
+                // 'figure'/'figcaption' deliberately left out: HTMLPurifier's
+                // definition is HTML4-based and has no built-in support for
+                // these HTML5 elements -- listing them in HTML.Allowed throws
+                // ErrorException during HTMLDefinition::setupConfigStuff(),
+                // which fataled every save with content at all. An img/caption
+                // inside one still survives, just unwrapped from the tag.
+                'p,br,b,strong,i,em,u,s,a[href|title|target],ul,ol,li,h1,h2,h3,h4,h5,h6,span,blockquote,pre,code,hr,img[src|alt|width|height],table,thead,tbody,tr,td,th,div'
             );
         }
 
