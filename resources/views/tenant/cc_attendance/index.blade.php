@@ -397,14 +397,22 @@
                                                             <input class="form-check-input" type="radio" name="attendance[{{ $emp->id }}]" id="absent_{{ $emp->id }}" value="Absent" onchange="ccToggleWfh({{ $emp->id }}, this.value)" {{ $sel === 'Absent' ? 'checked' : '' }}>
                                                             <label class="form-check-label text-danger fw-bold px-3" for="absent_{{ $emp->id }}">A</label>
                                                         </div>
+                                                        @if(!$partDay || in_array($leaveKind, ['short', 'half']))
                                                         <div class="form-check custom-option custom-option-icon mb-0">
                                                             <input class="form-check-input" type="radio" name="attendance[{{ $emp->id }}]" id="hd_{{ $emp->id }}" value="Half day" onchange="ccToggleWfh({{ $emp->id }}, this.value)" {{ $sel === 'Half day' ? 'checked' : '' }}>
                                                             <label class="form-check-label text-warning fw-bold px-3" for="hd_{{ $emp->id }}">HD</label>
                                                         </div>
+                                                        @endif
+                                                        @if(!$partDay || $leaveKind === 'wfh')
                                                         <div class="form-check custom-option custom-option-icon mb-0">
                                                             <input class="form-check-input" type="radio" name="attendance[{{ $emp->id }}]" id="wfh_{{ $emp->id }}" value="Work from home" onchange="ccToggleWfh({{ $emp->id }}, this.value)" {{ $sel === 'Work from home' ? 'checked' : '' }}>
                                                             <label class="form-check-label text-primary fw-bold px-3" for="wfh_{{ $emp->id }}">WFH</label>
                                                         </div>
+                                                        @endif
+                                                        {{-- "Sunday working"/"Holiday working" don't mean anything
+                                                             on a day that already has a leave claim covering part
+                                                             of it -- the server rejects them there too. --}}
+                                                        @unless($partDay)
                                                         <div class="form-check custom-option custom-option-icon mb-0">
                                                             <input class="form-check-input" type="radio" name="attendance[{{ $emp->id }}]" id="sunday_{{ $emp->id }}" value="Sunday working" onchange="ccToggleWfh({{ $emp->id }}, this.value)" {{ $sel === 'Sunday working' ? 'checked' : '' }}>
                                                             <label class="form-check-label text-info fw-bold px-3" for="sunday_{{ $emp->id }}">PS</label>
@@ -413,6 +421,7 @@
                                                             <input class="form-check-input" type="radio" name="attendance[{{ $emp->id }}]" id="holiday_{{ $emp->id }}" value="Holiday working" onchange="ccToggleWfh({{ $emp->id }}, this.value)" {{ $sel === 'Holiday working' ? 'checked' : '' }}>
                                                             <label class="form-check-label text-info fw-bold px-3" for="holiday_{{ $emp->id }}">HP</label>
                                                         </div>
+                                                        @endunless
                                                         {{-- Clear removes a wrongly-marked day so it can be
                                                              re-marked, or left blank altogether. --}}
                                                         @if($record)

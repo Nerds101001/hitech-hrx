@@ -266,8 +266,10 @@
                                                 // Leave on this day, shown as a small tag in the cell.
                                                 $cellLeave = $monthLeaves[$emp->id][$dateStr] ?? null;
                                                 $leaveTag = null;
+                                                $cellKind = $cellLeave ? \App\Http\Controllers\tenant\CcAttendanceController::leaveKind($cellLeave) : null;
+                                                $cellPartDay = $cellLeave && $cellKind !== 'full';
                                                 if ($cellLeave) {
-                                                    $kind = \App\Http\Controllers\tenant\CcAttendanceController::leaveKind($cellLeave);
+                                                    $kind = $cellKind;
                                                     $hrs = $cellLeave->duration_hours ? rtrim(rtrim(number_format((float) $cellLeave->duration_hours, 2), '0'), '.') . 'h' : '';
                                                     $leaveTag = [
                                                         'text'  => match ($kind) {
@@ -361,10 +363,18 @@
                                                                 <option value="">--</option>
                                                                 <option value="Present" class="cc-opt-p">P</option>
                                                                 <option value="Absent" class="cc-opt-a">A</option>
+                                                                @if(!$cellPartDay || in_array($cellKind, ['short', 'half']))
                                                                 <option value="Half day" class="cc-opt-hd">HD</option>
+                                                                @endif
+                                                                @if(!$cellPartDay || $cellKind === 'wfh')
                                                                 <option value="Work from home" class="cc-opt-wfh">WFH</option>
+                                                                @endif
+                                                                {{-- Meaningless on a day that already has a leave
+                                                                     claim -- the server rejects them there too. --}}
+                                                                @unless($cellPartDay)
                                                                 <option value="Sunday working" class="cc-opt-ps">PS</option>
                                                                 <option value="Holiday working" class="cc-opt-hp">HP</option>
+                                                                @endunless
                                                             </select>
                                                             <input type="hidden" name="notes[{{ $emp->id }}][{{ $dateStr }}]" id="note_{{ $emp->id }}_{{ $dateStr }}">
                                                             <a href="javascript:void(0)" onclick="let n = prompt('Enter Reporting Notes:'); if(n) { document.getElementById('note_{{ $emp->id }}_{{ $dateStr }}').value = n; this.style.color = '#25D366'; this.innerHTML = '<i class=\'ti ti-check\'></i> Note Added'; }" class="text-muted mt-1" style="font-size: 0.65rem; text-decoration: none;" title="Add Reporting Note">

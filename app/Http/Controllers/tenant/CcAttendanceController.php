@@ -289,16 +289,48 @@ class CcAttendanceController extends Controller
             return ['present', $in, $out, ''];
         }
 
+        // The register's own hint text ("HD = half day, A = absent") already
+        // promised these two for a short leave, but only 'Present' was ever
+        // implemented -- the other two fell through to the generic path below,
+        // which stamps an admin_reason and makes AttendanceDayStatus::resolve()
+        // trust a bare 'absent' instead of correctly classifying the day (e.g.
+        // unpaid_leave/half-day) from the still-attached short leave. No admin
+        // reason here on purpose, same as 'Present' above: the matrix derives
+        // the right code itself from workMins + the leave link.
+        if ($kind === 'short' && $status === 'Half day') {
+            // Some, but under 6h, of the day's remainder was worked (4h-5h50m
+            // lands AttendanceDayStatus in its own 'half-day' bucket).
+            return ['half-day', $day('09:30:00'), $day('14:00:00'), ''];
+        }
+        if ($kind === 'short' && $status === 'Absent') {
+            // None of the remainder was worked -- no real punches, matching
+            // how an ordinary Absent day is stored.
+            return ['absent', $day('00:00:00'), null, ''];
+        }
+
         if ($kind === 'half' && in_array($status, ['Present', 'Half day'], true)) {
             // Worked the half the leave does not cover.
             return $leave->half_day_session === 'second_half'
                 ? ['half-day', $day('09:30:00'), $day('14:00:00'), '']
                 : ['half-day', $day('14:00:00'), $day('18:30:00'), ''];
         }
+        if ($kind === 'half' && $status === 'Absent') {
+            // Same hint-text promise as short leave's 'A' -- see above. Left
+            // with no admin reason so the matrix classifies the unworked half
+            // against the leave's own paid/unpaid state (unworkedHalfCode()),
+            // instead of a bare 'absent' that drops that distinction.
+            return ['absent', $day('00:00:00'), null, ''];
+        }
 
         if ($kind === 'wfh' && in_array($status, ['Present', 'Work from home'], true)) {
             return ['work_from_home', $day('09:30:00'), $day('18:30:00'), ''];
         }
+        // wfh + Absent deliberately falls through to the generic path below,
+        // NOT handled here: AttendanceDayStatus::resolve() has no punch-based
+        // way to verify remote work (WFH never required a punch), so its own
+        // "no admin reason" branch trusts any WFH leave as worked unconditionally.
+        // The generic path's admin_reason override -- trusting CCare's raw
+        // 'Absent' as-is -- is what correctly overrides that assumption here.
 
         return null;
     }
@@ -659,7 +691,7 @@ class CcAttendanceController extends Controller
         // Counted so the message can tell the truth. It used to say "Attendance
         // saved" unconditionally — including when every row was skipped and
         // nothing at all was written.
-        $cleared = 0; $saved = 0; $onLeave = 0; $onPending = 0;
+        $cleared = 0; $saved = 0; $onLeave = 0; $onPending = 0; $invalidForLeave = 0;
 
         foreach ($request->attendance as $userId => $status) {
             if (empty($status)) continue;
@@ -667,6 +699,16 @@ class CcAttendanceController extends Controller
             $attendance = $existingAttendances->get($userId);
             $claim = $leaveClaims->get((int) $userId);
             $partDay = $claim && self::leaveKind($claim) !== 'full';
+
+            // "Sunday working"/"Holiday working" don't mean anything on a day
+            // that already has a leave claim covering part of it -- the register's
+            // own hint text for a part-day leave only ever offers P/HD/A (or
+            // WFH), never these two. Reject rather than let them fall through
+            // to the generic path and silently detach the day from its leave.
+            if ($partDay && in_array($status, ['Sunday working', 'Holiday working'], true)) {
+                $invalidForLeave++;
+                continue;
+            }
 
             // Previous submissions can be corrected while the date is open (the
             // window check above already blocked locked dates; Admin/HR always
@@ -774,6 +816,8 @@ class CcAttendanceController extends Controller
                 $why = "those salespeople are on approved leave for {$date} — leave is managed by the Leave module.";
             } elseif ($onPending) {
                 $why = "those salespeople have applied for leave on {$date} and it is still awaiting approval — their attendance cannot be marked until the leave is decided.";
+            } elseif ($invalidForLeave) {
+                $why = "\"Sunday working\"/\"Holiday working\" can't be marked on a day that already has a leave claim — pick P / A / HD / WFH instead for those.";
             } else {
                 $why = 'no attendance status was ticked. Choose P / A / HD / WFH / PS / HP for at least one salesperson.';
             }
@@ -785,6 +829,7 @@ class CcAttendanceController extends Controller
         if ($saved)     { $parts[] = $saved . ' ' . str('salesperson')->plural($saved) . ' marked'; }
         if ($cleared)   { $parts[] = $cleared . ' ' . str('entry')->plural($cleared) . ' cleared'; }
         if ($onLeave)   { $parts[] = $onLeave . ' skipped (on approved leave)'; }
+        if ($invalidForLeave) { $parts[] = $invalidForLeave . ' skipped ("Sunday working"/"Holiday working" is not valid on a leave day)'; }
         if ($onPending) { $parts[] = $onPending . ' skipped (leave applied, awaiting approval)'; }
         $msg = 'Attendance saved for ' . Carbon::parse($date)->format('d M Y') . ' — ' . implode(', ', $parts) . '.';
 
@@ -1006,6 +1051,12 @@ class CcAttendanceController extends Controller
                 $claim = isset($claimsByDate[$dateStr]) ? $claimsByDate[$dateStr]->get((int) $userId) : null;
                 $partDay = $claim && self::leaveKind($claim) !== 'full';
                 if ($claim && !$partDay) {
+                    $skippedForLeave++;
+                    continue;
+                }
+                // Same guard as the daily register's store(): these two don't
+                // mean anything on a day that already has a leave claim.
+                if ($partDay && in_array($status, ['Sunday working', 'Holiday working'], true)) {
                     $skippedForLeave++;
                     continue;
                 }
