@@ -50,6 +50,29 @@ class LeaveController extends Controller
     return false;
   }
 
+  /**
+   * Who an approval should be recorded as coming from: the employee's own
+   * manager when that manager is a vacant-position account delegated to the
+   * person actually clicking Approve, otherwise the real actor. This is
+   * computed from the employee's actual reporting line and the delegate
+   * pointer on their manager's account — never from client input — so there
+   * is nothing here for a request to spoof. An admin approving a report of
+   * GM-IT (delegated to them) is recorded as "approved by GM-IT", exactly as
+   * if they had switched into that account first; approving anyone else's
+   * request is unaffected and still records their own id, as before.
+   */
+  private function approverIdFor($actor, int $targetUserId): int
+  {
+    $managerId = User::find($targetUserId)?->reporting_to_id;
+    if ($managerId) {
+        $manager = User::find($managerId);
+        if ($manager && (int) $manager->access_delegate_id === (int) $actor->id) {
+            return $manager->id;
+        }
+    }
+    return $actor->id;
+  }
+
   public function index()
   {
     $employees = User::select('id', 'first_name', 'last_name', 'code')
@@ -70,6 +93,9 @@ class LeaveController extends Controller
       'pageConfigs' => ['contentLayout' => 'wide'],
       'employees'   => $employees,
       'leaveTypes'  => $leaveTypes,
+      // The "Delegate Access" tab only makes sense for someone who actually
+      // delegates for at least one vacant-position account.
+      'hasDelegatedAccounts' => User::where('access_delegate_id', auth()->id())->exists(),
     ]);
   }
 
@@ -77,7 +103,13 @@ class LeaveController extends Controller
   {
     try {
       $user = auth()->user();
-      $isManager = $user->hasRole('manager') && !$user->hasRole(['admin', 'hr']);
+      // Was role-only, out of step with canApproveFor() below which also
+      // honours the leave.approve.team permission — someone holding only
+      // that permission (e.g. a delegate for a vacant manager seat, with no
+      // reports of their own) fell through to the unscoped branch and saw
+      // every pending leave in the company, though canApproveFor() still
+      // correctly refused to let them act on any outside their own scope.
+      $isManager = ($user->hasRole('manager') || $user->can('leave.approve.team')) && !$user->hasRole(['admin', 'hr']);
       $isAccounts = $user->hasRole('accounts') && !$user->hasRole(['admin', 'hr']);
       
       $leaveQuery = LeaveRequest::query()->with(['user', 'user.department', 'approvedBy', 'leaveType' => function ($q) {
@@ -90,6 +122,19 @@ class LeaveController extends Controller
           $scopedUserIds = array_merge($managedSubordinateIds, [$user->id]);
           $leaveQuery->whereIn('user_id', $scopedUserIds);
           $odQuery->whereIn('user_id', $scopedUserIds);
+      }
+
+      // "Delegate Access" tab: only the teams of vacant-position accounts
+      // delegated to this user (not their own reports, not everyone else's —
+      // even an admin, who otherwise sees the whole company unscoped here,
+      // gets narrowed to just this when they ask for it). Empty list for
+      // someone with no delegated accounts, rather than falling through to
+      // an unscoped/wrong result.
+      if ($request->boolean('delegateScope')) {
+          $delegatedAccountIds = User::where('access_delegate_id', $user->id)->pluck('id')->toArray();
+          $delegatedTeamIds = empty($delegatedAccountIds) ? [-1] : User::whereIn('reporting_to_id', $delegatedAccountIds)->notTerminated()->pluck('id')->toArray();
+          $leaveQuery->whereIn('user_id', $delegatedTeamIds ?: [-1]);
+          $odQuery->whereIn('user_id', $delegatedTeamIds ?: [-1]);
       }
 
       if ($isAccounts) {
@@ -266,7 +311,7 @@ class LeaveController extends Controller
   {
     try {
       $user = auth()->user();
-      $isManager = $user->hasRole('manager') && !$user->hasRole(['admin', 'hr']);
+      $isManager = ($user->hasRole('manager') || $user->can('leave.approve.team')) && !$user->hasRole(['admin', 'hr']);
 
       $month = (int) ($request->input('summaryMonth') ?: now()->month);
       $year  = (int) ($request->input('summaryYear') ?: now()->year);
@@ -428,17 +473,18 @@ class LeaveController extends Controller
       }
 
       $leaveRequest->status = $validated['status'];
+      $approverId = $this->approverIdFor(auth()->user(), $leaveRequest->user_id);
 
       if ($validated['status'] == LeaveRequestStatus::CANCELLED) {
         $leaveRequest->cancel_reason = $validated['adminNotes'] ?? null;
         $leaveRequest->cancelled_at = now();
       } elseif ($validated['status'] == LeaveRequestStatus::APPROVED->value || $validated['status'] == 'approved') {
         $leaveRequest->approval_notes = $validated['adminNotes'] ?? null;
-        $leaveRequest->approved_by_id = auth()->id();
+        $leaveRequest->approved_by_id = $approverId;
         $leaveRequest->approved_at = now();
       } else {
         $leaveRequest->approval_notes = $validated['adminNotes'] ?? null;
-        $leaveRequest->rejected_by_id = auth()->id();
+        $leaveRequest->rejected_by_id = $approverId;
         $leaveRequest->rejected_at = now();
       }
 
@@ -468,6 +514,7 @@ class LeaveController extends Controller
     try {
       $leaveIds = [];
       $outdoorIds = [];
+      $actor = auth()->user();
       foreach ($validated['ids'] as $uid) {
           if (str_starts_with($uid, 'leave_')) $leaveIds[] = str_replace('leave_', '', $uid);
           elseif (str_starts_with($uid, 'outdoor_')) $outdoorIds[] = str_replace('outdoor_', '', $uid);
@@ -477,7 +524,6 @@ class LeaveController extends Controller
       // Process Leaves
       if (count($leaveIds) > 0) {
           $leaveRequests = LeaveRequest::whereIn('id', $leaveIds)->get();
-          $actor = auth()->user();
           foreach ($leaveRequests as $leaveRequest) {
             if ($leaveRequest->user_id === auth()->id() && in_array($validated['status'], ['approved', 'rejected'])) {
                 continue; // Skip their own requests
@@ -487,11 +533,12 @@ class LeaveController extends Controller
             }
             $newStatus = LeaveRequestStatus::tryFrom($validated['status']) ?? $validated['status'];
             $leaveRequest->status = $newStatus;
+            $approverId = $this->approverIdFor($actor, $leaveRequest->user_id);
             if ($validated['status'] == 'approved') {
-                $leaveRequest->approved_by_id = auth()->id();
+                $leaveRequest->approved_by_id = $approverId;
                 $leaveRequest->approved_at = now();
             } elseif ($validated['status'] == 'rejected') {
-                $leaveRequest->rejected_by_id = auth()->id();
+                $leaveRequest->rejected_by_id = $approverId;
                 $leaveRequest->rejected_at = now();
             }
             $leaveRequest->save();
@@ -512,11 +559,12 @@ class LeaveController extends Controller
                   continue; // Skip requests outside what this actor can approve
               }
               $duty->status = $validated['status'];
+              $approverId = $this->approverIdFor($actor, $duty->user_id);
               if ($validated['status'] === 'approved') {
-                  $duty->approved_by_id = auth()->id();
+                  $duty->approved_by_id = $approverId;
                   $duty->approved_at = now();
               } elseif ($validated['status'] === 'rejected') {
-                  $duty->rejected_by_id = auth()->id();
+                  $duty->rejected_by_id = $approverId;
                   $duty->rejected_at = now();
               }
               $duty->save();
@@ -546,7 +594,7 @@ class LeaveController extends Controller
     // Mirror getListAjax's scope exactly rather than inventing a new one, and
     // 404 (not 403) so an id outside someone's remit doesn't confirm it exists.
     $user       = auth()->user();
-    $isManager  = $user->hasRole('manager') && !$user->hasRole(['admin', 'hr']);
+    $isManager  = ($user->hasRole('manager') || $user->can('leave.approve.team')) && !$user->hasRole(['admin', 'hr']);
     $isAccounts = $user->hasRole('accounts') && !$user->hasRole(['admin', 'hr']);
 
     if ($isManager) {
@@ -661,7 +709,11 @@ class LeaveController extends Controller
         ->whereIn('status', ['pending', 'approved'])->first();
 
       if ($existing) {
-        return response()->json(['status' => 'error', 'message' => 'An outdoor duty request already exists for this date.']);
+        // 422, not 200 -- see outdoorDutyActionAjax's own note below: the page's
+        // success callback never checked the status field, so a 200 here made a
+        // rejected double-submit show "submitted successfully" and silently
+        // drop the actual conflict message.
+        return response()->json(['status' => 'error', 'message' => 'An outdoor duty request already exists for this date.'], 422);
       }
 
       $duty = OutdoorDuty::create([
@@ -689,7 +741,7 @@ class LeaveController extends Controller
       return response()->json(['status' => 'success', 'message' => 'Outdoor duty request submitted successfully.']);
     } catch (Exception $e) {
       Log::error('OutdoorDuty store error: ' . $e->getMessage());
-      return response()->json(['status' => 'error', 'message' => 'Something went wrong. Please try again.']);
+      return response()->json(['status' => 'error', 'message' => 'Something went wrong. Please try again.'], 500);
     }
   }
 
@@ -721,14 +773,15 @@ class LeaveController extends Controller
 
       $duty->status        = $validated['status'];
       $duty->updated_by_id = $user->id;
+      $approverId          = $this->approverIdFor($user, (int) $duty->user_id);
 
       if ($validated['status'] === 'approved') {
-        $duty->approved_by_id = $user->id;
+        $duty->approved_by_id = $approverId;
         $duty->approved_at    = now();
         $duty->approval_notes = $validated['adminNotes'] ?? null;
         $this->markOutdoorDutyAttendance($duty);
       } elseif ($validated['status'] === 'rejected') {
-        $duty->rejected_by_id = $user->id;
+        $duty->rejected_by_id = $approverId;
         $duty->rejected_at    = now();
         $duty->approval_notes = $validated['adminNotes'] ?? null;
       } else {

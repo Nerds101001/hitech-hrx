@@ -56,7 +56,12 @@ class LeaveRequestApproval extends Notification
       })->where('status', \App\Enums\UserAccountStatus::ACTIVE)->pluck('email')->toArray();
       
     $manager = $this->leaveRequest->user->reportingTo;
-    $managerEmail = $manager?->email;
+    // routeNotificationForMail(), not the raw column: a manager that's a
+    // vacant-position account (e.g. GM-IT) has a dummy address that bounces
+    // on every send — the override redirects it to the real delegate's
+    // inbox. Reading ->email directly here bypassed that and kept CC'ing
+    // the bouncing address even after the fix (User::routeNotificationForMail).
+    $managerEmail = $manager?->routeNotificationForMail();
     
     $isRecipientHR = $notifiable->hasRole('hr');
     $isRecipientManager = ($manager && $notifiable->id === $manager->id);

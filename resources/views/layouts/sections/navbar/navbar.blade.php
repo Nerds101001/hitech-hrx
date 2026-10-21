@@ -9,14 +9,13 @@
     $addonService = app(IAddonService::class);
     $isSuperAdmin = Auth::user()?->hasRole('admin') ?? false;
     $showPricingDesk = Auth::check() && \App\Support\PricingDeskAccess::canView(Auth::user());
-    // The full Pricing Desk page is now locked to one salesperson plus
-    // admins — see PricingDeskController@index — so the link to it is
-    // hidden for everyone else; the Quick Calculator popup above stays
-    // available to the broader $showPricingDesk audience as before.
-    $showFullPricingDesk = Auth::check() && (
-        \App\Support\PricingDeskAccess::canManage(Auth::user())
-        || strtolower(Auth::user()->email ?? '') === 'mukul@rustx.com'
-    );
+    // The full Pricing Desk page (see PricingDeskController@index) is open
+    // to the same canView() roster as the Quick Calculator popup again —
+    // a brief Mukul-only restriction earlier in this page's redesign has
+    // been lifted. Kept as its own variable (rather than reusing
+    // $showPricingDesk directly in the markup below) so a future narrower
+    // rule for just this link stays a one-line change here.
+    $showFullPricingDesk = $showPricingDesk;
 @endphp
 
 <style>

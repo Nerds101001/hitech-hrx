@@ -11,27 +11,26 @@ use Illuminate\Http\Request;
 /**
  * The Sales Pricing Desk: price list, discount-approval finder, product
  * calculators, and — for admins — the price/discount/factor editor (the
- * Admin tab). Viewing is locked to one salesperson (mukul@rustx.com) plus
- * whoever already has PricingDeskAccess::canManage() (admin role or the
- * pricing_desk.manage permission), rather than the wider department-based
- * roster PricingDeskAccess::canView() normally allows; the Admin tab itself
- * still follows canManage() exactly as before the redesign, so Mukul never
- * sees it while every admin does.
+ * Admin tab). Viewing is open to PricingDeskAccess::canView()'s full roster
+ * (admin/hr by role, anyone else via the pricing_desk.view/manage permission
+ * or their department matching config/pricing_desk.php) — back to the same
+ * audience as the header's Quick Calculator popup, after a brief Mukul-only
+ * restriction earlier in this page's redesign. The Admin tab itself still
+ * follows canManage() (admin role or pricing_desk.manage) regardless of who
+ * can view the rest of the page, so price/rule editing stays admin-only.
  */
 class PricingDeskController extends Controller
 {
     public function index()
     {
         $user = auth()->user();
-        $canManage = PricingDeskAccess::canManage($user);
-        $isMukul = strtolower($user->email ?? '') === 'mukul@rustx.com';
-        abort_unless($canManage || $isMukul, 404);
+        abort_unless(PricingDeskAccess::canView($user), 404);
 
         $row = PricingDeskData::current();
 
         return view('tenant.pricing-desk.index', [
             'seedJson' => $this->safeJson($row->data),
-            'canManage' => $canManage,
+            'canManage' => PricingDeskAccess::canManage($user),
         ]);
     }
 
@@ -59,6 +58,7 @@ class PricingDeskController extends Controller
             'vci'     => $trim($data['vci'] ?? []),
             'lubes'   => $trim($data['lubes'] ?? []),
             'drbio'   => $trim($data['drbio'] ?? []),
+            'kif'     => $trim($data['kif'] ?? []),
             'rules'   => $data['rules'] ?? [],
             'lists'   => $data['lists'] ?? [],
         ]);

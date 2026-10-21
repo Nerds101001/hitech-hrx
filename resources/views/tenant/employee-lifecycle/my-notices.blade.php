@@ -118,7 +118,24 @@
                     </td>
                     <td>{!! $severityBadge($w->severity ?? null) !!}</td>
                     <td class="text-nowrap">{{ $fmt($w->warning_date ?? $w->created_at) }}</td>
-                    <td><small class="text-muted">{{ \Illuminate\Support\Str::limit($w->description ?: '—', 70) }}</small></td>
+                    <td>
+                      <small class="text-muted">{{ \Illuminate\Support\Str::limit($w->description ?: '—', 70) }}</small>
+                      <button type="button" class="btn btn-sm btn-link p-0 ms-1 ln-view-detail"
+                        data-bs-toggle="modal" data-bs-target="#noticeDetailModal"
+                        data-kind="Warning" data-type="{{ e(str_replace('_', ' ', ucfirst($w->warning_type ?? '—'))) }}"
+                        data-severity="{{ e(ucfirst($w->severity ?? '—')) }}" data-date="{{ $fmt($w->warning_date ?? $w->created_at) }}"
+                        data-description="{{ e($w->description ?? '') }}" data-action-label="Corrective Action Taken"
+                        data-action="{{ e($w->action_taken ?: '—') }}" data-notes="{{ e($w->notes ?: '—') }}"
+                        data-issued-by="{{ e(optional($w->givenBy)->getFullName() ?? 'System') }}"
+                        data-attachment="{{ $w->attachment_path ? route('employee-lifecycle.warnings.attachment', $w->id) : '' }}"
+                        data-reply-url="{{ route('employee-lifecycle.warnings.reply', $w->id) }}"
+                        data-ack-url="{{ route('employee-lifecycle.warnings.acknowledge', $w->id) }}"
+                        data-acknowledged="{{ $w->acknowledged_at ? '1' : '0' }}"
+                        data-acknowledged-at="{{ $w->acknowledged_at ? $fmt($w->acknowledged_at) : '' }}"
+                        data-remarks="{{ e($w->employee_remarks ?? '') }}"
+                        data-remarks-at="{{ $w->employee_remarks_at ? $fmt($w->employee_remarks_at) : '' }}"
+                      >Read more &amp; Reply</button>
+                    </td>
                     <td>{!! $statusBadge($w->status ?? null) !!}</td>
                     <td>{!! $ackBadge($w->acknowledged_at) !!}</td>
                     <td class="text-end">
@@ -167,7 +184,23 @@
                     </td>
                     <td>{!! $severityBadge($c->severity ?? null) !!}</td>
                     <td class="text-nowrap">{{ $fmt($c->complaint_date ?? $c->created_at) }}</td>
-                    <td><small class="text-muted">{{ \Illuminate\Support\Str::limit($c->description ?: '—', 70) }}</small></td>
+                    <td>
+                      <small class="text-muted">{{ \Illuminate\Support\Str::limit($c->description ?: '—', 70) }}</small>
+                      <button type="button" class="btn btn-sm btn-link p-0 ms-1 ln-view-detail"
+                        data-bs-toggle="modal" data-bs-target="#noticeDetailModal"
+                        data-kind="Complaint" data-type="{{ e(str_replace('_', ' ', ucfirst($c->complaint_type ?? '—'))) }}"
+                        data-severity="{{ e(ucfirst($c->severity ?? '—')) }}" data-date="{{ $fmt($c->complaint_date ?? $c->created_at) }}"
+                        data-description="{{ e($c->description ?? '') }}" data-action-label="Resolution"
+                        data-action="{{ e($c->resolution ?: '—') }}" data-notes="{{ e($c->notes ?: '—') }}"
+                        data-attachment="{{ $c->attachment_path ? route('employee-lifecycle.complaints.attachment', $c->id) : '' }}"
+                        data-reply-url="{{ route('employee-lifecycle.complaints.reply', $c->id) }}"
+                        data-ack-url="{{ route('employee-lifecycle.complaints.acknowledge', $c->id) }}"
+                        data-acknowledged="{{ $c->acknowledged_at ? '1' : '0' }}"
+                        data-acknowledged-at="{{ $c->acknowledged_at ? $fmt($c->acknowledged_at) : '' }}"
+                        data-remarks="{{ e($c->employee_remarks ?? '') }}"
+                        data-remarks-at="{{ $c->employee_remarks_at ? $fmt($c->employee_remarks_at) : '' }}"
+                      >Read more &amp; Reply</button>
+                    </td>
                     <td>{!! $statusBadge($c->status ?? null) !!}</td>
                     <td>{!! $ackBadge($c->acknowledged_at) !!}</td>
                     <td class="text-end">
@@ -266,4 +299,122 @@
 
   </div>
 </div>
+
+{{-- Full detail for a warning/complaint row, filled in by JS from the "Read more" button's data-* attributes --}}
+<div class="modal fade" id="noticeDetailModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><span class="ln-detail-kind"></span> Detail</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div class="row g-3 mb-3">
+          <div class="col-md-4"><small class="text-muted d-block">Type</small><span class="ln-detail-type"></span></div>
+          <div class="col-md-4"><small class="text-muted d-block">Severity</small><span class="ln-detail-severity"></span></div>
+          <div class="col-md-4"><small class="text-muted d-block">Date</small><span class="ln-detail-date"></span></div>
+        </div>
+        <div class="mb-3 ln-detail-issuedby-wrap">
+          <small class="text-muted d-block">Issued By</small><span class="ln-detail-issuedby fw-medium"></span>
+        </div>
+        <div class="mb-3">
+          <small class="text-muted d-block">Description</small>
+          <p class="ln-detail-description mb-0" style="white-space: pre-wrap;"></p>
+        </div>
+        <div class="mb-3">
+          <small class="text-muted d-block ln-detail-action-label"></small>
+          <p class="ln-detail-action mb-0" style="white-space: pre-wrap;"></p>
+        </div>
+        <div class="mb-3">
+          <small class="text-muted d-block">Notes</small>
+          <p class="ln-detail-notes mb-0" style="white-space: pre-wrap;"></p>
+        </div>
+        <div class="ln-detail-attachment-wrap mb-3">
+          <a href="#" target="_blank" class="btn btn-sm btn-hitech ln-detail-attachment"><i class="bx bx-paperclip me-1"></i>View Attachment</a>
+        </div>
+
+        <hr>
+
+        {{-- Your reply: shown read-only once posted, HR/Admin see it on their own copy of this record. --}}
+        <div class="ln-detail-remarks-posted-wrap mb-3" style="display:none;">
+          <small class="text-muted d-block">Your Reply <span class="ln-detail-remarks-at"></span></small>
+          <p class="ln-detail-remarks-posted mb-0" style="white-space: pre-wrap;"></p>
+        </div>
+        <form method="POST" class="ln-detail-reply-form mb-3">
+          @csrf
+          <label class="form-label small text-muted mb-1">Post a Reply / Comment</label>
+          <textarea name="employee_remarks" class="form-control mb-2" rows="3" maxlength="1000" required placeholder="Your response — visible to HR/Admin once posted."></textarea>
+          <button type="submit" class="btn btn-sm btn-hitech">Post Reply</button>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <form method="POST" class="ln-detail-ack-form">
+          @csrf
+          <button type="submit" class="btn btn-sm btn-hitech ln-detail-ack-btn">Acknowledge</button>
+        </form>
+        <span class="text-muted small ln-detail-already-acked" style="display:none;">Acknowledged <span class="ln-detail-acked-at"></span></span>
+        <button type="button" class="btn btn-label-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    document.querySelectorAll('.ln-view-detail').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        const modal = document.getElementById('noticeDetailModal');
+        if (!modal) return;
+        const set = function (cls, value, isLink) {
+          const el = modal.querySelector('.' + cls);
+          if (!el) return;
+          if (isLink) { el.href = value || '#'; }
+          else { el.textContent = value || '—'; }
+        };
+        set('ln-detail-kind', btn.dataset.kind);
+        set('ln-detail-type', btn.dataset.type);
+        set('ln-detail-severity', btn.dataset.severity);
+        set('ln-detail-date', btn.dataset.date);
+        set('ln-detail-description', btn.dataset.description);
+        set('ln-detail-action-label', btn.dataset.actionLabel);
+        set('ln-detail-action', btn.dataset.action);
+        set('ln-detail-notes', btn.dataset.notes);
+        const issuedBy = btn.dataset.issuedBy;
+        modal.querySelector('.ln-detail-issuedby-wrap').style.display = issuedBy ? '' : 'none';
+        if (issuedBy) set('ln-detail-issuedby', issuedBy);
+        const attachmentUrl = btn.dataset.attachment;
+        modal.querySelector('.ln-detail-attachment-wrap').style.display = attachmentUrl ? '' : 'none';
+        if (attachmentUrl) set('ln-detail-attachment', attachmentUrl, true);
+
+        // Reply: already posted once -> show it read-only; otherwise show the form.
+        const remarks = btn.dataset.remarks;
+        const replyForm = modal.querySelector('.ln-detail-reply-form');
+        const postedWrap = modal.querySelector('.ln-detail-remarks-posted-wrap');
+        if (remarks) {
+          postedWrap.style.display = '';
+          replyForm.style.display = 'none';
+          set('ln-detail-remarks-posted', remarks);
+          set('ln-detail-remarks-at', btn.dataset.remarksAt ? '(' + btn.dataset.remarksAt + ')' : '');
+        } else {
+          postedWrap.style.display = 'none';
+          replyForm.style.display = '';
+        }
+        replyForm.action = btn.dataset.replyUrl || '#';
+
+        // Acknowledge: hide the button once already acknowledged.
+        const ackForm = modal.querySelector('.ln-detail-ack-form');
+        const ackedLabel = modal.querySelector('.ln-detail-already-acked');
+        if (btn.dataset.acknowledged === '1') {
+          ackForm.style.display = 'none';
+          ackedLabel.style.display = '';
+          set('ln-detail-acked-at', btn.dataset.acknowledgedAt ? '(' + btn.dataset.acknowledgedAt + ')' : '');
+        } else {
+          ackForm.style.display = '';
+          ackedLabel.style.display = 'none';
+        }
+        ackForm.action = btn.dataset.ackUrl || '#';
+      });
+    });
+  });
+</script>
 @endsection

@@ -503,6 +503,15 @@ class EmployeeLifecycleController extends Controller
                 }
             }
 
+            // 4. Direct reports of a terminated manager must not dangle with
+            // reporting_to_id pointing at someone no longer active - skip up
+            // to this manager's own manager. A manager with no manager of
+            // their own leaves their reports with reporting_to_id = null
+            // rather than guessing.
+            User::where('reporting_to_id', $user->id)
+                ->where('status', '!=', \App\Enums\UserAccountStatus::TERMINATED)
+                ->update(['reporting_to_id' => $user->reporting_to_id]);
+
             DB::commit();
 
             // Raise the IT / HR / Finance / Accounts NOCs and alert everyone.
@@ -668,6 +677,51 @@ class EmployeeLifecycleController extends Controller
         }
 
         return redirect()->back()->with('success', 'Acknowledged.');
+    }
+
+    /**
+     * The signed-in employee replies to a warning issued to them, from the
+     * "Read more" popup. One reply per record — posting again overwrites it
+     * rather than threading, to match what the popup shows. Visible to
+     * HR/Admin on the same popup immediately; no notification is sent.
+     */
+    public function replyToWarning(Request $request, EmployeeWarning $warning): RedirectResponse
+    {
+        if ($warning->user_id !== Auth::id()) {
+            abort(403);
+        }
+
+        $validated = $request->validate([
+            'employee_remarks' => 'required|string|max:1000',
+        ]);
+
+        $warning->update([
+            'employee_remarks' => $validated['employee_remarks'],
+            'employee_remarks_at' => now(),
+        ]);
+
+        return redirect()->back()->with('success', 'Your reply was posted.');
+    }
+
+    /**
+     * The signed-in employee replies to a complaint recorded against them.
+     */
+    public function replyToComplaint(Request $request, EmployeeComplaint $complaint): RedirectResponse
+    {
+        if ($complaint->respondent_id !== Auth::id()) {
+            abort(403);
+        }
+
+        $validated = $request->validate([
+            'employee_remarks' => 'required|string|max:1000',
+        ]);
+
+        $complaint->update([
+            'employee_remarks' => $validated['employee_remarks'],
+            'employee_remarks_at' => now(),
+        ]);
+
+        return redirect()->back()->with('success', 'Your reply was posted.');
     }
 
     /**

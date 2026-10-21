@@ -860,6 +860,25 @@ class User extends Authenticatable implements JWTSubject, AuditableContract
     return $this->access_delegate_id ? ($this->accessDelegate ?? $this) : $this;
   }
 
+  /**
+   * Routes every mail notification sent to a vacant-position placeholder
+   * account (e.g. GM-Export, GM-IT — org-chart seats with no real hire) to
+   * its acting delegate's real inbox instead. Those accounts' own addresses
+   * (gmexport@rustx.com etc.) are dummy and bounce — unlike a mangled
+   * ex-employee address (see SkipUnmailableRecipients), these are
+   * syntactically valid, so nothing else in the mail pipeline catches them.
+   * Standard Laravel Notifiable hook: this applies to every notification
+   * class that uses the mail channel, not just leave requests.
+   */
+  public function routeNotificationForMail($notification = null)
+  {
+    if ($this->access_delegate_id && $this->accessDelegate) {
+      return $this->accessDelegate->email;
+    }
+
+    return $this->email;
+  }
+
   public function workControlRoutines()
   {
     return $this->hasMany(WorkControlRoutine::class, 'user_id');

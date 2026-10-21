@@ -310,7 +310,23 @@
                     <td>{!! $who($r) !!}</td>
                     <td class="text-capitalize">{{ str_replace('_', ' ', $r->warning_type ?? '—') }}</td>
                     <td>{{ $fmt($r->warning_date ?? $r->created_at ?? null) }}</td>
-                    <td><small class="text-muted">{{ \Illuminate\Support\Str::limit($r->description ?: '—', 40) }}</small></td>
+                    <td>
+                      <small class="text-muted">{{ \Illuminate\Support\Str::limit($r->description ?: '—', 40) }}</small>
+                      <button type="button" class="btn btn-sm btn-link p-0 ms-1 lc-view-detail"
+                        data-bs-toggle="modal" data-bs-target="#warningDetailModal"
+                        data-employee="{{ e(trim(($r->user->first_name ?? '') . ' ' . ($r->user->last_name ?? ''))) }}"
+                        data-type="{{ e(str_replace('_', ' ', ucfirst($r->warning_type ?? '—'))) }}"
+                        data-severity="{{ e(ucfirst($r->severity ?? '—')) }}"
+                        data-date="{{ $fmt($r->warning_date ?? $r->created_at ?? null) }}"
+                        data-description="{{ e($r->description ?? '') }}"
+                        data-action-taken="{{ e($r->action_taken ?: '—') }}"
+                        data-notes="{{ e($r->notes ?: '—') }}"
+                        data-issued-by="{{ e(optional($r->givenBy)->getFullName() ?? 'System') }}"
+                        data-attachment="{{ $r->attachment_path ? route('employee-lifecycle.warnings.attachment', $r->id) : '' }}"
+                        data-remarks="{{ e($r->employee_remarks ?? '') }}"
+                        data-remarks-at="{{ $r->employee_remarks_at ? $fmt($r->employee_remarks_at) : '' }}"
+                      >Read more</button>
+                    </td>
                     <td>{!! $pill($r->status ?? null) !!}</td>
                     <td>
                       @if($r->acknowledged_at)
@@ -359,7 +375,23 @@
                 @forelse($tabComplaints as $r)
                   <tr>
                     <td>{!! $who($r) !!}</td>
-                    <td><small class="text-muted">{{ \Illuminate\Support\Str::limit($r->description ?: '—', 40) }}</small></td>
+                    <td>
+                      <small class="text-muted">{{ \Illuminate\Support\Str::limit($r->description ?: '—', 40) }}</small>
+                      <button type="button" class="btn btn-sm btn-link p-0 ms-1 lc-view-detail"
+                        data-bs-toggle="modal" data-bs-target="#complaintDetailModal"
+                        data-employee="{{ e(trim(($r->user->first_name ?? '') . ' ' . ($r->user->last_name ?? ''))) }}"
+                        data-type="{{ e(str_replace('_', ' ', ucfirst($r->complaint_type ?? '—'))) }}"
+                        data-severity="{{ e(ucfirst($r->severity ?? '—')) }}"
+                        data-date="{{ $fmt($r->complaint_date ?? $r->created_at ?? null) }}"
+                        data-description="{{ e($r->description ?? '') }}"
+                        data-action-taken="{{ e($r->resolution ?: '—') }}"
+                        data-notes="{{ e($r->notes ?: '—') }}"
+                        data-issued-by="{{ e(optional($r->complainant)->getFullName() ?? '—') }}"
+                        data-attachment="{{ $r->attachment_path ? route('employee-lifecycle.complaints.attachment', $r->id) : '' }}"
+                        data-remarks="{{ e($r->employee_remarks ?? '') }}"
+                        data-remarks-at="{{ $r->employee_remarks_at ? $fmt($r->employee_remarks_at) : '' }}"
+                      >Read more</button>
+                    </td>
                     <td class="text-capitalize">{{ str_replace('_', ' ', $r->complaint_type ?? '—') }}</td>
                     <td>{{ $fmt($r->complaint_date ?? $r->created_at ?? null) }}</td>
                     <td>{!! $pill($r->status ?? null) !!}</td>
@@ -831,6 +863,94 @@
   </div>
 </div>
 
+{{-- Warning full detail, filled in by JS from the "Read more" button's data-* attributes --}}
+<div class="modal fade" id="warningDetailModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content modal-content-hitech border-0 shadow-lg">
+      <div class="modal-header">
+        <h5 class="modal-title modal-title-hitech mb-0">Warning Detail</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div class="row g-3 mb-3">
+          <div class="col-md-6"><small class="text-muted d-block">Employee</small><span class="lc-detail-employee fw-bold"></span></div>
+          <div class="col-md-6"><small class="text-muted d-block">Issued By</small><span class="lc-detail-issuedby fw-bold"></span></div>
+          <div class="col-md-4"><small class="text-muted d-block">Type</small><span class="lc-detail-type"></span></div>
+          <div class="col-md-4"><small class="text-muted d-block">Severity</small><span class="lc-detail-severity"></span></div>
+          <div class="col-md-4"><small class="text-muted d-block">Date</small><span class="lc-detail-date"></span></div>
+        </div>
+        <div class="mb-3">
+          <small class="text-muted d-block">Incident Description</small>
+          <p class="lc-detail-description mb-0" style="white-space: pre-wrap;"></p>
+        </div>
+        <div class="mb-3">
+          <small class="text-muted d-block">Corrective Action Taken</small>
+          <p class="lc-detail-action mb-0" style="white-space: pre-wrap;"></p>
+        </div>
+        <div class="mb-3 lc-detail-notes-wrap">
+          <small class="text-muted d-block">Notes</small>
+          <p class="lc-detail-notes mb-0" style="white-space: pre-wrap;"></p>
+        </div>
+        <div class="lc-detail-attachment-wrap mb-3">
+          <a href="#" target="_blank" class="btn btn-sm btn-hitech-modal-cancel lc-detail-attachment"><i class="bx bx-paperclip me-1"></i>View Attachment</a>
+        </div>
+        <div class="lc-detail-remarks-wrap" style="display:none;">
+          <hr>
+          <small class="text-muted d-block">Employee's Reply <span class="lc-detail-remarks-at"></span></small>
+          <p class="lc-detail-remarks mb-0" style="white-space: pre-wrap;"></p>
+        </div>
+      </div>
+      <div class="modal-footer border-0">
+        <button type="button" class="btn btn-label-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{{-- Complaint full detail, same pattern as the warning one above --}}
+<div class="modal fade" id="complaintDetailModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content modal-content-hitech border-0 shadow-lg">
+      <div class="modal-header">
+        <h5 class="modal-title modal-title-hitech mb-0">Complaint Detail</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div class="row g-3 mb-3">
+          <div class="col-md-6"><small class="text-muted d-block">Against (Employee)</small><span class="lc-detail-employee fw-bold"></span></div>
+          <div class="col-md-6"><small class="text-muted d-block">Filed By</small><span class="lc-detail-issuedby fw-bold"></span></div>
+          <div class="col-md-4"><small class="text-muted d-block">Type</small><span class="lc-detail-type"></span></div>
+          <div class="col-md-4"><small class="text-muted d-block">Severity</small><span class="lc-detail-severity"></span></div>
+          <div class="col-md-4"><small class="text-muted d-block">Date</small><span class="lc-detail-date"></span></div>
+        </div>
+        <div class="mb-3">
+          <small class="text-muted d-block">Complaint Description</small>
+          <p class="lc-detail-description mb-0" style="white-space: pre-wrap;"></p>
+        </div>
+        <div class="mb-3">
+          <small class="text-muted d-block">Resolution</small>
+          <p class="lc-detail-action mb-0" style="white-space: pre-wrap;"></p>
+        </div>
+        <div class="mb-3 lc-detail-notes-wrap">
+          <small class="text-muted d-block">Notes</small>
+          <p class="lc-detail-notes mb-0" style="white-space: pre-wrap;"></p>
+        </div>
+        <div class="lc-detail-attachment-wrap mb-3">
+          <a href="#" target="_blank" class="btn btn-sm btn-hitech-modal-cancel lc-detail-attachment"><i class="bx bx-paperclip me-1"></i>View Attachment</a>
+        </div>
+        <div class="lc-detail-remarks-wrap" style="display:none;">
+          <hr>
+          <small class="text-muted d-block">Employee's Reply <span class="lc-detail-remarks-at"></span></small>
+          <p class="lc-detail-remarks mb-0" style="white-space: pre-wrap;"></p>
+        </div>
+      </div>
+      <div class="modal-footer border-0">
+        <button type="button" class="btn btn-label-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <style>
   .lifecycle-tabs {
     border-bottom: 1px solid rgba(0, 90, 90, .1);
@@ -903,6 +1023,40 @@
         refreshCount(paneId);
       });
       refreshCount(paneId);
+    });
+
+    // "Read more" on a warning/complaint row: fill the shared detail modal
+    // from the button's own data-* attributes, picked up right before Bootstrap
+    // opens it (data-bs-toggle="modal" already handles the opening).
+    document.querySelectorAll('.lc-view-detail').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        const modal = document.querySelector(btn.dataset.bsTarget);
+        if (!modal) return;
+        const set = function (cls, value, isLink) {
+          const el = modal.querySelector('.' + cls);
+          if (!el) return;
+          if (isLink) { el.href = value || '#'; }
+          else { el.textContent = value || '—'; }
+        };
+        set('lc-detail-employee', btn.dataset.employee);
+        set('lc-detail-issuedby', btn.dataset.issuedBy);
+        set('lc-detail-type', btn.dataset.type);
+        set('lc-detail-severity', btn.dataset.severity);
+        set('lc-detail-date', btn.dataset.date);
+        set('lc-detail-description', btn.dataset.description);
+        set('lc-detail-action', btn.dataset.actionTaken);
+        set('lc-detail-notes', btn.dataset.notes);
+        const attachmentUrl = btn.dataset.attachment;
+        modal.querySelector('.lc-detail-attachment-wrap').style.display = attachmentUrl ? '' : 'none';
+        if (attachmentUrl) set('lc-detail-attachment', attachmentUrl, true);
+
+        const remarks = btn.dataset.remarks;
+        modal.querySelector('.lc-detail-remarks-wrap').style.display = remarks ? '' : 'none';
+        if (remarks) {
+          set('lc-detail-remarks', remarks);
+          set('lc-detail-remarks-at', btn.dataset.remarksAt ? '(' + btn.dataset.remarksAt + ')' : '');
+        }
+      });
     });
 
     if (window.jQuery && jQuery.fn.select2) {
