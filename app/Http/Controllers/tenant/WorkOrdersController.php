@@ -5,6 +5,7 @@ namespace App\Http\Controllers\tenant;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -150,52 +151,61 @@ class WorkOrdersController extends Controller
         $unit = trim((string) $request->input('unit', ''));
         $category = trim((string) $request->input('category', ''));
         $group = trim((string) $request->input('group', ''));
+        $dispatchFilter = trim((string) $request->input('dispatch', ''));
         $per = $this->perPage($request);
         $page = max(1, (int) $request->input('page', 1));
         [$sort, $dir] = $this->sortParams($request, ['order_date', 'order_no', 'party_name', 'unit', 'stock_group', 'amount', 'item_name', 'quantity', 'sales_group'], 'order_date');
         $unitCase = $this->unitCaseSql();
 
+        // tally_ledgers.ledger_group is the customer's immediate ledger group in Tally's own chart of
+        // accounts -- for this company that group is routinely named after the salesperson, territory or
+        // product line the customer sits under (e.g. "ISHAN SIKKA", "PUNJAB", "Fillezy"), confirmed
+        // 2026-10-19 by sampling real values. Looked up from the CACHED salesGroupMap(), not a SQL JOIN --
+        // measured 2026-10-21: joining+hashing the whole ~12k-row tally_ledgers table on every request cost
+        // ~100ms+ on its own, regardless of date range, since the dedup has nothing to do with order_date.
+        $salesGroupMap = $this->salesGroupMap();
+        $groupNormalizedNames = $group !== ''
+            ? $salesGroupMap->filter(fn($r) => $r->ledger_group === $group)->pluck('normalized_name')
+            : null;
+
         $base = DB::table('tally_sale_orders AS o')
             ->leftJoin('tally_stock_items AS si', 'si.name', '=', 'o.item_name')
-            // tally_ledgers.ledger_group is the customer's immediate ledger group in Tally's own chart of
-            // accounts -- for this company that group is routinely named after the salesperson, territory
-            // or product line the customer sits under (e.g. "ISHAN SIKKA", "PUNJAB", "Fillezy"), confirmed
-            // 2026-10-19 by sampling real values. Not a guess, not a new sync -- tally_ledgers was already
-            // pulled (hrx:tally-push-ledgers) for the Credit & Contacts page; this just joins it in here.
-            // Joined against a DEDUPED subquery, not the raw table: 103 (company, normalized_name) pairs in
-            // tally_ledgers repeat (Tally itself has the odd same-named ledger twice), and a raw join on
-            // normalized_name alone would silently multiply those orders' lines in the result.
-            ->leftJoinSub($this->salesGroupLedgers(), 'tl', fn($j) => $j->on('tl.normalized_name', '=', 'o.normalized_name')->on('tl.company', '=', 'o.company'))
             ->when($company, fn($w) => $w->where('o.company', $company))
             ->whereBetween('o.order_date', [$from, $to])
             ->when($party !== '', fn($w) => $w->where(fn($w2) => $w2->where('o.party_name', 'like', "%{$party}%")->orWhere('o.order_no', 'like', "%{$party}%")))
             ->when($unit !== '', fn($w) => $w->whereRaw("{$unitCase} = ?", [$unit]))
             ->when($category !== '', fn($w) => $w->where('si.category', $category))
-            ->when($group !== '', fn($w) => $w->where('tl.ledger_group', $group));
+            ->when($groupNormalizedNames !== null, fn($w) => $w->whereIn('o.normalized_name', $groupNormalizedNames));
 
         $lineRows = (clone $base)->selectRaw(
-            "o.id, o.order_no, o.company, o.order_date, o.party_name, o.item_name, o.quantity, o.unit AS line_unit, o.amount, "
-            . "o.financial_approval, o.remarks, si.category AS stock_group, tl.ledger_group AS sales_group, {$unitCase} AS unit"
+            "o.id, o.order_no, o.company, o.order_date, o.party_name, o.normalized_name, o.item_name, o.quantity, o.unit AS line_unit, o.amount, "
+            . "o.financial_approval, o.remarks, si.category AS stock_group, {$unitCase} AS unit"
         );
 
-        // Materialized to a plain array, NOT passed as a subquery builder: a whereIn() subquery here re-runs
-        // $base (which itself joins stock_items + the ledger-group subquery) as a correlated subquery for
-        // every row of tally_deliveries/tally_invoices -- tried that first, made it slower (3s instead of
-        // 900ms). Built from the LEAN filteredOrderNumbers() helper, not a clone of $base, so this lookup
-        // skips the stock_items/ledger joins entirely in the common case (no stock-group/sales-group filter
-        // active) -- that alone cut this query from ~140ms to a few ms.
-        $filteredOrderNos = $this->filteredOrderNumbers($company, $from, $to, $party, $unit, $category, $group, $unitCase)->distinct()->pluck('o.order_no');
+        // Measured 2026-10-21: scoping these via whereIn($filteredOrderNos) over a large date range (21k+
+        // order numbers) was the actual bottleneck -- 1.1-1.2s each, because MySQL runs a huge IN-list as
+        // thousands of separate index lookups rather than one scan. Grouping the WHOLE table unconditionally
+        // (both are small, well under 50k rows total) and letting the LEFT JOIN below do the real matching
+        // is correct (a non-matching order_no/item_name just never joins) and ~8x faster for that wide-range
+        // case. But for the common NARROW range (the default 30-day view, a month, a quarter, a financial
+        // year -- a few hundred/thousand orders), scoping via whereIn() is the faster option again, since it
+        // shrinks these two aggregate queries to touch only the relevant slice instead of the whole table.
+        // $orderNosInRange is null for a genuinely wide range, which skips scoping and falls back to the
+        // unconditional full scan above.
+        $orderNosInRange = $this->narrowOrderNos($company, $from, $to, $party);
 
         // Delivered qty matched per ITEM within the order (not just per order) -- a multi-item order where
         // only some lines have shipped must show THOSE lines as dispatched and the rest as pending, which an
         // order-level sum can't tell apart. transporter_name/vehicle_number/document_number (the docket/LR
         // no.) ride along for the Dispatch tab's two extra columns -- same fields the order modal already
         // shows, usually blank for this company (confirmed earlier), but shown when Tally actually has them.
-        $deliveredByItem = DB::table('tally_deliveries')->whereIn('order_no', $filteredOrderNos)->groupBy('order_no', 'item_name')
+        $deliveredByItem = DB::table('tally_deliveries')->groupBy('order_no', 'item_name')
+            ->when($orderNosInRange !== null, fn($q) => $q->whereIn('order_no', $orderNosInRange))
             ->selectRaw('order_no, item_name, SUM(quantity) AS delivered_qty, MAX(delivery_date) AS last_delivery_date, '
                 . 'COUNT(DISTINCT delivery_no) AS delivery_notes, MAX(transporter_name) AS transporter_name, '
                 . 'MAX(vehicle_number) AS vehicle_number, MAX(document_number) AS docket_no');
-        $billedAgg = DB::table('tally_invoices')->whereNotNull('order_no')->whereIn('order_no', $filteredOrderNos)->groupBy('order_no')
+        $billedAgg = DB::table('tally_invoices')->whereNotNull('order_no')->groupBy('order_no')
+            ->when($orderNosInRange !== null, fn($q) => $q->whereIn('order_no', $orderNosInRange))
             ->selectRaw('order_no, MIN(invoice_date) AS first_invoice_date, COUNT(*) AS invoice_count');
 
         $withStatus = DB::query()->fromSub($lineRows, 'x')
@@ -210,23 +220,68 @@ class WorkOrdersController extends Controller
             default => $q,
         };
 
+        // Direct dispatch-status filter -- explicit request: a <select> for this, not just the "By dispatch
+        // status" chart click. Same 3 buckets the chart/badge already use, applied on TOP of whatever the
+        // tab itself already filters to (e.g. picking "Partially dispatched" on the Dispatch tab, which is
+        // already fully-dispatched-only, correctly yields nothing rather than silently being ignored).
+        $applyDispatchFilter = fn($q) => match ($dispatchFilter) {
+            'not' => $q->whereRaw('d.delivered_qty IS NULL'),
+            'full' => $q->whereRaw('d.delivered_qty IS NOT NULL')->whereRaw('GREATEST(x.quantity - COALESCE(d.delivered_qty, 0), 0) <= 0.0001'),
+            'partial' => $q->whereRaw('d.delivered_qty IS NOT NULL')->whereRaw('GREATEST(x.quantity - COALESCE(d.delivered_qty, 0), 0) > 0.0001'),
+            default => $q,
+        };
+
         // ONE query for everything below (stats, trend, by-unit, by-dispatch, by-customer, lead time, AND
         // the table), not a separate re-run of the join per section -- see the historical note on this
         // pattern in financialData(). A filtered window is at most a few thousand lines, trivial in memory.
-        $all = $applyTab($withStatus, $tab)->get();
+        $all = $applyDispatchFilter($applyTab($withStatus, $tab))->get();
 
-        $total = $all->count();
-        $rows = $this->sortRows($all, $sort, $dir)->values()
-            ->slice(($page - 1) * $per, $per)->values();
+        // sales_group from the cached map (see $salesGroupMap above), not the removed SQL join.
+        foreach ($all as $r) {
+            $r->sales_group = $salesGroupMap[$r->company . '|' . $r->normalized_name]->ledger_group ?? null;
+        }
+
+        // TABLE SHAPE differs by tab -- explicit request: Pending stays item-line-level (one row per item,
+        // "which specific item is still owed" is the whole point of that tab), but All/Dispatch go back to
+        // one row per ORDER with an expand arrow for the item-wise breakdown, instead of repeating every
+        // multi-item order N times. Both are derived from the SAME already-fetched $all (no extra query).
+        if ($tab === 'pending') {
+            $total = $all->count();
+            $rows = $this->sortRows($all, $sort, $dir)->values()->slice(($page - 1) * $per, $per)->values();
+        } else {
+            $orderRows = $all->groupBy('order_no')->map(function ($group) {
+                $first = $group->first();
+                $stockGroups = $group->pluck('stock_group')->filter()->unique();
+                $anyDelivered = $group->contains(fn($r) => $r->delivered_qty !== null);
+                return (object) [
+                    'order_no' => $first->order_no, 'company' => $first->company, 'order_date' => $first->order_date,
+                    'party_name' => $first->party_name, 'sales_group' => $first->sales_group, 'unit' => $first->unit,
+                    'stock_group' => $stockGroups->count() === 1 ? $stockGroups->first() : ($stockGroups->count() > 1 ? 'Multiple' : null),
+                    'quantity' => $group->sum('quantity'), 'amount' => $group->sum('amount'), 'line_count' => $group->count(),
+                    'delivered_qty' => $anyDelivered ? $group->sum(fn($r) => min((float) ($r->delivered_qty ?? 0), (float) $r->quantity)) : null,
+                    'pending_qty' => $group->sum('pending_qty'),
+                    'last_delivery_date' => $group->max('last_delivery_date'), 'delivery_notes' => $group->max('delivery_notes'),
+                    'financial_approval' => $group->pluck('financial_approval')->filter()->last(),
+                    'remarks' => $group->pluck('remarks')->filter()->last(),
+                    // invoice_count/first_invoice_date come from an ORDER-level join (billedAgg groups by
+                    // order_no only), so every line of this order already carries the SAME value -- sum()
+                    // would multiply it by line_count. Just take it once, off the first line.
+                    'invoice_count' => (int) ($first->invoice_count ?? 0),
+                    'first_invoice_date' => $first->first_invoice_date,
+                    'transporter_name' => $group->pluck('transporter_name')->filter()->last(),
+                    'vehicle_number' => $group->pluck('vehicle_number')->filter()->last(),
+                    'docket_no' => $group->pluck('docket_no')->filter()->last(),
+                ];
+            })->values();
+            $total = $orderRows->count();
+            $rows = $this->sortRows($orderRows, $sort, $dir)->values()->slice(($page - 1) * $per, $per)->values();
+        }
 
         $orderNos = $rows->pluck('order_no')->unique();
         $trackingNotes = DB::table('work_order_tracking_notes')->whereIn('order_no', $orderNos)->get()->keyBy(fn($r) => $r->company . '|' . $r->order_no);
         foreach ($rows as $r) {
             $r->tracking = $trackingNotes[$r->company . '|' . $r->order_no] ?? null;
         }
-        // Per-ORDER totals, not per-line -- explicit request: "for each work order total order qty
-        // dispatched qty pending qty, and amount for pending order". See orderRollups()'s own doc comment.
-        $this->attachOrderRollups($rows);
 
         $orderCount = $all->pluck('order_no')->unique()->count();
         $dispatchedAmount = $all->filter(fn($r) => $r->delivered_qty !== null && $r->pending_qty <= 0.0001)->sum('amount');
@@ -246,9 +301,15 @@ class WorkOrdersController extends Controller
         $byGroup = $all->groupBy(fn($r) => $r->sales_group ?: 'Not set')
             ->map(fn($g, $sg) => ['group' => $sg, 'value' => $g->sum('amount'), 'n' => $g->pluck('order_no')->unique()->count()])
             ->sortByDesc('value')->values()->take(20);
+        // Same shape as $byGroup, just grouped by Stock group instead of Sales group -- the "By sales
+        // group" chart card has a toggle to switch between the two, explicit request, so both need to be
+        // in the one response (always from the SAME already-filtered $all, no extra query).
+        $byCategory = $all->groupBy(fn($r) => $r->stock_group ?: 'Not set')
+            ->map(fn($g, $sg) => ['group' => $sg, 'value' => $g->sum('amount'), 'n' => $g->pluck('order_no')->unique()->count()])
+            ->sortByDesc('value')->values()->take(20);
         $byDispatch = $all->groupBy(function ($r) {
             if ($r->delivered_qty === null) return 'Not dispatched';
-            return $r->pending_qty <= 0.0001 ? 'Dispatched' : 'Partially dispatched';
+            return $r->pending_qty <= 0.0001 ? 'Fully dispatched' : 'Partially dispatched';
         })->map(fn($g, $s) => ['status' => $s, 'value' => $g->sum('amount'), 'n' => $g->pluck('order_no')->unique()->count()])->sortByDesc('value')->values();
 
         // Per-customer pending rollup -- explicit request: "per customer pending order". Only lines with
@@ -265,9 +326,9 @@ class WorkOrdersController extends Controller
                 'dispatched_value' => (float) $dispatchedAmount, 'pending_value' => (float) $pendingAmount,
                 'billed_value' => (float) $billedAmount, 'unit_count' => $all->pluck('unit')->unique()->count(),
                 'qty_ordered' => $qtyOrdered, 'qty_pending' => $qtyPending, 'qty_sent' => $qtySent,
-                'lead_time' => $this->leadTimeFromRows($all->unique('order_no')->values()),
+                'lead_time' => $this->leadTimeFromRows($this->uniqueByOrderNo($all)),
             ],
-            'trend' => $trend, 'by_unit' => $byUnit, 'by_group' => $byGroup, 'by_dispatch' => $byDispatch, 'by_party' => $byParty,
+            'trend' => $trend, 'by_unit' => $byUnit, 'by_group' => $byGroup, 'by_category' => $byCategory, 'by_dispatch' => $byDispatch, 'by_party' => $byParty,
             'table' => ['rows' => $rows, 'total' => $total, 'page' => $page, 'per' => $per],
             'unit_labels' => self::UNIT_PREFIXES,
             'sales_groups' => $this->salesGroups(),
@@ -291,6 +352,22 @@ class WorkOrdersController extends Controller
     {
         return DB::table('tally_ledgers')->groupBy('company', 'normalized_name')
             ->selectRaw('company, normalized_name, MAX(ledger_group) AS ledger_group');
+    }
+
+    /**
+     * Same dedup as salesGroupLedgers(), as a (company|normalized_name) -> ledger_group map, CACHED.
+     * Measured 2026-10-21: joining this dedup as a SQL subquery against the main query -- which every
+     * panelData()/financialData() request did, regardless of date range -- forced MySQL to scan/hash all
+     * ~12k tally_ledgers rows every time (~100ms+ of the ~460ms default-view response). This dataset only
+     * changes when tally_ledgers resyncs, so it's built once per 5 minutes and reused; sales_group is then
+     * backfilled onto rows in PHP (cheap: a few thousand array lookups) instead of joined in SQL.
+     */
+    private function salesGroupMap()
+    {
+        return Cache::remember('work_orders_sales_group_map', 300, fn() => DB::table('tally_ledgers')
+            ->groupBy('company', 'normalized_name')
+            ->selectRaw('company, normalized_name, MAX(ledger_group) AS ledger_group')
+            ->get()->keyBy(fn($r) => $r->company . '|' . $r->normalized_name));
     }
 
     /**
@@ -352,29 +429,59 @@ class WorkOrdersController extends Controller
         }
     }
 
-    /** A LEAN version of the panelData()/financialData() filter -- only joins tally_stock_items when a
-     *  category filter is actually active, and only joins the ledger-group subquery when a group filter is
-     *  active, instead of always carrying both joins the way the main line-row query does. Used purely to
-     *  get the list of matching order numbers so the delivery/invoice aggregates can be scoped to them
-     *  instead of grouping the entire 46k/48k-row tables on every request; those two joins are the most
-     *  expensive part of the main query, so skipping them here (usually both filters are empty) matters. */
-    private function filteredOrderNumbers(?string $company, string $from, string $to, string $party, string $unit, string $category, string $group, string $unitCase, ?string $approval = null)
+    /** One row per order_no out of a large line-level collection. Measured 2026-10-21: Collection::unique()
+     *  on full row objects took 1.8s+ for ~21k distinct orders out of ~43k lines -- its in_array() scan
+     *  against the growing "seen" list is effectively O(n * distinct). keyBy() + values() does the same
+     *  dedup (last line of each order wins, fine here since order_date/first_invoice_date/last_delivery_date
+     *  are the same across every line of one order) via PHP's native array keys instead, in ~20ms. */
+    private function uniqueByOrderNo($rows)
     {
-        $q = DB::table('tally_sale_orders AS o');
-        if ($category !== '') {
-            $q->join('tally_stock_items AS si', 'si.name', '=', 'o.item_name');
+        return $rows->keyBy('order_no')->values();
+    }
+
+    /**
+     * Distinct order_nos for the currently filtered date range -- used to scope the small aggregate
+     * tables (tally_deliveries/tally_invoices) via whereIn(), but ONLY when the range is narrow enough
+     * that the resulting IN-list stays small. The default view (and most presets: a month, a quarter, a
+     * financial year) is narrow, so scoping here means those aggregate queries touch a few hundred/
+     * thousand rows instead of the whole table -- the actual ask behind "just load 30 days, not all
+     * data". For a genuinely wide "All data" range this would build a 20k+-value IN-list, which is the
+     * exact pattern measured 2026-10-21 to be SLOWER than an unscoped full-table scan (see the notes on
+     * $deliveredByItem/$billedAgg below), so that case returns null and skips scoping entirely.
+     */
+    /**
+     * Deliberately NOT built off $base: $base carries the leftJoin(tally_stock_items)/leftJoinSub(ledgers)
+     * needed for the category/group filters, and measured 2026-10-21, running THOSE joins just to get a
+     * DISTINCT order_no list cost 1.8s on its own (a join forces a full sort/materialize for the distinct)
+     * -- more than the thing it was meant to speed up. This hits tally_sale_orders alone (company+order_date
+     * is already a composite index), skipping the category/group filters -- over-inclusive when either is
+     * set (a few extra order_nos end up in the whereIn), which is harmless: the downstream LEFT JOIN still
+     * only matches real (order_no[, item_name]) pairs, and $all itself is still fully filtered by $base.
+     */
+    private function narrowOrderNos(?string $company, string $from, string $to, string $party = '')
+    {
+        if (\Carbon\Carbon::parse($from)->diffInDays(\Carbon\Carbon::parse($to)) > 400) {
+            return null;
         }
-        if ($group !== '') {
-            $q->joinSub($this->salesGroupLedgers(), 'tl', fn($j) => $j->on('tl.normalized_name', '=', 'o.normalized_name')->on('tl.company', '=', 'o.company'));
-        }
-        $q->when($company, fn($w) => $w->where('o.company', $company))
+        return DB::table('tally_sale_orders AS o')
+            ->when($company, fn($w) => $w->where('o.company', $company))
             ->whereBetween('o.order_date', [$from, $to])
             ->when($party !== '', fn($w) => $w->where(fn($w2) => $w2->where('o.party_name', 'like', "%{$party}%")->orWhere('o.order_no', 'like', "%{$party}%")))
-            ->when($unit !== '', fn($w) => $w->whereRaw("{$unitCase} = ?", [$unit]))
-            ->when($category !== '', fn($w) => $w->where('si.category', $category))
-            ->when($group !== '', fn($w) => $w->where('tl.ledger_group', $group))
-            ->when($approval !== null && $approval !== '', fn($w) => $w->where('o.financial_approval', $approval));
-        return $q;
+            ->distinct()->pluck('o.order_no');
+    }
+
+    /** Same idea as narrowOrderNos(), but for tally_outstanding, which is keyed by customer
+     *  (normalized_name), not order_no. */
+    private function narrowNormalizedNames(?string $company, string $from, string $to, string $party = '')
+    {
+        if (\Carbon\Carbon::parse($from)->diffInDays(\Carbon\Carbon::parse($to)) > 400) {
+            return null;
+        }
+        return DB::table('tally_sale_orders AS o')
+            ->when($company, fn($w) => $w->where('o.company', $company))
+            ->whereBetween('o.order_date', [$from, $to])
+            ->when($party !== '', fn($w) => $w->where(fn($w2) => $w2->where('o.party_name', 'like', "%{$party}%")->orWhere('o.order_no', 'like', "%{$party}%")))
+            ->distinct()->pluck('o.normalized_name');
     }
 
     /** Avg days order-date -> first-invoice-date, and order-date -> last-delivery-date, over the SAME
@@ -423,9 +530,14 @@ class WorkOrdersController extends Controller
     {
         $this->authorizeAccess();
 
-        $lines = DB::table('tally_sale_orders')->where('order_no', $orderNo)
-            ->orderBy('id')
-            ->get(['company', 'order_date', 'party_name', 'normalized_name', 'item_name', 'spec', 'hsn', 'quantity', 'unit', 'rate', 'amount', 'pack_cases', 'pack_gross_qty', 'pack_net_wt_qty', 'pack_qty_number']);
+        // Stock group (si.category) is joined in here too, same as panelData()/financialData() already do --
+        // the All/Dispatch tabs' order-level table has no item-wise Stock group of its own to show (every
+        // item on the order can be in a different group), so the expand-row detail is what actually needs it.
+        $lines = DB::table('tally_sale_orders AS o')
+            ->leftJoin('tally_stock_items AS si', 'si.name', '=', 'o.item_name')
+            ->where('o.order_no', $orderNo)
+            ->orderBy('o.id')
+            ->get(['o.company', 'o.order_date', 'o.party_name', 'o.normalized_name', 'o.item_name', 'o.spec', 'o.hsn', 'o.quantity', 'o.unit', 'o.rate', 'o.amount', 'o.pack_cases', 'o.pack_gross_qty', 'o.pack_net_wt_qty', 'o.pack_qty_number', 'si.category AS stock_group']);
         abort_if($lines->isEmpty(), 404);
         $company = $lines->first()->company;
 
@@ -563,35 +675,47 @@ class WorkOrdersController extends Controller
             'credit_period', 'outstanding_days', 'total_outstanding', 'credit_limit', 'financial_approval'], 'order_date');
         $unitCase = $this->unitCaseSql();
 
+        // See panelData()'s identical note: sales_group is looked up from the CACHED salesGroupMap(), not a
+        // SQL JOIN -- joining/hashing the whole ~12k-row tally_ledgers table cost ~100ms+ on every request
+        // regardless of date range, since the dedup has nothing to do with order_date.
+        $salesGroupMap = $this->salesGroupMap();
+        $groupNormalizedNames = $group !== ''
+            ? $salesGroupMap->filter(fn($r) => $r->ledger_group === $group)->pluck('normalized_name')
+            : null;
+
         $base = DB::table('tally_sale_orders AS o')
             ->leftJoin('tally_stock_items AS si', 'si.name', '=', 'o.item_name')
-            // See panelData()'s identical join for why ledger_group is here -- confirmed real salesperson/
-            // territory/brand buckets, not a guess -- and why it's a deduped subquery, not the raw table.
-            ->leftJoinSub($this->salesGroupLedgers(), 'tl', fn($j) => $j->on('tl.normalized_name', '=', 'o.normalized_name')->on('tl.company', '=', 'o.company'))
             ->when($company, fn($w) => $w->where('o.company', $company))
             ->whereBetween('o.order_date', [$from, $to])
             ->when($party !== '', fn($w) => $w->where(fn($w2) => $w2->where('o.party_name', 'like', "%{$party}%")->orWhere('o.order_no', 'like', "%{$party}%")))
             ->when($unit !== '', fn($w) => $w->whereRaw("{$unitCase} = ?", [$unit]))
             ->when($category !== '', fn($w) => $w->where('si.category', $category))
-            ->when($group !== '', fn($w) => $w->where('tl.ledger_group', $group))
+            ->when($groupNormalizedNames !== null, fn($w) => $w->whereIn('o.normalized_name', $groupNormalizedNames))
             ->when($approval !== '', fn($w) => $w->where('o.financial_approval', $approval));
 
         $lineRows = (clone $base)->selectRaw("o.id, o.order_no, o.company, o.order_date, o.party_name, o.normalized_name, o.item_name, o.quantity, o.amount, "
-            . "o.financial_approval, o.remarks, si.category AS stock_group, tl.ledger_group AS sales_group, {$unitCase} AS unit");
+            . "o.financial_approval, o.remarks, si.category AS stock_group, {$unitCase} AS unit");
 
-        // See panelData()'s identical note: materialized arrays from the LEAN filteredOrderNumbers()
-        // helper, not subquery builders cloned from $base -- a whereIn() subquery re-running $base (which
-        // joins stock_items + the ledger-group subquery) per outer row made this slower, not faster.
-        $filteredOrderNos = $this->filteredOrderNumbers($company, $from, $to, $party, $unit, $category, $group, $unitCase, $approval)->distinct()->pluck('o.order_no');
-        $filteredNormalizedNames = $this->filteredOrderNumbers($company, $from, $to, $party, $unit, $category, $group, $unitCase, $approval)->distinct()->pluck('o.normalized_name');
-        $outstandingAgg = DB::table('tally_outstanding')->whereIn('normalized_name', $filteredNormalizedNames)
+        // See panelData()'s identical note (measured 2026-10-21): whereIn() over a large materialized
+        // order_no/normalized_name list was the actual bottleneck, not a speedup -- grouping these small
+        // tables (tally_outstanding/tally_invoices/tally_deliveries) unconditionally and letting the LEFT
+        // JOIN below do the real matching is both correct and ~3-8x faster for a WIDE date range. For the
+        // common narrow range (default 30 days, a month, a quarter, a financial year) scoping via whereIn()
+        // is faster again -- see narrowOrderNos()'s doc comment. Null for a wide range, which skips scoping.
+        $orderNosInRange = $this->narrowOrderNos($company, $from, $to, $party);
+        $namesInRange = $this->narrowNormalizedNames($company, $from, $to, $party);
+
+        $outstandingAgg = DB::table('tally_outstanding')
             ->groupBy('normalized_name')
+            ->when($namesInRange !== null, fn($q) => $q->whereIn('normalized_name', $namesInRange))
             ->selectRaw('normalized_name, SUM(amount) AS total_outstanding, MAX(credit_days) AS credit_period, MIN(bill_date) AS oldest_bill_date');
 
         // tally_sale_lines/tally_invoices carry the actual billing dates for lead-time, same as panelData().
-        $billedAgg = DB::table('tally_invoices')->whereNotNull('order_no')->whereIn('order_no', $filteredOrderNos)->groupBy('order_no')
+        $billedAgg = DB::table('tally_invoices')->whereNotNull('order_no')->groupBy('order_no')
+            ->when($orderNosInRange !== null, fn($q) => $q->whereIn('order_no', $orderNosInRange))
             ->selectRaw('order_no, MIN(invoice_date) AS first_invoice_date');
-        $deliveredAgg = DB::table('tally_deliveries')->whereIn('order_no', $filteredOrderNos)->groupBy('order_no')
+        $deliveredAgg = DB::table('tally_deliveries')->groupBy('order_no')
+            ->when($orderNosInRange !== null, fn($q) => $q->whereIn('order_no', $orderNosInRange))
             ->selectRaw('order_no, MAX(delivery_date) AS last_delivery_date');
 
         $withCredit = DB::query()->fromSub($lineRows, 'x')
@@ -606,12 +730,29 @@ class WorkOrdersController extends Controller
         // see panelData()'s identical note; this endpoint had the same six-re-runs-of-one-join problem.
         $all = $withCredit->get();
 
+        // sales_group from the cached map (see $salesGroupMap above), not a SQL join.
+        foreach ($all as $r) {
+            $r->sales_group = $salesGroupMap[$r->company . '|' . $r->normalized_name]->ledger_group ?? null;
+        }
+
         $total = $all->count();
         $rows = $this->sortRows($all, $sort, $dir)->values()
             ->slice(($page - 1) * $per, $per)->values();
 
         // Per-ORDER totals -- see orderRollups()'s doc comment (panelData() uses the same helper).
         $this->attachOrderRollups($rows);
+
+        // This ITEM's own pending qty (not the whole order's) -- financialData() never joined deliveries
+        // per item the way panelData() does, so it had no line-level pending figure at all until now.
+        // Scoped to just the current page's rows (cheap), matched per item like everywhere else.
+        $pageOrderNos = $rows->pluck('order_no')->unique();
+        $deliveredByItem = DB::table('tally_deliveries')->whereIn('order_no', $pageOrderNos)->groupBy('order_no', 'item_name')
+            ->selectRaw('order_no, item_name, SUM(quantity) AS delivered_qty')->get()
+            ->keyBy(fn($d) => $d->order_no . '|' . $d->item_name);
+        foreach ($rows as $r) {
+            $delivered = (float) ($deliveredByItem[$r->order_no . '|' . $r->item_name]->delivered_qty ?? 0);
+            $r->pending_qty = max(0, (float) $r->quantity - $delivered);
+        }
 
         $orderCount = $all->pluck('order_no')->unique()->count();
         $okValue = $all->filter(fn($r) => $r->financial_approval === 'Ok')->sum('amount');
@@ -621,6 +762,10 @@ class WorkOrdersController extends Controller
         $trend = $all->groupBy('order_date')->map(fn($g, $d) => ['d' => $d, 'value' => $g->sum('amount'), 'n' => $g->pluck('order_no')->unique()->count()])->sortKeys()->values();
         $byUnit = $all->groupBy('unit')->map(fn($g, $u) => ['unit' => $u, 'value' => $g->sum('amount'), 'n' => $g->pluck('order_no')->unique()->count()])->sortByDesc('value')->values();
         $byGroup = $all->groupBy(fn($r) => $r->sales_group ?: 'Not set')
+            ->map(fn($g, $sg) => ['group' => $sg, 'value' => $g->sum('amount'), 'n' => $g->pluck('order_no')->unique()->count()])
+            ->sortByDesc('value')->values()->take(20);
+        // See panelData()'s identical $byCategory -- the "By sales group" chart card toggles to this.
+        $byCategory = $all->groupBy(fn($r) => $r->stock_group ?: 'Not set')
             ->map(fn($g, $sg) => ['group' => $sg, 'value' => $g->sum('amount'), 'n' => $g->pluck('order_no')->unique()->count()])
             ->sortByDesc('value')->values()->take(20);
         $byApproval = $all->groupBy(fn($r) => $r->financial_approval ?? 'Not set')
@@ -646,9 +791,9 @@ class WorkOrdersController extends Controller
                 'ok_value' => (float) $okValue, 'hold_value' => (float) $holdRows->sum('amount'),
                 'hold_count' => $holdRows->pluck('order_no')->unique()->count(), 'unit_count' => $all->pluck('unit')->unique()->count(),
                 'qty_ordered' => $qtyOrdered,
-                'lead_time' => $this->leadTimeFromRows($all->unique('order_no')->values()),
+                'lead_time' => $this->leadTimeFromRows($this->uniqueByOrderNo($all)),
             ],
-            'trend' => $trend, 'by_unit' => $byUnit, 'by_group' => $byGroup, 'by_approval' => $byApproval, 'by_party' => $byParty,
+            'trend' => $trend, 'by_unit' => $byUnit, 'by_group' => $byGroup, 'by_category' => $byCategory, 'by_approval' => $byApproval, 'by_party' => $byParty,
             'table' => ['rows' => $rows, 'total' => $total, 'page' => $page, 'per' => $per],
             'unit_labels' => self::UNIT_PREFIXES,
             'sales_groups' => $this->salesGroups(),

@@ -15,13 +15,24 @@
        the 4 cards ended up with visibly different bottom edges (the sales-group list is naturally taller
        than a fixed-height donut). h-100 makes every card stretch to match the tallest one in the row. --}}
   <div class="row g-3 mb-3 align-items-stretch">
-    <div class="col-12 col-lg-3"><div class="hitech-card-white p-3 h-100"><h6 class="fw-bold mb-2">Order value by day</h6><div class="wopanel-trend"></div></div></div>
+    <div class="col-12 col-lg-3"><div class="hitech-card-white p-3 h-100"><h6 class="fw-bold mb-2">Order value by day <span class="text-muted small fw-normal">(click to filter)</span></h6><div class="wopanel-trend"></div></div></div>
     <div class="col-12 col-lg-3"><div class="hitech-card-white p-3 h-100"><h6 class="fw-bold mb-2">By unit <span class="text-muted small">(click to filter)</span></h6><div class="wopanel-byunit"></div></div></div>
-    <div class="col-12 col-lg-3"><div class="hitech-card-white p-3 h-100"><h6 class="fw-bold mb-2">By dispatch status</h6><div class="wopanel-bydispatch"></div></div></div>
+    <div class="col-12 col-lg-3"><div class="hitech-card-white p-3 h-100"><h6 class="fw-bold mb-2">By dispatch status <span class="text-muted small fw-normal">(click to filter)</span></h6><div class="wopanel-bydispatch"></div></div></div>
     {{-- Tally's own customer ledger GROUP -- for this company routinely a salesperson, territory or brand
          bucket (e.g. "ISHAN SIKKA", "PUNJAB", "Fillezy"), confirmed against real data 2026-10-19. Top 20 by
-         value; click to filter the table below to that one group. --}}
-    <div class="col-12 col-lg-3"><div class="hitech-card-white p-3 h-100"><h6 class="fw-bold mb-2">By sales group <span class="text-muted small fw-normal">(click to filter)</span></h6><div class="wopanel-bygroup"></div></div></div>
+         value; click to filter the table below to that one group. Toggle switches this SAME card between
+         Sales group and Stock group -- explicit request: one card, not a separate 5th chart, since only
+         one of the two is ever being looked at at a time. --}}
+    <div class="col-12 col-lg-3"><div class="hitech-card-white p-3 h-100">
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <h6 class="fw-bold mb-0">By <span class="wopanel-group-toggle-label">sales group</span> <span class="text-muted small fw-normal">(click to filter)</span></h6>
+        <div class="btn-group btn-group-sm wopanel-group-toggle" role="group">
+          <button type="button" class="btn btn-outline-secondary active" data-group-mode="group">Sales</button>
+          <button type="button" class="btn btn-outline-secondary" data-group-mode="category">Stock</button>
+        </div>
+      </div>
+      <div class="wopanel-bygroup"></div>
+    </div></div>
   </div>
 
   <div class="hitech-card-white overflow-hidden mb-3 position-relative">
@@ -38,6 +49,31 @@
           <option value="kif" @selected($company === 'kif')>Keep It Fresh</option>
           <option value="" @selected($company === null)>Both</option>
         </select>
+        <select class="form-select form-select-sm wop-f-sm wopanel-unit">
+          <option value="">All units</option>
+          @foreach($unitPrefixes as $code => $label)
+            <option value="{{ $code }}">{{ $label }}</option>
+          @endforeach
+        </select>
+        <select class="form-select form-select-sm wop-f-sm wopanel-category">
+          <option value="">All stock groups</option>
+          @foreach($categories as $c)
+            <option value="{{ $c }}">{{ $c }}</option>
+          @endforeach
+        </select>
+        <select class="form-select form-select-sm wop-f-sm wopanel-group">
+          <option value="">All sales groups</option>
+        </select>
+        {{-- Explicit request: a direct filter for dispatch status, not just the "By dispatch status" chart
+             click -- same 3 buckets the chart and the Dispatch badge already use (Not dispatched / Partially
+             dispatched / Fully dispatched), matched server-side the same way. --}}
+        <select class="form-select form-select-sm wop-f-sm wopanel-dispatch">
+          <option value="">All dispatch status</option>
+          <option value="not">Not dispatched</option>
+          <option value="partial">Partially dispatched</option>
+          <option value="full">Fully dispatched</option>
+        </select>
+        {{-- Moved to sit right before Reset -- explicit request. --}}
         <div class="position-relative wop-f-date">
           <button type="button" class="btn btn-sm btn-outline-secondary w-100 wopanel-date-toggle text-truncate"></button>
           {{-- position:fixed, not absolute -- the filter row scrolls horizontally (.wop-filter-row),
@@ -58,21 +94,6 @@
             </div>
           </div>
         </div>
-        <select class="form-select form-select-sm wop-f-sm wopanel-unit">
-          <option value="">All units</option>
-          @foreach($unitPrefixes as $code => $label)
-            <option value="{{ $code }}">{{ $label }}</option>
-          @endforeach
-        </select>
-        <select class="form-select form-select-sm wop-f-sm wopanel-category">
-          <option value="">All stock groups</option>
-          @foreach($categories as $c)
-            <option value="{{ $c }}">{{ $c }}</option>
-          @endforeach
-        </select>
-        <select class="form-select form-select-sm wop-f-sm wopanel-group">
-          <option value="">All sales groups</option>
-        </select>
         <button type="button" class="btn btn-sm btn-outline-secondary wopanel-reset" title="Reset filters"><i class="bx bx-reset"></i></button>
         {{-- Column show/hide -- same checkbox-list content as the Sales Report page's "Columns" button,
              but NOT Bootstrap's dropdown/Popper (same clipping problem as the date popover above: Popper
@@ -96,12 +117,17 @@
              found: columns without an explicit width went haywire and the header text overlapped/garbled
              the moment any one column was hidden, because the browser had never been told how to
              re-distribute their share. --}}
+        @if($panelTab === 'pending')
+        {{-- The whole-ORDER rollup columns (Order: dispatched/pending/pending ₹) used to sit right next to
+             this line's own "Item pending" -- explicit removal request 2026-10-21: having an order-level
+             number and an item-level number side by side, both labeled "pending", kept reading as the same
+             figure shown twice (it never was -- confirmed correct via direct API checks both times) rather
+             than two different things. Dropped entirely so there's only one "pending" number per row here. --}}
         <colgroup>
-          <col style="width:6%"><col style="width:7%"><col style="width:8%"><col style="width:7%">
-          <col style="width:6%"><col style="width:5%"><col style="width:5%"><col style="width:5%">
-          <col style="width:6%"><col style="width:7%"><col style="width:7%"><col style="width:7%">
-          @if($panelTab === 'dispatch')<col style="width:6%"><col style="width:6%">@endif
-          <col style="width:6%"><col style="width:5%"><col style="width:5%">
+          <col style="width:7%"><col style="width:8%"><col style="width:10%"><col style="width:8%">
+          <col style="width:6%"><col style="width:5%"><col style="width:6%"><col style="width:6%">
+          <col style="width:6%"><col style="width:6%">
+          <col style="width:7%"><col style="width:6%"><col style="width:6%">
         </colgroup>
         <thead class="table-light">
           <tr>
@@ -114,13 +140,43 @@
             <th class="wopanel-sortable wop-col-category" data-sort="stock_group">Stock group</th>
             <th class="ss-num wopanel-sortable" data-sort="quantity">Qty</th>
             <th class="ss-num wopanel-sortable" data-sort="amount">Amount</th>
-            {{-- Whole-ORDER totals, one column each -- every line of a multi-item order repeats the same
-                 numbers, same as Party/Sales group already do. Order qty/Order amt were dropped (same as
-                 Qty/Amount when an order has one line, and redundant with summing Qty/Amount per order
-                 otherwise) -- only the two that actually differ from the line-level columns stay. --}}
-            <th class="ss-num wop-col-orderroll" title="WHOLE ORDER's already-dispatched quantity, summed across every item on it -- not just this line">Order: dispatched</th>
-            <th class="ss-num wop-col-orderroll" title="WHOLE ORDER's still-pending quantity, summed across every item on it -- not just this line">Order: pending</th>
-            <th class="ss-num wop-col-orderroll" title="Value of only the still-pending portion of the whole order">Order: pending ₹</th>
+            {{-- This ITEM's own still-pending quantity -- the Qty column is what was ordered for this
+                 line; this is how much of THAT line specifically hasn't shipped yet. Matched per item
+                 against deliveries, same number already driving the Dispatch badge text below. --}}
+            <th class="ss-num" title="This line's own still-pending quantity (matched per item)">Item pending</th>
+            <th class="wop-col-status">Dispatch</th>
+            <th class="wop-col-status">Approval</th>
+            <th class="wop-col-remarks">Remarks</th>
+          </tr>
+        </thead>
+        <tbody class="wopanel-table-body"><tr><td colspan="13" class="text-center text-muted py-5">Loading…</td></tr></tbody>
+        @else
+        {{-- All / Dispatch: one row per ORDER (not per item line) -- explicit request 2026-10-21: these two
+             tabs were repeating a multi-item order once per item, which read as duplicate orders; Pending
+             (above) keeps the item-line shape since "which item is still owed" is the point of that tab.
+             The chevron in the first column expands a row into its own item-wise sub-rows, fetched on
+             demand from the same order-detail endpoint the modal already uses -- no separate table shape
+             to maintain for that detail. --}}
+        <colgroup>
+          <col style="width:3%">
+          <col style="width:7%"><col style="width:9%"><col style="width:14%">
+          <col style="width:10%"><col style="width:5%"><col style="width:9%">
+          <col style="width:6%"><col style="width:7%">
+          <col style="width:9%">
+          @if($panelTab === 'dispatch')<col style="width:8%"><col style="width:8%">@endif
+          <col style="width:7%"><col style="width:7%">
+        </colgroup>
+        <thead class="table-light">
+          <tr>
+            <th></th>
+            <th class="wopanel-sortable" data-sort="order_date">Date</th>
+            <th class="wopanel-sortable" data-sort="order_no">Order no.</th>
+            <th class="wopanel-sortable wop-col-party" data-sort="party_name">Party</th>
+            <th class="wopanel-sortable wop-col-group" data-sort="sales_group">Sales group</th>
+            <th class="wopanel-sortable" data-sort="unit">Unit</th>
+            <th class="wopanel-sortable wop-col-category" data-sort="stock_group">Stock group</th>
+            <th class="ss-num wopanel-sortable" data-sort="quantity">Qty</th>
+            <th class="ss-num wopanel-sortable" data-sort="amount">Amount</th>
             <th class="wop-col-status">Dispatch</th>
             @if($panelTab === 'dispatch')
               <th class="wop-col-category">Transporter</th>
@@ -130,7 +186,8 @@
             <th class="wop-col-remarks">Remarks</th>
           </tr>
         </thead>
-        <tbody class="wopanel-table-body"><tr><td colspan="{{ $panelTab === 'dispatch' ? 17 : 15 }}" class="text-center text-muted py-5">Loading…</td></tr></tbody>
+        <tbody class="wopanel-table-body"><tr><td colspan="{{ $panelTab === 'dispatch' ? 14 : 12 }}" class="text-center text-muted py-5">Loading…</td></tr></tbody>
+        @endif
       </table>
     </div>
     <div class="p-3 d-flex flex-wrap justify-content-between align-items-center gap-2">
@@ -191,10 +248,13 @@
      right next to them -- renaming the headers to "Order: ..." wasn't enough on its own since a narrow
      column truncates the header text and the "Order:" prefix (the actual distinguishing part) is exactly
      what gets cut off first. A tint survives truncation; text doesn't. */
-  .wop-col-orderroll { background: #f3f8f7 !important; }
-  .wop-row:hover .wop-col-orderroll { background: #eaf2f1 !important; }
   .wop-row { cursor: pointer; }
   .wop-row:hover { background: #f8fafc; }
+  .wop-expand-btn { background: none; border: none; padding: 2px 4px; cursor: pointer; color: #64748b; font-size: 1rem; line-height: 1; }
+  .wop-expand-btn:hover { color: #127464; }
+  .wop-order-row.wop-expanded .wop-expand-btn { color: #127464; }
+  .wop-subrow { background: #fafcfc; cursor: default; }
+  .wop-subrow:hover { background: #fafcfc; }
   .wopanel-byparty-body tr { cursor: pointer; }
   .wopanel-byparty-body tr:hover { background: #f8fafc; }
   /* Column show/hide -- same class name as the Sales Report page's "Columns" dropdown. */
@@ -230,15 +290,17 @@ window.__woPanelDataUrl = window.__woPanelDataUrl || {!! json_encode(route('sale
 
     const todayDate = new Date();
     const todayIso = ymd(todayDate);
-    const state = { q: '', company: {!! json_encode($company) !!} || '', from: ymd(new Date(Date.now() - 29 * 86400000)), to: todayIso, unit: '', category: '', group: '', page: 1, sort: 'order_date', dir: 'desc', presetLabel: 'Last 30 days' };
+    const state = { q: '', company: {!! json_encode($company) !!} || '', from: ymd(new Date(Date.now() - 29 * 86400000)), to: todayIso, unit: '', category: '', group: '', dispatch: '', page: 1, sort: 'order_date', dir: 'desc', presetLabel: 'Last 30 days' };
     let trendChart = null, unitChart = null, groupChart = null, dispatchChart = null;
+    let lastRenderData = null; // re-render the By sales/stock group chart on toggle without a re-fetch
+    state.groupMode = 'group'; // 'group' = Sales group (d.by_group), 'category' = Stock group (d.by_category)
     let requestSeq = 0; // race-condition guard: only the response to the MOST RECENT request is ever rendered
     let groupOptionsFilled = false; // the <select> is populated once from the first response's sales_groups
 
     const elSearch = root.querySelector('.wopanel-search'), elCompany = root.querySelector('.wopanel-company'),
           elFrom = root.querySelector('.wopanel-from'), elTo = root.querySelector('.wopanel-to'),
           elUnit = root.querySelector('.wopanel-unit'), elCategory = root.querySelector('.wopanel-category'),
-          elGroup = root.querySelector('.wopanel-group'),
+          elGroup = root.querySelector('.wopanel-group'), elDispatch = root.querySelector('.wopanel-dispatch'),
           elDateToggle = root.querySelector('.wopanel-date-toggle'), elDatePop = root.querySelector('.wopanel-date-pop'),
           elColsBtn = root.querySelector('.wopanel-cols-btn'), elColsMenu = root.querySelector('.wopanel-cols-menu'),
           elLoading = root.querySelector('.wopanel-loading');
@@ -390,7 +452,7 @@ window.__woPanelDataUrl = window.__woPanelDataUrl || {!! json_encode(route('sale
         state.page = state.page || 1;
         const mySeq = ++requestSeq;
         elLoading.style.display = '';
-        const params = new URLSearchParams({ tab: PANEL_TAB, from: state.from, to: state.to, unit: state.unit, category: state.category, group: state.group, party: state.q, page: state.page, sort: state.sort, dir: state.dir });
+        const params = new URLSearchParams({ tab: PANEL_TAB, from: state.from, to: state.to, unit: state.unit, category: state.category, group: state.group, dispatch: state.dispatch, party: state.q, page: state.page, sort: state.sort, dir: state.dir });
         if (state.company) params.set('company', state.company);
         let data;
         try {
@@ -408,6 +470,51 @@ window.__woPanelDataUrl = window.__woPanelDataUrl || {!! json_encode(route('sale
         const c = new ApexCharts(el, opts);
         c.render();
         return c;
+    }
+
+    // Hoisted out of render() -- toggleExpand() (item sub-rows) needs the same badge markup as the main
+    // order rows so an expanded item lines up visually with its own order row.
+    const dispatchBadge = (r) => {
+        const notDispatched = r.delivered_qty === null;
+        const fullyDispatched = !notDispatched && Number(r.pending_qty) <= 0.0001;
+        return notDispatched
+            ? '<span class="ss-flag">Not shipped</span>'
+            : fullyDispatched
+                ? '<span class="ss-flag ok">Shipped</span>'
+                : '<span class="ss-flag warn">Pending ' + qty(r.pending_qty) + '</span>';
+    };
+    const approvalBadgeHtml = (r) => {
+        const approval = r.financial_approval || 'Not set';
+        const cls = approval === 'Ok' ? 'ok' : (approval === 'Make and Hold' ? 'bad' : 'warn');
+        return '<span class="ss-flag ' + cls + '">' + esc(approval) + '</span>';
+    };
+
+    // One chart card toggles between Sales group and Stock group (data.by_group / data.by_category, same
+    // shape) instead of a separate 5th card -- explicit request. Redraws from the already-fetched response,
+    // no re-fetch on toggle; picking a bar filters the table via that mode's own select (group or category).
+    function renderGroupChart(d) {
+        if (!d) return;
+        const isCategory = state.groupMode === 'category';
+        const series = isCategory ? d.by_category : d.by_group;
+        root.querySelector('.wopanel-group-toggle-label').textContent = isCategory ? 'stock group' : 'sales group';
+        if (groupChart) groupChart.destroy();
+        groupChart = chart(root.querySelector('.wopanel-bygroup'), {
+            chart: { type: 'bar', height: 280, toolbar: { show: false }, events: { dataPointSelection: (e, c, cfg) => {
+                const g = series[cfg.dataPointIndex];
+                if (!g) return;
+                const val = g.group === 'Not set' ? '' : g.group;
+                if (isCategory) { state.category = val; elCategory.value = val; } else { state.group = val; elGroup.value = val; }
+                state.page = 1; load();
+            } } },
+            series: [{ name: 'Value', data: series.map(g => Number(g.value)) }],
+            xaxis: { categories: series.map(g => g.group), labels: { formatter: (v) => crore(v) } },
+            // Bar-end data labels were printing the raw unformatted number (e.g. "37127294.93999999")
+            // right over the bar, unreadable and overlapping the next row -- the tooltip already shows the
+            // formatted value on hover, so the in-chart label is just switched off instead of reformatted.
+            dataLabels: { enabled: false },
+            plotOptions: { bar: { horizontal: true, borderRadius: 3 } },
+            colors: ['#127464'], tooltip: { y: { formatter: (v) => inr(v) } },
+        });
     }
 
     function render(d) {
@@ -430,8 +537,20 @@ window.__woPanelDataUrl = window.__woPanelDataUrl || {!! json_encode(route('sale
         // always-on bar labels (same overlap problem the sales-group chart had -- the value shows on
         // hover via the tooltip instead, which already had the full formatted amount).
         const fdateShort = (s) => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s || ''); return m ? m[3] + '/' + m[2] : ''; };
+        // Click a day's bar to filter the table down to just that one day -- explicit request ("Order
+        // value by day" was the one chart on this card that wasn't click-to-filter like the others).
         trendChart = chart(root.querySelector('.wopanel-trend'), {
-            chart: { type: 'bar', height: 300, toolbar: { show: false } },
+            chart: { type: 'bar', height: 300, toolbar: { show: false }, events: { dataPointSelection: (e, c, cfg) => {
+                const t = d.trend[cfg.dataPointIndex];
+                if (!t) return;
+                state.from = t.d; state.to = t.d;
+                elFrom.value = state.from; elTo.value = state.to;
+                state.presetLabel = fdate(state.from);
+                updateDateToggleLabel();
+                root.querySelectorAll('.wopanel-preset').forEach((b) => b.classList.remove('btn-primary'));
+                root.querySelectorAll('.wopanel-preset').forEach((b) => b.classList.add('btn-outline-secondary'));
+                state.page = 1; load();
+            } } },
             series: [{ name: 'Order value', data: d.trend.map(t => Number(t.value)) }],
             dataLabels: { enabled: false },
             xaxis: { categories: d.trend.map(t => fdateShort(t.d)), tickAmount: Math.min(10, d.trend.length - 1 || 1), labels: { rotate: -45 } },
@@ -448,25 +567,24 @@ window.__woPanelDataUrl = window.__woPanelDataUrl || {!! json_encode(route('sale
         });
 
         if (dispatchChart) dispatchChart.destroy();
+        // Click a slice to filter the table to that dispatch status -- same 3 buckets as the new
+        // wopanel-dispatch <select>, kept in sync both ways.
+        const dispatchStatusToCode = { 'Not dispatched': 'not', 'Partially dispatched': 'partial', 'Fully dispatched': 'full' };
         dispatchChart = chart(root.querySelector('.wopanel-bydispatch'), {
-            chart: { type: 'donut', height: 340 },
+            chart: { type: 'donut', height: 340, events: { dataPointSelection: (e, c, cfg) => {
+                const x = d.by_dispatch[cfg.dataPointIndex];
+                if (!x) return;
+                state.dispatch = dispatchStatusToCode[x.status] || '';
+                elDispatch.value = state.dispatch;
+                state.page = 1; load();
+            } } },
             series: d.by_dispatch.map(x => Number(x.value)), labels: d.by_dispatch.map(x => x.status),
             colors: ['#15803d', '#f59e0b', '#94a3b8'],
             legend: { position: 'bottom', fontSize: '11px' }, tooltip: { y: { formatter: (v) => inr(v) } },
         });
 
-        if (groupChart) groupChart.destroy();
-        groupChart = chart(root.querySelector('.wopanel-bygroup'), {
-            chart: { type: 'bar', height: 280, toolbar: { show: false }, events: { dataPointSelection: (e, c, cfg) => { const g = d.by_group[cfg.dataPointIndex]; if (g) { state.group = g.group === 'Not set' ? '' : g.group; elGroup.value = state.group; state.page = 1; load(); } } } },
-            series: [{ name: 'Value', data: d.by_group.map(g => Number(g.value)) }],
-            xaxis: { categories: d.by_group.map(g => g.group), labels: { formatter: (v) => crore(v) } },
-            // Bar-end data labels were printing the raw unformatted number (e.g. "37127294.93999999")
-            // right over the bar, unreadable and overlapping the next row -- the tooltip already shows the
-            // formatted value on hover, so the in-chart label is just switched off instead of reformatted.
-            dataLabels: { enabled: false },
-            plotOptions: { bar: { horizontal: true, borderRadius: 3 } },
-            colors: ['#127464'], tooltip: { y: { formatter: (v) => inr(v) } },
-        });
+        lastRenderData = d;
+        renderGroupChart(d);
 
         // The <select> options come from the server (every real customer-ledger group, not just the ones
         // in this filtered page) and are filled once -- re-filling on every response would reset whatever
@@ -491,44 +609,47 @@ window.__woPanelDataUrl = window.__woPanelDataUrl || {!! json_encode(route('sale
         });
 
         const t = d.table;
+        const emptyColspan = PANEL_TAB === 'pending' ? 13 : (PANEL_TAB === 'dispatch' ? 14 : 12);
         root.querySelector('.wopanel-table-body').innerHTML = t.rows.length ? t.rows.map((r) => {
-            const notDispatched = r.delivered_qty === null;
-            const fullyDispatched = !notDispatched && Number(r.pending_qty) <= 0.0001;
-            const dispatchHtml = notDispatched
-                ? '<span class="ss-flag">Not shipped</span>'
-                : fullyDispatched
-                    ? '<span class="ss-flag ok">Shipped</span>'
-                    : '<span class="ss-flag warn">Pending ' + qty(r.pending_qty) + '</span>';
-            const approval = r.financial_approval || 'Not set';
-            const approvalBadge = approval === 'Ok' ? 'ok' : (approval === 'Make and Hold' ? 'bad' : 'warn');
-            // Dispatch-only columns: transporter name and docket/vehicle number, straight off the matched
-            // Delivery Note -- explicit request ("for dispatch... docket details transporter details").
-            // Usually blank for this company (disclosed in the page's own footnote), shown when present.
+            if (PANEL_TAB === 'pending') {
+                // Whole-ORDER rollup columns were dropped from this row (see the thead comment) -- just this
+                // line's own pending_qty is shown now, no order-level number sitting next to it to confuse.
+                return '<tr class="wop-row" data-wo-order="' + esc(r.order_no) + '">'
+                    + '<td class="text-nowrap">' + fdate(r.order_date) + '</td><td class="fw-semibold text-nowrap">' + esc(r.order_no) + '</td>'
+                    + '<td class="wop-ellip" title="' + esc(r.item_name || '') + '">' + esc(r.item_name || '—') + '</td>'
+                    + '<td class="wop-ellip" title="' + esc(r.party_name) + '">' + esc(r.party_name) + '</td>'
+                    + '<td class="wop-ellip" title="' + esc(r.sales_group || '') + '">' + esc(r.sales_group || '—') + '</td>'
+                    + '<td>' + esc(d.unit_labels[r.unit] || r.unit) + '</td>'
+                    + '<td class="wop-ellip" title="' + esc(r.stock_group || '') + '">' + esc(r.stock_group || '—') + '</td>'
+                    + '<td class="ss-num">' + qty(r.quantity) + '</td>'
+                    + '<td class="ss-num fw-semibold">' + inr(r.amount) + '</td>'
+                    + '<td class="ss-num">' + qty(r.pending_qty) + '</td>'
+                    + '<td>' + dispatchBadge(r) + '</td>'
+                    + '<td><span class="ss-flag ' + (r.financial_approval === 'Ok' ? 'ok' : (r.financial_approval === 'Make and Hold' ? 'bad' : 'warn')) + '">' + esc(r.financial_approval || 'Not set') + '</span></td>'
+                    + '<td class="wop-ellip small" title="' + esc(r.remarks || '') + '">' + esc(r.remarks || '') + '</td></tr>';
+            }
+            // All / Dispatch: ONE row per order (r.quantity/r.amount/r.pending_qty are already the order's
+            // own totals, summed server-side in panelData() -- not a line). The expand arrow reveals this
+            // order's own item lines on demand instead of the table repeating the order once per item.
             const dispatchExtraCols = PANEL_TAB === 'dispatch'
                 ? '<td class="wop-ellip" title="' + esc(r.transporter_name || '') + '">' + esc(r.transporter_name || '—') + '</td>'
                     + '<td class="wop-ellip" title="' + esc([r.docket_no, r.vehicle_number].filter(Boolean).join(' / ')) + '">' + esc([r.docket_no, r.vehicle_number].filter(Boolean).join(' / ') || '—') + '</td>'
                 : '';
-            // Whole ORDER's totals (not this line's own qty/amount) -- explicit request: separate columns
-            // for order qty / dispatched / pending qty / order amount / pending amount, not one combined
-            // cell. Every line of a multi-item order shows the same order-level numbers, same as Party/
-            // Sales group already repeat per line.
-            return '<tr class="wop-row" data-wo-order="' + esc(r.order_no) + '">'
-                + '<td class="text-nowrap">' + fdate(r.order_date) + '</td><td class="fw-semibold text-nowrap">' + esc(r.order_no) + '</td>'
-                + '<td class="wop-ellip" title="' + esc(r.item_name || '') + '">' + esc(r.item_name || '—') + '</td>'
+            const multi = (r.line_count || 1) > 1;
+            return '<tr class="wop-row wop-order-row" data-wo-order="' + esc(r.order_no) + '" data-wo-company="' + esc(r.company) + '">'
+                + '<td class="text-center">' + (multi ? '<button type="button" class="wop-expand-btn" aria-label="Expand"><i class="bx bx-chevron-right"></i></button>' : '') + '</td>'
+                + '<td class="text-nowrap">' + fdate(r.order_date) + '</td><td class="fw-semibold text-nowrap">' + esc(r.order_no) + (multi ? ' <span class="text-muted small">(' + r.line_count + ' items)</span>' : '') + '</td>'
                 + '<td class="wop-ellip" title="' + esc(r.party_name) + '">' + esc(r.party_name) + '</td>'
                 + '<td class="wop-ellip" title="' + esc(r.sales_group || '') + '">' + esc(r.sales_group || '—') + '</td>'
                 + '<td>' + esc(d.unit_labels[r.unit] || r.unit) + '</td>'
                 + '<td class="wop-ellip" title="' + esc(r.stock_group || '') + '">' + esc(r.stock_group || '—') + '</td>'
                 + '<td class="ss-num">' + qty(r.quantity) + '</td>'
                 + '<td class="ss-num fw-semibold">' + inr(r.amount) + '</td>'
-                + '<td class="ss-num wop-col-orderroll">' + qty(r.order_dispatched_qty) + '</td>'
-                + '<td class="ss-num wop-col-orderroll">' + qty(r.order_pending_qty) + '</td>'
-                + '<td class="ss-num wop-col-orderroll">' + inr(r.order_pending_amount) + '</td>'
-                + '<td>' + dispatchHtml + '</td>'
+                + '<td>' + dispatchBadge(r) + '</td>'
                 + dispatchExtraCols
-                + '<td><span class="ss-flag ' + approvalBadge + '">' + esc(approval) + '</span></td>'
+                + '<td>' + approvalBadgeHtml(r) + '</td>'
                 + '<td class="wop-ellip small" title="' + esc(r.remarks || '') + '">' + esc(r.remarks || '') + '</td></tr>';
-        }).join('') : '<tr><td colspan="' + (PANEL_TAB === 'dispatch' ? 17 : 15) + '" class="text-center text-muted py-5">No work order lines match these filters.</td></tr>';
+        }).join('') : '<tr><td colspan="' + emptyColspan + '" class="text-center text-muted py-5">No work orders match these filters.</td></tr>';
         if (root.__applyColumnVisibility) root.__applyColumnVisibility(); // tbody was just replaced wholesale -- re-apply hidden columns
 
         const from = (t.page - 1) * t.per + 1, to = Math.min(t.page * t.per, t.total);
@@ -545,7 +666,99 @@ window.__woPanelDataUrl = window.__woPanelDataUrl || {!! json_encode(route('sale
         root.querySelector('.wopanel-pager').innerHTML = pager;
     }
 
+    // Expand/collapse an order-level row (All/Dispatch tabs only) into its own item lines, fetched on
+    // demand from the same order-detail endpoint the modal uses (window.__woShowUrlBase, set by
+    // work-order-modal.blade.php, included on every Work Orders tab) -- no separate table shape to build
+    // and maintain just for this inline detail.
+    async function toggleExpand(btn) {
+        const row = btn.closest('tr');
+        const orderNo = row.dataset.woOrder;
+        const collapse = () => {
+            let next = row.nextElementSibling;
+            while (next && next.classList.contains('wop-subrow') && next.dataset.woOrder === orderNo) {
+                const after = next.nextElementSibling;
+                next.remove();
+                next = after;
+            }
+        };
+        if (row.classList.contains('wop-expanded')) {
+            row.classList.remove('wop-expanded');
+            btn.querySelector('i').className = 'bx bx-chevron-right';
+            collapse();
+            return;
+        }
+        row.classList.add('wop-expanded');
+        btn.querySelector('i').className = 'bx bx-chevron-down';
+        const colCount = row.cells.length;
+        const loadingRow = document.createElement('tr');
+        loadingRow.className = 'wop-subrow';
+        loadingRow.dataset.woOrder = orderNo;
+        loadingRow.innerHTML = '<td colspan="' + colCount + '" class="text-muted small py-2 ps-4">Loading items…</td>';
+        row.after(loadingRow);
+
+        // Item rows reuse EVERY column the parent order row has -- same shape as the item-wise Pending
+        // tab, just read straight off the parent row's own cells for whatever is order-level (Date, Party,
+        // Sales group, Approval, Remarks, Transporter/Docket), so they stay correct under the Columns
+        // show/hide toggle and column resize without any extra wiring.
+        const cells = row.cells;
+        const dateHtml = cells[1].innerHTML;
+        const partyHtml = cells[3].innerHTML;
+        const salesGroupHtml = cells[4].innerHTML;
+        // "Unit" in this table means the branch/location (Ramgarh, Patalganga, ...), NOT the item's own
+        // measurement unit (Nos/Kg/...) -- same value for every item on the order, so inherited from the
+        // parent row exactly like Party/Sales group, not read off the item line itself.
+        const unitHtml = cells[5].innerHTML;
+        const approvalHtml = cells[cells.length - 2].innerHTML;
+        const remarksHtml = cells[cells.length - 1].innerHTML;
+        const transporterHtml = PANEL_TAB === 'dispatch' ? cells[10].innerHTML : '';
+        const docketHtml = PANEL_TAB === 'dispatch' ? cells[11].innerHTML : '';
+
+        try {
+            const r = await fetch(window.__woShowUrlBase + '/' + encodeURIComponent(orderNo), { headers: { 'Accept': 'application/json' }, credentials: 'same-origin' });
+            if (!r.ok) throw new Error('fetch failed');
+            const data = await r.json();
+            const deliveredByItem = {};
+            (data.deliveries || []).forEach((note) => (note.items || []).forEach((it) => {
+                deliveredByItem[it.item] = (deliveredByItem[it.item] || 0) + Number(it.qty || 0);
+            }));
+            const lines = data.lines || [];
+            const rowsHtml = lines.length ? lines.map((l) => {
+                const delivered = Object.prototype.hasOwnProperty.call(deliveredByItem, l.item_name) ? deliveredByItem[l.item_name] : null;
+                const itemRow = { delivered_qty: delivered, pending_qty: delivered === null ? Number(l.quantity) : Math.max(0, Number(l.quantity) - delivered) };
+                return '<tr class="wop-row wop-subrow" data-wo-order="' + esc(orderNo) + '">'
+                    + '<td></td>'
+                    + '<td class="text-nowrap">' + dateHtml + '</td>'
+                    + '<td class="wop-ellip ps-4"><span class="fw-semibold text-nowrap">' + esc(orderNo) + '</span><br>'
+                        + '<span class="small text-muted" title="' + esc(l.item_name || '') + '">' + esc(l.item_name || '—') + '</span></td>'
+                    + '<td class="wop-ellip">' + partyHtml + '</td>'
+                    + '<td class="wop-ellip">' + salesGroupHtml + '</td>'
+                    + '<td>' + unitHtml + '</td>'
+                    + '<td class="wop-ellip" title="' + esc(l.stock_group || '') + '">' + esc(l.stock_group || '—') + '</td>'
+                    + '<td class="ss-num">' + qty(l.quantity) + '</td>'
+                    + '<td class="ss-num fw-semibold">' + inr(l.amount) + '</td>'
+                    + '<td>' + dispatchBadge(itemRow) + '</td>'
+                    + (PANEL_TAB === 'dispatch' ? ('<td class="wop-ellip">' + transporterHtml + '</td><td class="wop-ellip">' + docketHtml + '</td>') : '')
+                    + '<td>' + approvalHtml + '</td>'
+                    + '<td class="wop-ellip small">' + remarksHtml + '</td></tr>';
+            }).join('') : ('<tr class="wop-subrow" data-wo-order="' + esc(orderNo) + '"><td colspan="' + colCount + '" class="text-muted small py-2 ps-4">No item lines found.</td></tr>');
+            loadingRow.insertAdjacentHTML('afterend', rowsHtml);
+            loadingRow.remove();
+            if (root.__applyColumnVisibility) root.__applyColumnVisibility();
+        } catch (e) {
+            loadingRow.innerHTML = '<td colspan="' + colCount + '" class="text-danger small py-2 ps-4">Failed to load items.</td>';
+        }
+    }
+
     root.addEventListener('click', (e) => {
+        const expandBtn = e.target.closest('.wop-expand-btn');
+        if (expandBtn) { e.preventDefault(); e.stopPropagation(); toggleExpand(expandBtn); return; }
+        const groupModeBtn = e.target.closest('[data-group-mode]');
+        if (groupModeBtn) {
+            state.groupMode = groupModeBtn.dataset.groupMode;
+            root.querySelectorAll('.wopanel-group-toggle [data-group-mode]').forEach((b) => b.classList.toggle('active', b === groupModeBtn));
+            renderGroupChart(lastRenderData);
+            return;
+        }
         const p = e.target.closest('.wopanel-preset'); if (p) { setPreset(p.dataset.preset, p.textContent.trim()); return; }
         const pg = e.target.closest('[data-wop-page]'); if (pg) { state.page = Number(pg.dataset.wopPage); load(); return; }
         const sortTh = e.target.closest('.wopanel-sortable');
@@ -574,8 +787,8 @@ window.__woPanelDataUrl = window.__woPanelDataUrl || {!! json_encode(route('sale
         if (!e.target.closest('.wopanel-cols-menu')) elColsMenu.style.display = 'none';
         const reset = e.target.closest('.wopanel-reset');
         if (reset) {
-            state.q = ''; state.unit = ''; state.category = ''; state.group = ''; state.page = 1; state.sort = 'order_date'; state.dir = 'desc';
-            elSearch.value = ''; elUnit.value = ''; elCategory.value = ''; elGroup.value = '';
+            state.q = ''; state.unit = ''; state.category = ''; state.group = ''; state.dispatch = ''; state.page = 1; state.sort = 'order_date'; state.dir = 'desc';
+            elSearch.value = ''; elUnit.value = ''; elCategory.value = ''; elGroup.value = ''; elDispatch.value = '';
             setPreset('last30', 'Last 30 days');
         }
     });
@@ -591,6 +804,7 @@ window.__woPanelDataUrl = window.__woPanelDataUrl || {!! json_encode(route('sale
     elTo.addEventListener('change', (e) => { state.to = e.target.value; state.presetLabel = fdate(state.from) + ' – ' + fdate(state.to); updateDateToggleLabel(); state.page = 1; load(); });
     elUnit.addEventListener('change', (e) => { state.unit = e.target.value; state.page = 1; load(); });
     elCategory.addEventListener('change', (e) => { state.category = e.target.value; state.page = 1; load(); });
+    elDispatch.addEventListener('change', (e) => { state.dispatch = e.target.value; state.page = 1; load(); });
 
     (function waitForApex(triesLeft) {
         if (window.ApexCharts || triesLeft <= 0) { setPreset('last30', 'Last 30 days'); } else { setTimeout(() => waitForApex(triesLeft - 1), 50); }

@@ -15,8 +15,18 @@
     <div class="col-12 col-lg-3"><div class="hitech-card-white p-3 h-100"><h6 class="fw-bold mb-2">By unit <span class="text-muted small">(click to filter)</span></h6><div id="woFinByUnit"></div></div></div>
     <div class="col-12 col-lg-3"><div class="hitech-card-white p-3 h-100"><h6 class="fw-bold mb-2">By approval <span class="text-muted small">(click to filter)</span></h6><div id="woFinByApproval"></div></div></div>
     {{-- Tally's own customer ledger GROUP -- see work-orders-panel.blade.php's identical card for why this
-         is a real salesperson/territory/brand bucket, not a guess. --}}
-    <div class="col-12 col-lg-3"><div class="hitech-card-white p-3 h-100"><h6 class="fw-bold mb-2">By sales group <span class="text-muted small fw-normal">(click to filter)</span></h6><div id="woFinByGroup"></div></div></div>
+         is a real salesperson/territory/brand bucket, not a guess. Toggle switches this SAME card between
+         Sales group and Stock group -- see work-orders-panel.blade.php's identical note. --}}
+    <div class="col-12 col-lg-3"><div class="hitech-card-white p-3 h-100">
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <h6 class="fw-bold mb-0">By <span id="woFinGroupToggleLabel">sales group</span> <span class="text-muted small fw-normal">(click to filter)</span></h6>
+        <div class="btn-group btn-group-sm" id="woFinGroupToggle" role="group">
+          <button type="button" class="btn btn-outline-secondary active" data-group-mode="group">Sales</button>
+          <button type="button" class="btn btn-outline-secondary" data-group-mode="category">Stock</button>
+        </div>
+      </div>
+      <div id="woFinByGroup"></div>
+    </div></div>
   </div>
 
   <div class="hitech-card-white overflow-hidden mb-3 position-relative">
@@ -95,9 +105,9 @@
              table-layout:fixed was quietly ignoring it, functionally harmless but incorrect. Also widens
              the 3 whole-order columns, which were too narrow for their renamed headers to read at all. --}}
         <colgroup>
-          <col style="width:5%"><col style="width:6%"><col style="width:8%"><col style="width:7%">
+          <col style="width:5%"><col style="width:6%"><col style="width:7%"><col style="width:6%">
           <col style="width:5%"><col style="width:4%"><col style="width:4%"><col style="width:4%">
-          <col style="width:5%"><col style="width:6%"><col style="width:6%"><col style="width:6%">
+          <col style="width:5%"><col style="width:5%"><col style="width:6%"><col style="width:6%"><col style="width:6%">
           <col style="width:5%"><col style="width:5%">
           <col style="width:5%"><col style="width:5%">
           <col style="width:5%"><col style="width:4%">
@@ -112,6 +122,9 @@
               <th class="wofin-sortable wofin-col-category" data-sort="stock_group">Stock group</th>
               <th class="ss-num wofin-sortable" data-sort="quantity">Qty</th>
               <th class="ss-num wofin-sortable" data-sort="amount">Amount</th>
+              {{-- This ITEM's own still-pending quantity (not the whole order's) -- see
+                   work-orders-panel.blade.php's identical note. --}}
+              <th class="ss-num" title="This line's own still-pending quantity (matched per item, not the whole order)">Item pending</th>
               {{-- Whole-ORDER totals, one column each -- see work-orders-panel.blade.php's identical note.
                    Order qty/Order amt dropped (redundant with Qty/Amount). --}}
               <th class="ss-num wofin-col-orderroll" title="WHOLE ORDER's already-dispatched quantity, summed across every item on it -- not just this line">Order: dispatched</th>
@@ -121,7 +134,7 @@
               <th class="ss-num wofin-sortable" data-sort="total_outstanding">O/S amt</th><th class="ss-num wofin-sortable" data-sort="credit_limit">Credit limit</th>
               <th class="wofin-sortable" data-sort="financial_approval">Approval</th><th class="wofin-col-remarks">Remarks</th></tr>
         </thead>
-        <tbody id="woFinTableBody"><tr><td colspan="18" class="text-center text-muted py-5">Loading…</td></tr></tbody>
+        <tbody id="woFinTableBody"><tr><td colspan="19" class="text-center text-muted py-5">Loading…</td></tr></tbody>
       </table>
     </div>
     <div class="p-3 d-flex flex-wrap justify-content-between align-items-center gap-2">
@@ -210,14 +223,15 @@ window.__woFinCompany = {!! json_encode($company ?: '') !!};
 
     const todayDate = new Date();
     const todayIso = ymd(todayDate);
-    const state = { q: '', company: window.__woFinCompany || '', from: ymd(new Date(Date.now() - 29 * 86400000)), to: todayIso, unit: '', category: '', group: '', approval: '', page: 1, sort: 'order_date', dir: 'desc', presetLabel: 'Last 30 days' };
+    const state = { q: '', company: window.__woFinCompany || '', from: ymd(new Date(Date.now() - 29 * 86400000)), to: todayIso, unit: '', category: '', group: '', approval: '', page: 1, sort: 'order_date', dir: 'desc', presetLabel: 'Last 30 days', groupMode: 'group' };
     let trendChart = null, unitChart = null, groupChart = null, approvalChart = null;
+    let lastRenderData = null; // re-render the By sales/stock group chart on toggle without a re-fetch
     let requestSeq = 0; // race-condition guard: only the response to the MOST RECENT request is ever rendered
     let groupOptionsFilled = false; // the <select> is populated once from the first response's sales_groups
 
     const elSearch = document.getElementById('woFinSearch'), elCompany = document.getElementById('woFinCompanySel'),
           elFrom = document.getElementById('woFinFrom'), elTo = document.getElementById('woFinTo'),
-          elGroup = document.getElementById('woFinGroup'),
+          elGroup = document.getElementById('woFinGroup'), elCategory = document.getElementById('woFinCategory'),
           elDateToggle = document.getElementById('woFinDateToggle'), elDatePop = document.getElementById('woFinDatePop'),
           elColsBtn = document.getElementById('woFinColsBtn'), elColsMenu = document.getElementById('woFinColsMenu'),
           elLoading = document.getElementById('woFinLoading');
@@ -376,6 +390,32 @@ window.__woFinCompany = {!! json_encode($company ?: '') !!};
         return c;
     }
 
+    // See work-orders-panel.blade.php's identical function: one chart card toggles between Sales group and
+    // Stock group instead of a separate 5th card. Redraws from the already-fetched response, no re-fetch.
+    function renderGroupChart(d) {
+        if (!d) return;
+        const isCategory = state.groupMode === 'category';
+        const series = isCategory ? d.by_category : d.by_group;
+        document.getElementById('woFinGroupToggleLabel').textContent = isCategory ? 'stock group' : 'sales group';
+        if (groupChart) groupChart.destroy();
+        groupChart = chart('woFinByGroup', {
+            chart: { type: 'bar', height: 280, toolbar: { show: false }, events: { dataPointSelection: (e, c, cfg) => {
+                const g = series[cfg.dataPointIndex];
+                if (!g) return;
+                const val = g.group === 'Not set' ? '' : g.group;
+                if (isCategory) { state.category = val; elCategory.value = val; } else { state.group = val; elGroup.value = val; }
+                state.page = 1; load();
+            } } },
+            series: [{ name: 'Value', data: series.map(g => Number(g.value)) }],
+            xaxis: { categories: series.map(g => g.group), labels: { formatter: (v) => crore(v) } },
+            // See work-orders-panel.blade.php's identical note: the raw unformatted number printed on the
+            // bar was unreadable and overlapped the next row -- the tooltip covers it on hover instead.
+            dataLabels: { enabled: false },
+            plotOptions: { bar: { horizontal: true, borderRadius: 3 } },
+            colors: ['#127464'], tooltip: { y: { formatter: (v) => inr(v) } },
+        });
+    }
+
     function render(d) {
         const s = d.stats;
         const lt = s.lead_time || {}, ltBill = lt.to_billing, ltDel = lt.to_delivery;
@@ -419,17 +459,8 @@ window.__woFinCompany = {!! json_encode($company ?: '') !!};
             legend: { position: 'bottom', fontSize: '11px' }, tooltip: { y: { formatter: (v) => inr(v) } },
         });
 
-        if (groupChart) groupChart.destroy();
-        groupChart = chart('woFinByGroup', {
-            chart: { type: 'bar', height: 280, toolbar: { show: false }, events: { dataPointSelection: (e, c, cfg) => { const g = d.by_group[cfg.dataPointIndex]; if (g) { state.group = g.group === 'Not set' ? '' : g.group; elGroup.value = state.group; state.page = 1; load(); } } } },
-            series: [{ name: 'Value', data: d.by_group.map(g => Number(g.value)) }],
-            xaxis: { categories: d.by_group.map(g => g.group), labels: { formatter: (v) => crore(v) } },
-            // See work-orders-panel.blade.php's identical note: the raw unformatted number printed on the
-            // bar was unreadable and overlapped the next row -- the tooltip covers it on hover instead.
-            dataLabels: { enabled: false },
-            plotOptions: { bar: { horizontal: true, borderRadius: 3 } },
-            colors: ['#127464'], tooltip: { y: { formatter: (v) => inr(v) } },
-        });
+        lastRenderData = d;
+        renderGroupChart(d);
 
         // The <select> options come from the server (every real customer-ledger group, not just the ones
         // in this filtered page) and are filled once -- re-filling on every response would reset whatever
@@ -469,6 +500,7 @@ window.__woFinCompany = {!! json_encode($company ?: '') !!};
                 + '<td class="wofin-ellip" title="' + esc(r.stock_group || '') + '">' + esc(r.stock_group || '—') + '</td>'
                 + '<td class="ss-num">' + qty(r.quantity) + '</td>'
                 + '<td class="ss-num fw-semibold">' + inr(r.amount) + '</td>'
+                + '<td class="ss-num">' + qty(r.pending_qty) + '</td>'
                 + '<td class="ss-num wofin-col-orderroll">' + qty(r.order_dispatched_qty) + '</td>'
                 + '<td class="ss-num wofin-col-orderroll">' + qty(r.order_pending_qty) + '</td>'
                 + '<td class="ss-num wofin-col-orderroll">' + inr(r.order_pending_amount) + '</td>'
@@ -476,7 +508,7 @@ window.__woFinCompany = {!! json_encode($company ?: '') !!};
                 + '<td class="ss-num">' + (r.total_outstanding != null ? inr(r.total_outstanding) : '—') + '</td><td class="ss-num">' + (r.credit_limit != null ? inr(r.credit_limit) : '—') + '</td>'
                 + '<td><span class="ss-flag ' + badge + '">' + esc(r.financial_approval || 'Not set') + '</span></td>'
                 + '<td class="wofin-ellip small" title="' + esc(r.remarks || '') + '">' + esc(r.remarks || '') + '</td></tr>';
-        }).join('') : '<tr><td colspan="18" class="text-center text-muted py-5">No work order lines match these filters.</td></tr>';
+        }).join('') : '<tr><td colspan="19" class="text-center text-muted py-5">No work order lines match these filters.</td></tr>';
         if (applyColumnVisibility) applyColumnVisibility(); // tbody was just replaced wholesale -- re-apply hidden columns
 
         const from = (t.page - 1) * t.per + 1, to = Math.min(t.page * t.per, t.total);
@@ -494,6 +526,13 @@ window.__woFinCompany = {!! json_encode($company ?: '') !!};
     }
 
     document.getElementById('woFin').addEventListener('click', (e) => {
+        const groupModeBtn = e.target.closest('[data-group-mode]');
+        if (groupModeBtn) {
+            state.groupMode = groupModeBtn.dataset.groupMode;
+            document.getElementById('woFinGroupToggle').querySelectorAll('[data-group-mode]').forEach((b) => b.classList.toggle('active', b === groupModeBtn));
+            renderGroupChart(lastRenderData);
+            return;
+        }
         const p = e.target.closest('.wofin-preset'); if (p) { setPreset(p.dataset.preset, p.textContent.trim()); return; }
         const pg = e.target.closest('[data-wofin-page]'); if (pg) { state.page = Number(pg.dataset.wofinPage); load(); return; }
         const sortTh = e.target.closest('.wofin-sortable');
