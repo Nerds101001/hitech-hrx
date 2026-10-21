@@ -423,17 +423,25 @@ class TrainingController extends Controller
                 'message' => 'No quiz for this module - it is complete once watched.']);
         }
 
+        // How many questions a test should draw, per the module's own
+        // "Questions per test" setting -- this was never actually read here,
+        // so it only ever capped at a hardcoded 20 (or 25 for a segmented
+        // catalogue): a module with fewer questions than that cap showed its
+        // WHOLE bank regardless of what was configured.
+        $cap = max(1, (int) ($module->questions_per_test ?: 20));
+
         // When a module's question bank is segmented into categories (e.g. the
         // Rust-X catalogue: VCI/SMP, corrosion control, films & papers, oils &
         // coatings, commercial, compliance), draw a few random questions from
-        // EVERY segment so each attempt covers the whole catalogue, capped at 25.
+        // EVERY segment so each attempt covers the whole catalogue, capped at
+        // the module's configured question count.
         $categories = $module->questions()
             ->whereNotNull('category')
             ->distinct()
             ->pluck('category');
 
         if ($categories->count() > 1) {
-            $perCategory = (int) min(5, max(3, floor(25 / $categories->count())));
+            $perCategory = (int) min(5, max(3, floor($cap / $categories->count())));
             $questions = collect();
             foreach ($categories as $category) {
                 $questions = $questions->merge(
@@ -444,12 +452,12 @@ class TrainingController extends Controller
                         ->get()
                 );
             }
-            $questions = $questions->shuffle()->take(25)->values();
+            $questions = $questions->shuffle()->take($cap)->values();
         } else {
-            // Uncategorised modules: show up to 20 randomly picked questions.
+            // Uncategorised modules: show up to the configured count, randomly picked.
             $questions = $module->questions()
                 ->inRandomOrder()
-                ->limit(20)
+                ->limit($cap)
                 ->get();
         }
 
