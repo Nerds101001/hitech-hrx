@@ -64,7 +64,11 @@ $(function () {
   if (dtTable.length) {
     var employeeView = baseUrl + 'employees/view/';
 
-    var dtLeaveRequests = dtTable.DataTable({
+    // Global (not `var`-scoped to this closure) so the "Delegate Access" tab
+    // toggle in resources/views/tenant/leave/index.blade.php — a separate
+    // inline <script>, outside this file's own closure — can reach it to
+    // reload the same table with the scope flag it just flipped.
+    var dtLeaveRequests = window.dtLeaveRequests = dtTable.DataTable({
       processing: true,
       serverSide: true,
       dom: 'rt<"row"<"col-sm-12 col-md-6"i><"col-sm-12 col-md-6"p>>', // Custom DOM for Hitech layout
@@ -78,6 +82,7 @@ $(function () {
           d.monthFilter = $('#monthFilter').val();
           d.yearFilter = $('#yearFilter').val();
           d.searchTerm = $('#customSearchInput').val(); // Integrated Search
+          d.delegateScope = window.leaveDelegateScope ? 1 : 0; // "Delegate Access" tab toggle, see index.blade.php
         },
         error: function (xhr, error, code) {
           console.log('Error: ' + error);

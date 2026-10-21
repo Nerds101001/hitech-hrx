@@ -207,13 +207,19 @@
         $('.main-view-toggle-btn').removeClass('active');
         $(this).addClass('active');
 
-        if ($(this).data('view') === 'summary') {
+        var view = $(this).data('view');
+        if (view === 'summary') {
           $('#requestsView').hide();
           $('#summaryView').show();
           initSummaryTable();
         } else {
           $('#summaryView').hide();
           $('#requestsView').show();
+          // Read by leave-requests-index.js's ajax `data` callback — scopes
+          // the same table to just the delegated vacant account(s)' teams
+          // instead of this user's normal (own-team or company-wide) view.
+          window.leaveDelegateScope = (view === 'delegate');
+          if (window.dtLeaveRequests) window.dtLeaveRequests.ajax.reload();
         }
       });
     });
@@ -235,6 +241,11 @@
             <button type="button" class="btn btn-sm rounded-pill px-4 main-view-toggle-btn" data-view="summary">
               <i class="bx bx-bar-chart-alt-2 me-1"></i>Employee Summary
             </button>
+            @if($hasDelegatedAccounts)
+            <button type="button" class="btn btn-sm rounded-pill px-4 main-view-toggle-btn" data-view="delegate" title="Requests from the team(s) of a vacant-position account delegated to you">
+              <i class="bx bx-transfer-alt me-1"></i>Delegate Access
+            </button>
+            @endif
           </div>
         </div>
         <div id="requestsView">
