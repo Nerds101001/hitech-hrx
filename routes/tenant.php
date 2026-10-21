@@ -877,6 +877,12 @@ Route::middleware([
     Route::post('job-application/add-skill/{id}', [JobApplicationController::class, 'addSkill'])->name('job.application.addSkill');
     Route::post('job-application/add-experience/{id}', [JobApplicationController::class, 'addExperience'])->name('job.application.addExperience');
     Route::post('job-application/get-by-job', [JobApplicationController::class, 'getByJob'])->name('get.job.application');
+    // Both referenced by resources/views/tenant/jobApplication/show_script.blade.php
+    // but never registered -- route() threw RouteNotFoundException, 500ing the
+    // whole Job Application show page for everyone (star rating + stage change
+    // never even got a chance to silently fail, the page never rendered at all).
+    Route::post('job-application/rating/{id}', [JobApplicationController::class, 'rating'])->name('job.application.rating');
+    Route::post('job-application/stage-change', [JobApplicationController::class, 'stageChange'])->name('job.application.stage.change');
 
     Route::resource('custom-question', CustomQuestionController::class);
 

@@ -36,6 +36,11 @@
           },
           success: function(data) {
              // Optional: toastr
+          },
+          error: function(xhr) {
+            stars.removeClass('selected');
+            var msg = (xhr.responseJSON && (xhr.responseJSON.error || xhr.responseJSON.message)) || 'Could not save rating.';
+            if (typeof toastr !== 'undefined') toastr.error(msg); else alert(msg);
           }
         });
       });
@@ -55,10 +60,14 @@
           success: function(data) {
             if ($('#commonModal').is(':visible')) {
                 // Refresh modal content instead of full page if in modal
-                location.reload(); 
+                location.reload();
             } else {
                 window.location.reload();
             }
+          },
+          error: function(xhr) {
+            var msg = (xhr.responseJSON && (xhr.responseJSON.error || xhr.responseJSON.message)) || 'Could not change stage.';
+            if (typeof toastr !== 'undefined') toastr.error(msg); else alert(msg);
           }
         });
       });

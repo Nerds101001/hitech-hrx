@@ -230,12 +230,14 @@
           success: function (response) {
             $('#hitechResetPasswordModal').modal('hide');
             btn.prop('disabled', false).text('Confirm Reset');
-            
-            Swal.fire({ 
-              icon: 'success', 
-              title: 'Success!', 
-              text: response.message, 
-              customClass: { confirmButton: 'btn btn-success' } 
+
+            Swal.fire({
+              icon: 'success',
+              title: 'Success!',
+              // Success::response() nests the payload under .data -- {message, password}
+              // here. Reading .message directly always showed "undefined".
+              text: (response.data && response.data.message) || 'Password reset successfully.',
+              customClass: { confirmButton: 'btn btn-success' }
             });
           },
           error: function (error) {
@@ -272,7 +274,15 @@
               data: { id: user_id, _token: '{{ csrf_token() }}' },
               success: function (response) {
                 window.dt_user.ajax.reload();
-                Swal.fire({ icon: 'success', title: 'Unlocked!', text: response.message, customClass: { confirmButton: 'btn btn-success' } });
+                // Success::response() puts the plain message string directly
+                // under .data here (not .data.message) -- .message was always
+                // undefined. Also: this call had no error callback at all, so a
+                // failed unlock (e.g. the user id not found) showed nothing.
+                Swal.fire({ icon: 'success', title: 'Unlocked!', text: response.data || 'Security lock removed successfully.', customClass: { confirmButton: 'btn btn-success' } });
+              },
+              error: function (error) {
+                const msg = (error.responseJSON && error.responseJSON.data) || 'Something went wrong.';
+                Swal.fire({ icon: 'error', title: 'Error!', text: msg, customClass: { confirmButton: 'btn btn-danger' } });
               }
             });
           }

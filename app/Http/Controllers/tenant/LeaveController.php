@@ -709,7 +709,11 @@ class LeaveController extends Controller
         ->whereIn('status', ['pending', 'approved'])->first();
 
       if ($existing) {
-        return response()->json(['status' => 'error', 'message' => 'An outdoor duty request already exists for this date.']);
+        // 422, not 200 -- see outdoorDutyActionAjax's own note below: the page's
+        // success callback never checked the status field, so a 200 here made a
+        // rejected double-submit show "submitted successfully" and silently
+        // drop the actual conflict message.
+        return response()->json(['status' => 'error', 'message' => 'An outdoor duty request already exists for this date.'], 422);
       }
 
       $duty = OutdoorDuty::create([
@@ -737,7 +741,7 @@ class LeaveController extends Controller
       return response()->json(['status' => 'success', 'message' => 'Outdoor duty request submitted successfully.']);
     } catch (Exception $e) {
       Log::error('OutdoorDuty store error: ' . $e->getMessage());
-      return response()->json(['status' => 'error', 'message' => 'Something went wrong. Please try again.']);
+      return response()->json(['status' => 'error', 'message' => 'Something went wrong. Please try again.'], 500);
     }
   }
 

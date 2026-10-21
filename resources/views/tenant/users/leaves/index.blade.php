@@ -1025,7 +1025,17 @@ document.addEventListener('DOMContentLoaded', function() {
                 od_location:        $('#od_location').val(),
                 od_expected_return: $('#od_return_time').val()
             },
-            success: function() {
+            success: function(response) {
+                // The server can return HTTP 200 with status:'error' (e.g. a
+                // duplicate request for the same date) -- this never checked
+                // that, so a rejected submit showed "submitted successfully"
+                // and silently dropped the real error message.
+                if (response && response.status === 'error') {
+                    const msg = response.message || 'Could not submit the request.';
+                    if (typeof toastr !== 'undefined') toastr.error(msg);
+                    else alert(msg);
+                    return;
+                }
                 if (typeof toastr !== 'undefined') toastr.success('Outdoor duty request submitted successfully.');
                 else alert('Outdoor duty request submitted successfully.');
                 $('#odApplyModal').modal('hide');
