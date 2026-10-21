@@ -498,7 +498,7 @@ const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;',
 const fmt=(n,d=2)=>n==null||isNaN(n)?'–':Number(n).toLocaleString('en-IN',{minimumFractionDigits:d,maximumFractionDigits:d});
 const r2=n=>Math.round(n*100)/100;
 
-const FAM_ICON={vci:'bx-package',lubes:'bx-droplet',fillezy:'bx-box',drbio:'bx-leaf'};
+const FAM_ICON={vci:'bx-package',lubes:'bx-droplet',fillezy:'bx-box',drbio:'bx-leaf',kif:'bx-cube-alt'};
 
 /* ================= approval bands (unchanged math) ================= */
 const BAND_TXT=['No approval needed','GM approval','Channel price','Director approval'];
@@ -786,6 +786,9 @@ const CALCS=[
  {id:'dbstretch',g:'Dr. Bio compostable',t:'Stretch film roll',desc:'Machine or hand wrap. Individual pack adds ₹15 for packaging.',
   fields:[sel('type','Format',['Machine wrap','Hand wrap','Individual pack'],'Machine wrap'),d('W','Width',18,450),n('Lm','Roll length (metres)',500),n('mic','Thickness (micron)',20)],rate:{unit:'KG',list:'drbio',codes:['DB-1064'],def:'DB-1064'},
   calc(v){const wi=v.W;const kg=(wi/40)*v.Lm*v.mic*4*F().drbio/6600;return{kg,add:v.type==='Individual pack'?15:0,unit:'roll',desc:`Dr. Bio stretch film (${v.type.toLowerCase()}) ${v._dims('W')} × ${v.Lm} m, ${v.mic} mic`}}},
+ {id:'kifmap',g:'Keep It Fresh',t:'KIF MAP Bags — custom size',desc:'MAP Bags are flat per-piece items, not priced by weight like VCI/Dr. Bio — there is no micron/density figure in the KIF price list. This estimates a price for a size that is NOT one of the 11 standard sizes already on the KIF price list, from a ₹/sq-inch rate (Admin → Calculator Factors) fitted to those 11 known prices. Always prefer the exact price-list row when the size matches one.',noUnits:true,
+  fields:[n('L','Length (inch)',10),n('W','Width (inch)',12)],
+  calc(v){const price=v.L*v.W*F().kifMapRate;return{info:[['Estimated price per pc',price,2,true]]}}},
 ];
 const GROUP_META={
   'VCI plastic':{icon:'bx-shield-quarter',color:'#0A9995'},
@@ -793,6 +796,7 @@ const GROUP_META={
   'Tuffpaulin':{icon:'bx-cube',color:'#D97706'},
   'Size converters':{icon:'bx-transfer-alt',color:'#7C3AED'},
   'Dr. Bio compostable':{icon:'bx-leaf',color:'#16A34A'},
+  'Keep It Fresh':{icon:'bx-cube-alt',color:'#0D9488'},
 };
 let curCalc=null, calcUnit=LS.get('spd_unit')||'in', calcCollapsed={};
 function qcGroups(list){const seen=[],map={};list.forEach(c=>{if(!map[c.g]){map[c.g]=[];seen.push(c.g)}map[c.g].push(c)});return seen.map(g=>({g,items:map[g]}))}
@@ -963,7 +967,7 @@ function markDirty(){LS.set('spd_override',DATA)}
 function flashMsg(el,ok,text){el.textContent=text;el.className='pd2-savemsg '+(ok?'ok':'bad');if(ok)setTimeout(()=>{el.textContent=''},3500)}
 function renderAdmin(){
   $('#pd2aRules').innerHTML=LISTS().filter(m=>DATA.rules[m.k]).map(m=>m.k).map(l=>DATA.rules[l].map((p,k)=>`<label>${esc(LM(l).short)} — ${['No approval','GM','Channel'][k]} (%)<input type="number" step="0.5" data-rl="${l}" data-rk="${k}" value="${p}"></label>`).join('')).join('');
-  const FL={vci:'VCI plastic & paper wastage (×)',vci5:'5-side VCI cover wastage (×)',drbio:'Dr. Bio film factor (×)',shrink:'Dr. Bio shrink factor (×)',tuffFG:'Tuffpaulin FG-size uplift (×)'};
+  const FL={vci:'VCI plastic & paper wastage (×)',vci5:'5-side VCI cover wastage (×)',drbio:'Dr. Bio film factor (×)',shrink:'Dr. Bio shrink factor (×)',tuffFG:'Tuffpaulin FG-size uplift (×)',kifMapRate:'KIF MAP Bags — ₹/sq-inch estimate'};
   $('#pd2aFactors').innerHTML=Object.keys(FL).map(k=>`<label>${FL[k]}<input type="number" step="0.01" data-fk="${k}" value="${DATA.factors[k]}"></label>`).join('');
   renderFamTabs();
   fillACats();
