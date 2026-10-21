@@ -172,6 +172,7 @@
         'compare'     => ['sales-sources.index',       'bx-git-compare',   'Compare'],
         'outstanding' => ['sales-sources.outstanding', 'bx-time-five',     'Outstanding'],
         'orders'      => ['sales-sources.orders',      'bx-cart',          'Sale Orders'],
+        'work-orders' => ['sales-sources.work-orders', 'bx-task',          'Work Orders'],
         'unmapped'    => ['sales-sources.unmapped',    'bx-unlink',        'Not in CRM'],
         'parties'     => ['sales-sources.parties',     'bx-credit-card',   'Credit & Contacts'],
         'team'        => ['sales-sources.team',        'bx-group',         'Team'],

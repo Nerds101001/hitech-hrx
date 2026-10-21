@@ -402,6 +402,14 @@ Route::middleware([
       Route::get('tally/outstanding-bills', [$c, 'outstandingBills'])->name('outstanding-bills');
       Route::get('tally/orders', [$c, 'orders'])->name('orders');
       Route::get('tally/orders/dispatch', [$c, 'orderDispatch'])->name('orders.dispatch');
+      // Work Orders -- full per-order item detail, pending qty, lead-time stats, editable tracking notes.
+      Route::get('work-orders', [\App\Http\Controllers\tenant\WorkOrdersController::class, 'index'])->name('work-orders');
+      // Registered before {orderNo} below -- a literal path segment, would otherwise be swallowed as an order number.
+      Route::get('work-orders/item-history', [\App\Http\Controllers\tenant\WorkOrdersController::class, 'itemHistory'])->name('work-orders.item-history');
+      Route::get('work-orders/financial-data', [\App\Http\Controllers\tenant\WorkOrdersController::class, 'financialData'])->name('work-orders.financial-data');
+      Route::get('work-orders/panel-data', [\App\Http\Controllers\tenant\WorkOrdersController::class, 'panelData'])->name('work-orders.panel-data');
+      Route::get('work-orders/{orderNo}', [\App\Http\Controllers\tenant\WorkOrdersController::class, 'show'])->name('work-orders.show');
+      Route::post('work-orders/{orderNo}/tracking', [\App\Http\Controllers\tenant\WorkOrdersController::class, 'updateTracking'])->name('work-orders.tracking');
       Route::get('unmapped', [$c, 'unmapped'])->name('unmapped');
       Route::get('parties', [$c, 'parties'])->name('parties');
       // Credit & Contacts' one write path into Tally -- admin-only, enforced again in the controller (the
