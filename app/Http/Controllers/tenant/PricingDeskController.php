@@ -58,6 +58,7 @@ class PricingDeskController extends Controller
             'vci'     => $trim($data['vci'] ?? []),
             'lubes'   => $trim($data['lubes'] ?? []),
             'drbio'   => $trim($data['drbio'] ?? []),
+            'kif'     => $trim($data['kif'] ?? []),
             'rules'   => $data['rules'] ?? [],
             'lists'   => $data['lists'] ?? [],
         ]);
