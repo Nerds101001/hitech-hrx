@@ -348,6 +348,21 @@
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     $(function() {
+        // Flashed success/error and validation errors from the Upload/Edit forms'
+        // plain (non-AJAX) submits -- this page had no way to show either, so a
+        // rejected submit (e.g. a bad department selection) looked identical to
+        // a successful one: the modal just closed with nothing on screen.
+        @if(session('success'))
+            Swal.fire({icon: 'success', title: 'Done', text: @json(session('success')),
+                customClass: {confirmButton: 'btn btn-success rounded-pill fw-bold px-4'}, buttonsStyling: false});
+        @elseif(session('error'))
+            Swal.fire({icon: 'error', title: 'Could not save', text: @json(session('error')),
+                customClass: {confirmButton: 'btn btn-primary rounded-pill fw-bold px-4'}, buttonsStyling: false});
+        @elseif($errors->any())
+            Swal.fire({icon: 'error', title: 'Could not save', html: @json('<div class="text-start">' . collect($errors->all())->map(fn($e) => e($e))->implode('<br>') . '</div>'),
+                customClass: {confirmButton: 'btn btn-primary rounded-pill fw-bold px-4'}, buttonsStyling: false});
+        @endif
+
         // Edit modals are per-policy and prefilled server-side; they open via
         // Bootstrap's data-bs-toggle, so no JS is needed to populate them.
 

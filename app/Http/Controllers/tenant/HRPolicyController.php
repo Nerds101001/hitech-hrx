@@ -49,6 +49,16 @@ class HRPolicyController extends Controller
      */
     public function store(Request $request)
     {
+        // The form's own "All Departments (Default)" option submits the literal
+        // string "all" -- not a department id, so it has to be stripped BEFORE
+        // validation runs, or `target_departments.* => exists:departments,id`
+        // rejects it outright and the whole submit fails validation. Picking
+        // that default option was silently failing every time because of this.
+        $allSelected = in_array('all', (array) $request->input('target_departments', []), true);
+        if ($allSelected) {
+            $request->merge(['target_departments' => null]);
+        }
+
         $request->validate([
             'title' => 'required|string|max:255',
             'file' => 'required|mimes:pdf|max:10240', // Max 10MB
@@ -72,7 +82,7 @@ class HRPolicyController extends Controller
                 'category' => $request->category ?? 'General',
                 'is_mandatory' => $request->boolean('is_mandatory'),
                 'show_as_popup' => $request->boolean('show_as_popup'),
-                'target_departments' => $request->has('target_departments') && in_array('all', $request->target_departments) ? null : $request->target_departments,
+                'target_departments' => $request->input('target_departments'),
                 'created_by_id' => auth()->id()
             ]);
 
