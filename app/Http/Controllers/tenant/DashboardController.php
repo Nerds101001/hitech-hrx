@@ -872,8 +872,13 @@ class DashboardController extends Controller
 
       // MANAGER SPECIFIC SCOPING FOR REVAMP
       if ($isManager) {
+        // Direct reports only — NOT the manager themself. Every stat built from
+        // this list (Team Size, Present/On Leave/Absent, Pending Approvals,
+        // team deployment/attendance trend, upcoming leaves) is "how is my
+        // team doing", so including self inflated Team Size by one and would
+        // have put the manager's own leave/expense/document/loan requests in
+        // their own "Pending Approvals" queue.
         $teamMemberIds = User::where('reporting_to_id', $user->id)->notTerminated()->pluck('id')->toArray();
-        $teamMemberIds[] = $user->id; // Include self
 
         $totalUser = count($teamMemberIds);
         $active = User::whereIn('id', $teamMemberIds)->where('status', UserAccountStatus::ACTIVE)->count();
