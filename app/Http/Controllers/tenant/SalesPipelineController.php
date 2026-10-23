@@ -450,8 +450,16 @@ class SalesPipelineController extends Controller
         // picked (or a CCare / New Biz rep's own book). Only a customer that
         // moved New Biz -> CCare has months that fall outside them.
         $monthCategory = in_array($fCat, ['New Biz', 'CCare', 'None'], true) ? $fCat : null;
+        // Credit the totals to whoever is actually being viewed. $teamView is
+        // just the raw `?team=1` flag on the URL — it stays true even when a
+        // single person with no reports is selected (e.g. `?team=1&sp=228` for
+        // a salesperson), so using it here dropped the per-person credit filter
+        // and summed every role's forecast/sale/pending on their rows, not just
+        // their own share. $showTeamActive is only true when that person's team
+        // was actually expanded into the row scope, which is the one case where
+        // no single person should be credited.
         $creditPeople = array_values(array_unique(array_map('intval', array_filter(
-            $teamView ? [] : [$fSp, $fCcare, $fNb, $fBoth],
+            $showTeamActive ? [] : [$fSp, $fCcare, $fNb, $fBoth],
             fn ($v) => is_numeric($v)
         ))));
         if (!$creditPeople && ($isCcare || $isNewBiz) && !$isManager && $allowedSpIds !== null) {
