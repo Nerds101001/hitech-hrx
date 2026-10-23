@@ -386,8 +386,11 @@ class AssetController extends Controller
                     $editBtn     = '';
                     $deleteBtn   = '';
                     $transferBtn = '';
+                    $canEdit = auth()->user()->hasRole(['admin', 'hr']) || auth()->user()->can('assets.edit');
+                    if ($canEdit) {
+                        $editBtn = '<button class="btn btn-sm btn-icon edit-record" data-id="' . $asset->id . '"><i class="bx bx-pencil text-primary"></i></button>';
+                    }
                     if (auth()->user()->hasRole(['admin', 'hr'])) {
-                        $editBtn   = '<button class="btn btn-sm btn-icon edit-record" data-id="' . $asset->id . '"><i class="bx bx-pencil text-primary"></i></button>';
                         $deleteBtn = '<button class="btn btn-sm btn-icon delete-record" data-id="' . $asset->id . '"><i class="bx bx-trash text-danger"></i></button>';
                         if ($asset->status === 'assigned') {
                             $currentUser = $asset->assignedUser
