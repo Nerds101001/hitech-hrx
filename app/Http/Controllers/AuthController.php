@@ -355,35 +355,37 @@ class AuthController extends Controller
 
       $user = User::where('email', $email)->first();
 
-      if ($user) {
-          try {
-              if ($user->locked_until && now()->lt($user->locked_until)) {
-                  // Generate a signed, 15-minute unlock link.
-                  $unlockUrl = \Illuminate\Support\Facades\URL::temporarySignedRoute(
-                      'auth.unlock',
-                      now()->addMinutes(15),
-                      ['user' => $user->id]
-                  );
+      if ($user && $user->locked_until && now()->lt($user->locked_until)) {
+          // Generate a signed, 15-minute unlock link.
+          $unlockUrl = \Illuminate\Support\Facades\URL::temporarySignedRoute(
+              'auth.unlock',
+              now()->addMinutes(15),
+              ['user' => $user->id]
+          );
 
-                  // Email only. It used to be shown on screen as well, to anyone who
-                  // typed the email - so a guesser could lock an account, unlock it
-                  // straight away and carry on guessing, and the lockout protected
-                  // nothing. Only the account's own inbox gets the link now.
-                  $user->notify(new \App\Notifications\Auth\UnlockAccountNotification($unlockUrl));
-              } else {
-                  // The account isn't actually locked right now, so there is nothing
-                  // to unlock. We used to just do nothing here while still telling the
-                  // screen "an unlock link has been sent" - so a genuine owner who
-                  // wasn't locked got no email and no explanation. Let the inbox know
-                  // instead; the on-screen reply below stays identical either way.
-                  $user->notify(new \App\Notifications\Auth\AccountNotLockedNotification());
-              }
+          // Email only. It used to be shown on screen as well, to anyone who
+          // typed the email - so a guesser could lock an account, unlock it
+          // straight away and carry on guessing, and the lockout protected
+          // nothing. Only the account's own inbox gets the link now.
+          try {
+              $user->notify(new \App\Notifications\Auth\UnlockAccountNotification($unlockUrl));
           } catch (\Throwable $e) {
               \Illuminate\Support\Facades\Log::warning('Unlock email failed: ' . $e->getMessage());
           }
+
+          return redirect()->back()->with('success', self::UNLOCK_SENT);
       }
 
-      // The same reply whether or not the account exists or is locked.
+      if ($user) {
+          // A known account that isn't actually locked - tell them directly so they
+          // aren't left waiting on an email that will never come. (Deliberately
+          // distinguishable from the unknown-email reply below - the user asked for
+          // this feedback over keeping unlock-request anonymous for non-locked accounts.)
+          return redirect()->back()->with('success', 'Your account is not locked. Please log in.');
+      }
+
+      // Unknown email: keep the generic reply, same as the locked case, so nothing
+      // here confirms whether an email belongs to an account.
       return redirect()->back()->with('success', self::UNLOCK_SENT);
   }
 

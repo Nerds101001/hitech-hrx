@@ -64,6 +64,29 @@ class LoginNoAccountDisclosureTest extends TestCase
         $this->assertSame($locked->getSession()->get('success'), $unknown->getSession()->get('success'));
     }
 
+    /**
+     * Deliberate, explicit exception to the rule above (owner's call, 2026-10-24):
+     * a known account that isn't locked gets a distinct "not locked" reply instead
+     * of the generic one, so a genuine owner isn't left waiting on an email that
+     * will never come. This does let the unlock-request page confirm whether an
+     * email belongs to an account - only for the not-locked case - which the owner
+     * accepted in exchange for the feedback.
+     */
+    public function test_a_known_but_unlocked_account_gets_a_distinct_reply_on_purpose(): void
+    {
+        $knownReply = $this->from('/auth/unlock-request')
+            ->post(route('auth.unlock.request'), ['email' => $this->real->email])
+            ->getSession()->get('success');
+        Notification::assertNothingSent();
+
+        $unknownReply = $this->from('/auth/unlock-request')
+            ->post(route('auth.unlock.request'), ['email' => 'nobody' . uniqid() . '@example.test'])
+            ->getSession()->get('success');
+
+        $this->assertNotSame($knownReply, $unknownReply);
+        $this->assertStringContainsString('not locked', (string) $knownReply);
+    }
+
     public function test_forgot_password_does_not_say_whether_an_email_is_registered(): void
     {
         $r = $this->post(route('password.email'), ['email' => 'nobody' . uniqid() . '@example.test']);
