@@ -355,20 +355,29 @@ class AuthController extends Controller
 
       $user = User::where('email', $email)->first();
 
-      if ($user && $user->locked_until) {
-          // Generate a signed, 15-minute unlock link.
-          $unlockUrl = \Illuminate\Support\Facades\URL::temporarySignedRoute(
-              'auth.unlock',
-              now()->addMinutes(15),
-              ['user' => $user->id]
-          );
-
-          // Email only. It used to be shown on screen as well, to anyone who
-          // typed the email - so a guesser could lock an account, unlock it
-          // straight away and carry on guessing, and the lockout protected
-          // nothing. Only the account's own inbox gets the link now.
+      if ($user) {
           try {
-              $user->notify(new \App\Notifications\Auth\UnlockAccountNotification($unlockUrl));
+              if ($user->locked_until && now()->lt($user->locked_until)) {
+                  // Generate a signed, 15-minute unlock link.
+                  $unlockUrl = \Illuminate\Support\Facades\URL::temporarySignedRoute(
+                      'auth.unlock',
+                      now()->addMinutes(15),
+                      ['user' => $user->id]
+                  );
+
+                  // Email only. It used to be shown on screen as well, to anyone who
+                  // typed the email - so a guesser could lock an account, unlock it
+                  // straight away and carry on guessing, and the lockout protected
+                  // nothing. Only the account's own inbox gets the link now.
+                  $user->notify(new \App\Notifications\Auth\UnlockAccountNotification($unlockUrl));
+              } else {
+                  // The account isn't actually locked right now, so there is nothing
+                  // to unlock. We used to just do nothing here while still telling the
+                  // screen "an unlock link has been sent" - so a genuine owner who
+                  // wasn't locked got no email and no explanation. Let the inbox know
+                  // instead; the on-screen reply below stays identical either way.
+                  $user->notify(new \App\Notifications\Auth\AccountNotLockedNotification());
+              }
           } catch (\Throwable $e) {
               \Illuminate\Support\Facades\Log::warning('Unlock email failed: ' . $e->getMessage());
           }
