@@ -418,7 +418,17 @@ class AttendanceDayStatusTest extends TestCase
         $this->assertEquals('unpaid_leave', $r['code']);
     }
 
-    public function test_no_attendance_leave_takes_priority_over_a_coinciding_full_holiday(): void
+    /**
+     * Reversed 2026-10-24 (owner's call, re: Sachin Sharma EMP-004's Oct 2-5
+     * request where Oct 2 is Gandhi Jayanti): a full-day holiday now wins over
+     * a coinciding leave day with no attendance row, not the other way round.
+     * Nobody was ever going to work a declared holiday regardless of the leave
+     * applied over it, and nothing is deducted from balance for it either way
+     * (calculateWorkingDays() already skips holidays) - so "Holiday" is the
+     * correct label, not "Paid Leave". The Sunday/weekly-off precedence below
+     * is untouched; this applies to a genuine full holiday only.
+     */
+    public function test_no_attendance_full_holiday_takes_priority_over_a_coinciding_leave(): void
     {
         $user = $this->makeUser();
         $holiday = $this->fullHoliday('2026-06-15');
@@ -433,7 +443,7 @@ class AttendanceDayStatusTest extends TestCase
         $date = Carbon::parse('2026-06-15');
 
         $r = AttendanceDayStatus::resolve($user, $date, null, $leave->fresh('leaveType'), $holiday);
-        $this->assertEquals('paid_leave', $r['code'], 'an approved leave is more specific than a coinciding holiday and must win');
+        $this->assertEquals('holiday', $r['code'], 'a declared holiday wins over a coinciding leave day with no attendance row');
     }
 
     public function test_no_attendance_no_leave_full_holiday_is_holiday(): void

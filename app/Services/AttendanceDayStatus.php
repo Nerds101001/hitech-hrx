@@ -396,7 +396,21 @@ class AttendanceDayStatus
         }
 
         // No attendance row at all for this day.
-        if ($matchingLeave) {
+        //
+        // A full-day holiday always wins here, even for a day inside an approved
+        // leave's date range (e.g. a leave applied Fri-Mon where the Friday is a
+        // declared holiday): the employee was never going to work that day
+        // regardless of the leave, nothing is deducted from their balance for it
+        // (calculateWorkingDays() already skips it), and showing "Holiday" avoids
+        // the wrong impression that leave was spent on a day it wasn't (owner's
+        // call, 2026-10-24, re: Sachin Sharma EMP-004's Oct 2-5 request where Oct 2
+        // is Gandhi Jayanti). This does NOT apply to a coinciding Sunday/weekly-off
+        // - that still loses to $matchingLeave below, per the Aug 2026 refactor
+        // that made leave win over a coinciding weekly-off so it reads as leave
+        // rather than a generic OFF.
+        if ($isFullHoliday) {
+            $result['code'] = 'holiday';
+        } elseif ($matchingLeave) {
             $isShortLeave = $matchingLeave->leaveType?->is_short_leave ?? false;
             $isHalfDayLeave = $matchingLeave->is_half_day || ($matchingLeave->leaveType?->is_half_day ?? false);
             $isPaidLeave = self::leaveDayIsPaid($user, $matchingLeave, null, $date);
@@ -412,8 +426,6 @@ class AttendanceDayStatus
                 $result['code'] = $isPaidLeave ? 'paid_leave' : 'unpaid_leave';
             }
             $result['isPaid'] = (bool) $isPaidLeave;
-        } elseif ($isFullHoliday) {
-            $result['code'] = 'holiday';
         } elseif (!LeavePolicyService::isWorkingDay($user, $date)) {
             $result['code'] = 'weekly_off';
         } elseif ($date->isFuture() && !$date->isToday()) {
