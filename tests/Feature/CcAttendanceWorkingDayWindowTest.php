@@ -122,4 +122,80 @@ class CcAttendanceWorkingDayWindowTest extends TestCase
         $this->assertStringContainsString('locked', (string) app('session.store')->get('error'));
         $this->assertStringContainsString('18 Mar 2031, 12:00 PM', (string) app('session.store')->get('error'));
     }
+
+    /**
+     * The monthly sheet builds its own leave tags independently of
+     * AttendanceDayStatus (a naive from_date..to_date fill with no holiday
+     * check), so the resolver fix doesn't reach it - found 2026-10-24 via
+     * Sachin Sharma EMP-004's Oct 2-5 leave, where Oct 2 (a full holiday)
+     * still showed the ALP tag on this specific page. A full holiday with
+     * nothing marked now reads "Holiday" here too, and the leave tag doesn't
+     * render on it - the day on either side of the holiday still does.
+     */
+    public function test_monthly_sheet_shows_holiday_not_the_leave_tag_on_an_unworked_holiday(): void
+    {
+        $dept = \App\Models\Department::create(['name' => 'Customer Care QA ' . uniqid(), 'code' => 'CCQA' . random_int(1000, 9999)]);
+        $this->ccare->forceFill(['department_id' => $dept->id])->save();
+
+        $holidayName = 'QA Monthly Holiday ' . uniqid();
+        Holiday::create(['name' => $holidayName, 'date' => '2031-03-12', 'code' => 'QAH' . random_int(1000, 9999), 'status' => \App\Enums\Status::ACTIVE, 'holiday_type' => 'full']);
+
+        $alp = \App\Models\LeaveType::where('code', 'ALP')->firstOrFail();
+        $leave = \App\Models\LeaveRequest::create([
+            'user_id' => $this->salesperson->id, 'leave_type_id' => $alp->id,
+            'from_date' => '2031-03-11', 'to_date' => '2031-03-13',
+            'status' => 'pending', 'user_notes' => 'monthly sheet holiday-vs-leave test',
+        ]);
+        $leave->updateQuietly(['status' => 'approved']);
+
+        Carbon::setTestNow('2031-03-13 09:00:00');       // the 12th (holiday) is still within its marking window
+        $view = $this->controller->monthly(Request::create('/cc-attendance/monthly', 'GET', ['month' => 3, 'year' => 2031]));
+        \Illuminate\Support\Facades\View::share('errors', new \Illuminate\Support\ViewErrorBag());
+        $html = view('tenant.cc_attendance.monthly', $view->getData())->render();
+
+        $this->assertStringContainsString($holidayName, $html, 'the holiday cell shows its name, not a leave tag');
+        $this->assertSame(2, substr_count($html, '>ALP<'), 'only the two real leave days (11th and 13th) get the ALP tag, not the 12th');
+
+        // The select for the still-open holiday cell (12th) offers only HP, not
+        // the full P/A/HD/WFH/PS set an ordinary open day's select offers.
+        $marker = 'name="attendance[' . $this->salesperson->id . '][2031-03-12]"';
+        $selectStart = strpos($html, $marker);
+        $this->assertNotFalse($selectStart, 'the holiday cell has its select rendered');
+        $selectBlock = substr($html, $selectStart, strpos($html, '</select>', $selectStart) - $selectStart);
+        $this->assertStringContainsString('cc-opt-hp', $selectBlock, 'HP is offered on the holiday');
+        $this->assertStringNotContainsString('cc-opt-p"', $selectBlock, 'Present is not offered on the holiday');
+        $this->assertStringNotContainsString('cc-opt-a"', $selectBlock, 'Absent is not offered on the holiday');
+        $this->assertStringNotContainsString('cc-opt-hd', $selectBlock, 'Half day is not offered on the holiday');
+        $this->assertStringNotContainsString('cc-opt-wfh', $selectBlock, 'WFH is not offered on the holiday');
+        $this->assertStringNotContainsString('cc-opt-ps', $selectBlock, 'Sunday working is not offered on the holiday');
+    }
+
+    /**
+     * Server-side half of the same rule, in case of a stale page or a crafted
+     * submission: only "Holiday working" (or clearing) is accepted on a full
+     * holiday - Present, Absent, Half day, WFH, Sunday working are all
+     * rejected, same spirit as the existing leave-claim rejection above.
+     */
+    public function test_store_rejects_every_status_but_holiday_working_on_a_holiday(): void
+    {
+        Holiday::create(['name' => 'QA Store Holiday', 'date' => '2031-03-12', 'code' => 'QAH' . random_int(1000, 9999), 'status' => \App\Enums\Status::ACTIVE, 'holiday_type' => 'full']);
+
+        $submit = function (string $status) {
+            app('session.store')->flush();
+            $r = Request::create('/cc-attendance', 'POST', ['date' => '2031-03-12', 'attendance' => [$this->salesperson->id => $status], 'notes' => [$this->salesperson->id => 'reporting note']]);
+            $r->setLaravelSession(app('session.store'));
+            app()->instance('request', $r);
+            $this->controller->store($r);
+        };
+
+        Carbon::setTestNow('2031-03-13 09:00:00');
+
+        $submit('Present');
+        $this->assertNull(Attendance::where('user_id', $this->salesperson->id)->whereDate('check_in_time', '2031-03-12')->first(), 'Present is rejected on a holiday');
+        $this->assertStringContainsString('only "Holiday working" can be marked', (string) app('session.store')->get('error'));
+
+        $submit('Holiday working');
+        $att = Attendance::where('user_id', $this->salesperson->id)->whereDate('check_in_time', '2031-03-12')->first();
+        $this->assertNotNull($att, 'Holiday working is accepted');
+    }
 }

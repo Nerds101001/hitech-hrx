@@ -687,11 +687,12 @@ class CcAttendanceController extends Controller
             ->whereDate('check_in_time', $date)
             ->get()
             ->keyBy('user_id');
+        $usersById = empty($userIds) ? collect() : \App\Models\User::whereIn('id', $userIds)->get()->keyBy('id');
 
         // Counted so the message can tell the truth. It used to say "Attendance
         // saved" unconditionally — including when every row was skipped and
         // nothing at all was written.
-        $cleared = 0; $saved = 0; $onLeave = 0; $onPending = 0; $invalidForLeave = 0;
+        $cleared = 0; $saved = 0; $onLeave = 0; $onPending = 0; $invalidForLeave = 0; $invalidForHoliday = 0;
 
         foreach ($request->attendance as $userId => $status) {
             if (empty($status)) continue;
@@ -707,6 +708,21 @@ class CcAttendanceController extends Controller
             // to the generic path and silently detach the day from its leave.
             if ($partDay && in_array($status, ['Sunday working', 'Holiday working'], true)) {
                 $invalidForLeave++;
+                continue;
+            }
+
+            // On a full holiday, the only thing worth recording is whether the
+            // person actually worked it - "Holiday working" - or nothing at all
+            // (the day already reads Holiday with nothing marked). Present/Absent/
+            // Half day/WFH/Sunday working make no sense on a day nobody was
+            // expected to work; the sheet's own select no longer offers them for
+            // a holiday cell, but reject here too in case of a stale/crafted
+            // submission (owner's call, 2026-10-24).
+            $markingUser = $usersById->get((int) $userId);
+            $isHolidayDay = $markingUser
+                && \App\Services\AttendanceDayStatus::holidayForUserOnDateSingle($markingUser, $date)?->isFullDay();
+            if ($isHolidayDay && $status !== 'Holiday working' && $status !== '__clear') {
+                $invalidForHoliday++;
                 continue;
             }
 
@@ -818,6 +834,8 @@ class CcAttendanceController extends Controller
                 $why = "those salespeople have applied for leave on {$date} and it is still awaiting approval — their attendance cannot be marked until the leave is decided.";
             } elseif ($invalidForLeave) {
                 $why = "\"Sunday working\"/\"Holiday working\" can't be marked on a day that already has a leave claim — pick P / A / HD / WFH instead for those.";
+            } elseif ($invalidForHoliday) {
+                $why = "that date is a holiday — only \"Holiday working\" can be marked on it, or leave it blank.";
             } else {
                 $why = 'no attendance status was ticked. Choose P / A / HD / WFH / PS / HP for at least one salesperson.';
             }
@@ -830,6 +848,7 @@ class CcAttendanceController extends Controller
         if ($cleared)   { $parts[] = $cleared . ' ' . str('entry')->plural($cleared) . ' cleared'; }
         if ($onLeave)   { $parts[] = $onLeave . ' skipped (on approved leave)'; }
         if ($invalidForLeave) { $parts[] = $invalidForLeave . ' skipped ("Sunday working"/"Holiday working" is not valid on a leave day)'; }
+        if ($invalidForHoliday) { $parts[] = $invalidForHoliday . ' skipped (only "Holiday working" is valid on a holiday)'; }
         if ($onPending) { $parts[] = $onPending . ' skipped (leave applied, awaiting approval)'; }
         $msg = 'Attendance saved for ' . Carbon::parse($date)->format('d M Y') . ' — ' . implode(', ', $parts) . '.';
 

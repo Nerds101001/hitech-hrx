@@ -263,8 +263,13 @@
                                                 $record = $attList[$dateStr] ?? null;
                                                 $status = $record ? strtolower($record->status) : null;
 
-                                                // Leave on this day, shown as a small tag in the cell.
-                                                $cellLeave = $monthLeaves[$emp->id][$dateStr] ?? null;
+                                                // Leave on this day, shown as a small tag in the cell - unless
+                                                // it's a full holiday with nothing marked: nobody was ever going
+                                                // to work a declared holiday regardless of a leave applied over
+                                                // it, so the cell reads "Holiday", not the leave type (matches
+                                                // AttendanceDayStatus's same precedence, owner's call 2026-10-24).
+                                                $isUnworkedHoliday = !$record && isset($empHolidayDates[$dateStr]);
+                                                $cellLeave = $isUnworkedHoliday ? null : ($monthLeaves[$emp->id][$dateStr] ?? null);
                                                 $leaveTag = null;
                                                 $cellKind = $cellLeave ? \App\Http\Controllers\tenant\CcAttendanceController::leaveKind($cellLeave) : null;
                                                 $cellPartDay = $cellLeave && $cellKind !== 'full';
@@ -351,6 +356,9 @@
                                                     @if($isSunday && !$isWithinWindow)
                                                         {{-- Sunday but not in window, just show Sun --}}
                                                         <span class="text-muted fst-italic" style="font-size: 0.75rem;">Sun</span>
+                                                    @elseif($isUnworkedHoliday && !$isWithinWindow)
+                                                        {{-- Holiday but not in window, just show it - same treatment as Sunday above --}}
+                                                        <span class="text-muted fst-italic" style="font-size: 0.75rem;" title="{{ $empHolidayDates[$dateStr] }}">Holiday</span>
                                                     @elseif($leaveTag && $leaveTag['full'])
                                                         {{-- Full-day leave: the Leave module owns the day --}}
                                                     @elseif(!$isWithinWindow)
@@ -359,8 +367,16 @@
                                                     @else
                                                         {{-- Editable Window --}}
                                                         <div class="d-flex flex-column align-items-center justify-content-center">
+                                                            @if($isUnworkedHoliday)
+                                                                {{-- Holiday, still open: defaults to Holiday: the only thing
+                                                                     worth recording is whether they worked it. --}}
+                                                                <span class="text-muted fst-italic mb-1" style="font-size: 0.7rem;" title="{{ $empHolidayDates[$dateStr] }}">Holiday</span>
+                                                            @endif
                                                             <select name="attendance[{{ $emp->id }}][{{ $dateStr }}]" class="cc-select">
                                                                 <option value="">--</option>
+                                                                @if($isUnworkedHoliday)
+                                                                <option value="Holiday working" class="cc-opt-hp">HP</option>
+                                                                @else
                                                                 <option value="Present" class="cc-opt-p">P</option>
                                                                 <option value="Absent" class="cc-opt-a">A</option>
                                                                 @if(!$cellPartDay || in_array($cellKind, ['short', 'half']))
@@ -375,6 +391,7 @@
                                                                 <option value="Sunday working" class="cc-opt-ps">PS</option>
                                                                 <option value="Holiday working" class="cc-opt-hp">HP</option>
                                                                 @endunless
+                                                                @endif
                                                             </select>
                                                             <input type="hidden" name="notes[{{ $emp->id }}][{{ $dateStr }}]" id="note_{{ $emp->id }}_{{ $dateStr }}">
                                                             <a href="javascript:void(0)" onclick="let n = prompt('Enter Reporting Notes:'); if(n) { document.getElementById('note_{{ $emp->id }}_{{ $dateStr }}').value = n; this.style.color = '#25D366'; this.innerHTML = '<i class=\'ti ti-check\'></i> Note Added'; }" class="text-muted mt-1" style="font-size: 0.65rem; text-decoration: none;" title="Add Reporting Note">
