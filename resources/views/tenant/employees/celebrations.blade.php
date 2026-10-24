@@ -126,6 +126,21 @@
         align-items: center;
         gap: 6px;
     }
+    .btn-celeb.btn-app-wish {
+        background: var(--hitech-primary, #008080);
+        color: #fff;
+        border: none;
+    }
+    .btn-celeb.btn-app-wish:hover { filter: brightness(1.1); color: #fff; }
+    .celeb-wished-badge {
+        margin-top: 1.5rem;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 0.75rem;
+        font-weight: 700;
+        color: var(--hitech-primary, #008080);
+    }
 
     .festive-icon {
         position: absolute;
@@ -234,14 +249,22 @@
                                 </div>
 
                                 @if($isToday)
+                                    @if($u->is_wished_birthday ?? false)
+                                        <div class="celeb-wished-badge"><i class="bx bx-check-circle"></i> Wished in-app</div>
+                                    @endif
                                     <div class="action-row">
                                         <a href="mailto:{{ $u->email }}?subject=Happy Birthday!" class="btn btn-celeb btn-primary">
                                             <i class="bx bx-envelope"></i> Email
                                         </a>
-                                        <a href="https://wa.me/{{ preg_replace('/[^0-9]/', '', $u->phone) }}?text=Happy%20Birthday%20{{ urlencode($u->name) }}!" 
+                                        <a href="https://wa.me/{{ preg_replace('/[^0-9]/', '', $u->phone) }}?text=Happy%20Birthday%20{{ urlencode($u->name) }}!"
                                            target="_blank" class="btn btn-celeb btn-success">
                                             <i class="bx bxl-whatsapp"></i> Wish
                                         </a>
+                                        <button type="button" class="btn btn-celeb btn-app-wish"
+                                                data-uid="{{ $u->id }}" data-uname="{{ $u->name }}"
+                                                onclick="openSendWishModal(this.dataset.uid, this.dataset.uname, 'birthday')">
+                                            <i class="bx bx-send"></i> Wish in-app
+                                        </button>
                                     </div>
                                 @endif
                             </div>
@@ -285,14 +308,22 @@
                                 </div>
 
                                 @if($isToday)
+                                    @if($u->is_wished_anniversary ?? false)
+                                        <div class="celeb-wished-badge"><i class="bx bx-check-circle"></i> Wished in-app</div>
+                                    @endif
                                     <div class="action-row">
                                         <a href="mailto:{{ $u->email }}?subject=Happy Work Anniversary!" class="btn btn-celeb btn-primary">
                                             <i class="bx bx-envelope"></i> Email
                                         </a>
-                                        <a href="https://wa.me/{{ preg_replace('/[^0-9]/', '', $u->phone) }}?text=Congratulations%20on%20your%20Work%20Anniversary%20{{ urlencode($u->name) }}!" 
+                                        <a href="https://wa.me/{{ preg_replace('/[^0-9]/', '', $u->phone) }}?text=Congratulations%20on%20your%20Work%20Anniversary%20{{ urlencode($u->name) }}!"
                                            target="_blank" class="btn btn-celeb btn-success">
                                             <i class="bx bxl-whatsapp"></i> Wish
                                         </a>
+                                        <button type="button" class="btn btn-celeb btn-app-wish"
+                                                data-uid="{{ $u->id }}" data-uname="{{ $u->name }}"
+                                                onclick="openSendWishModal(this.dataset.uid, this.dataset.uname, 'anniversary')">
+                                            <i class="bx bx-send"></i> Wish in-app
+                                        </button>
                                     </div>
                                 @endif
                             </div>

@@ -2300,6 +2300,32 @@ class EmployeeController extends Controller
         return $md < now()->format('md') ? '1' . $md : '0' . $md;
     });
 
+    // Who the viewer has already wished in-app this year, so a worked "Wish"
+    // button doesn't offer to send twice - same check the dashboard's own
+    // Celebrations card uses (DashboardController::index()).
+    $wishedBirthdayIds = \Illuminate\Support\Facades\DB::table('notifications')
+        ->where('type', \App\Notifications\BirthdayWishNotification::class)
+        ->whereJsonContains('data->sender_id', auth()->id())
+        ->whereYear('created_at', now()->year)
+        ->pluck('notifiable_id')->toArray();
+    $wishedAnniversaryIds = \Illuminate\Support\Facades\DB::table('notifications')
+        ->where('type', \App\Notifications\WorkAnniversaryWishNotification::class)
+        ->whereJsonContains('data->sender_id', auth()->id())
+        ->whereYear('created_at', now()->year)
+        ->pluck('notifiable_id')->toArray();
+    // Someone whose birthday AND work anniversary fall on the same calendar
+    // date appears as the SAME User object in both $birthdays and
+    // $anniversaries (both built from the one $users collection) - a single
+    // shared "is_wished" property name let the anniversary pass silently
+    // overwrite the birthday pass's flag on that shared object. Distinct
+    // property names per context instead.
+    foreach ($birthdays as $u) {
+        $u->is_wished_birthday = in_array($u->id, $wishedBirthdayIds);
+    }
+    foreach ($anniversaries as $u) {
+        $u->is_wished_anniversary = in_array($u->id, $wishedAnniversaryIds);
+    }
+
     return view('tenant.employees.celebrations', compact('birthdays', 'anniversaries'));
   }
 
