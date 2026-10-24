@@ -342,12 +342,18 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                <div class="mb-3">
-                    <label class="form-label fw-semibold">Date <span class="text-danger">*</span></label>
-                    {{-- Same backdate rule as regular leave (up to 1 week back, or
-                         further with an HR unlock window) - this used to be locked
-                         to today only, with no backdating at all. --}}
-                    <input type="date" id="od_date" class="form-control" min="{{ \App\Support\LeaveBackdate::earliestFor(auth()->id()) }}">
+                <div class="row g-3 mb-3">
+                    <div class="col-6">
+                        <label class="form-label fw-semibold">From Date <span class="text-danger">*</span></label>
+                        {{-- Same backdate rule as regular leave (up to 1 week back, or
+                             further with an HR unlock window) - this used to be locked
+                             to today only, with no backdating at all. --}}
+                        <input type="date" id="od_date" class="form-control" min="{{ \App\Support\LeaveBackdate::earliestFor(auth()->id()) }}">
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label fw-semibold">To Date <span class="text-muted small">(optional)</span></label>
+                        <input type="date" id="od_to_date" class="form-control" min="{{ \App\Support\LeaveBackdate::earliestFor(auth()->id()) }}">
+                    </div>
                 </div>
                 <div class="mb-3">
                     <label class="form-label fw-semibold">Purpose <span class="text-danger">*</span></label>
@@ -1010,12 +1016,23 @@ document.addEventListener('DOMContentLoaded', function() {
 
     loadOdList();
 
+    // "To Date" can't be before "From Date" - mirrors the regular leave form's
+    // own from/to sync.
+    $('#od_date').on('change', function() {
+        $('#od_to_date').attr('min', this.value);
+        if ($('#od_to_date').val() && $('#od_to_date').val() < this.value) {
+            $('#od_to_date').val(this.value);
+        }
+    });
+
     // Submit OD request
     $('#odSubmitBtn').on('click', function() {
         const date    = $('#od_date').val();
+        const toDate  = $('#od_to_date').val();
         const purpose = $('#od_purpose').val().trim();
         if (!date)    { alert('Please select a date.'); return; }
         if (!purpose) { alert('Please enter the purpose.'); return; }
+        if (toDate && toDate < date) { alert('To Date cannot be before From Date.'); return; }
 
         $(this).prop('disabled', true).text('Submitting...');
         $.ajax({
@@ -1024,6 +1041,7 @@ document.addEventListener('DOMContentLoaded', function() {
             headers: { 'X-CSRF-TOKEN': $('meta[name=csrf-token]').attr('content') },
             data: {
                 od_date:            date,
+                od_to_date:         toDate || date,
                 od_purpose:         purpose,
                 od_location:        $('#od_location').val(),
                 od_expected_return: $('#od_return_time').val()
@@ -1039,10 +1057,11 @@ document.addEventListener('DOMContentLoaded', function() {
                     else alert(msg);
                     return;
                 }
-                if (typeof toastr !== 'undefined') toastr.success('Outdoor duty request submitted successfully.');
-                else alert('Outdoor duty request submitted successfully.');
+                const okMsg = response.message || 'Outdoor duty request submitted successfully.';
+                if (typeof toastr !== 'undefined') toastr.success(okMsg);
+                else alert(okMsg);
                 $('#odApplyModal').modal('hide');
-                $('#od_date, #od_purpose, #od_location, #od_return_time').val('');
+                $('#od_date, #od_to_date, #od_purpose, #od_location, #od_return_time').val('');
                 loadOdList();
             },
             error: function(xhr) {

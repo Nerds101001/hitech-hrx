@@ -694,6 +694,11 @@ class LeaveController extends Controller
     $validated = $request->validate([
       'od_user_id'           => 'nullable|exists:users,id',
       'od_date'              => 'required|date',
+      // Optional: a multi-day request ("from date to date"). Omitted or equal
+      // to od_date means the original single-day request. One OutdoorDuty row
+      // per day is created, same as a single day - there is no from_date/
+      // to_date span column on this table, unlike leave_requests.
+      'od_to_date'           => 'nullable|date|after_or_equal:od_date',
       'od_purpose'           => 'required|string|max:500',
       'od_location'          => 'nullable|string|max:255',
       'od_expected_return'   => 'nullable|string|max:15',
@@ -704,49 +709,75 @@ class LeaveController extends Controller
       $userId = ($user->hasRole(['admin', 'hr', 'manager']) && !empty($validated['od_user_id']))
         ? $validated['od_user_id'] : $user->id;
 
+      $fromDate = $validated['od_date'];
+      $toDate   = $validated['od_to_date'] ?? $validated['od_date'];
+
+      // A span this wide is almost certainly a typo'd year, not a genuine
+      // multi-week outdoor duty - same guard as a leave unlock window.
+      $spanDays = \Carbon\Carbon::parse($fromDate)->diffInDays(\Carbon\Carbon::parse($toDate)) + 1;
+      if ($spanDays > 31) {
+        return response()->json(['status' => 'error', 'message' => 'An outdoor duty request cannot span more than 31 days.'], 422);
+      }
+
       // Same one-week backdate rule as regular leave (LeaveBackdate) - the date
       // picker enforces it, but this endpoint took any date at all with no
       // server-side check, so a direct POST (or a stale page) could backdate
-      // an outdoor duty indefinitely.
-      if ($backdateError = \App\Support\LeaveBackdate::error($validated['od_date'], null, $userId)) {
+      // an outdoor duty indefinitely. Checked across the whole span.
+      if ($backdateError = \App\Support\LeaveBackdate::error($fromDate, $toDate, $userId)) {
         return response()->json(['status' => 'error', 'message' => $backdateError], 422);
       }
 
-      $existing = OutdoorDuty::where('user_id', $userId)
-        ->whereDate('date', $validated['od_date'])
-        ->whereIn('status', ['pending', 'approved'])->first();
+      // All-or-nothing: if any day in the span already has a request, create
+      // none of them rather than leaving a partial, confusing span behind.
+      $conflicting = OutdoorDuty::where('user_id', $userId)
+        ->whereBetween('date', [$fromDate, $toDate])
+        ->whereIn('status', ['pending', 'approved'])
+        ->orderBy('date')
+        ->pluck('date');
 
-      if ($existing) {
+      if ($conflicting->isNotEmpty()) {
         // 422, not 200 -- see outdoorDutyActionAjax's own note below: the page's
         // success callback never checked the status field, so a 200 here made a
         // rejected double-submit show "submitted successfully" and silently
         // drop the actual conflict message.
-        return response()->json(['status' => 'error', 'message' => 'An outdoor duty request already exists for this date.'], 422);
+        $dates = $conflicting->map(fn ($d) => $d->format('d M Y'))->implode(', ');
+        $message = $conflicting->count() === 1
+          ? "An outdoor duty request already exists for {$dates}."
+          : "An outdoor duty request already exists for: {$dates}.";
+        return response()->json(['status' => 'error', 'message' => $message], 422);
       }
 
-      $duty = OutdoorDuty::create([
-        'user_id'              => $userId,
-        'date'                 => $validated['od_date'],
-        'purpose'              => $validated['od_purpose'],
-        'location'             => $validated['od_location'] ?? null,
-        'expected_return_time' => $validated['od_expected_return'] ?? null,
-        'status'               => 'pending',
-        'created_by_id'        => $user->id,
-        'updated_by_id'        => $user->id,
-      ]);
+      $duties = [];
+      for ($d = \Carbon\Carbon::parse($fromDate); $d->lte(\Carbon\Carbon::parse($toDate)); $d->addDay()) {
+        $duties[] = OutdoorDuty::create([
+          'user_id'              => $userId,
+          'date'                 => $d->toDateString(),
+          'purpose'              => $validated['od_purpose'],
+          'location'             => $validated['od_location'] ?? null,
+          'expected_return_time' => $validated['od_expected_return'] ?? null,
+          'status'               => 'pending',
+          'created_by_id'        => $user->id,
+          'updated_by_id'        => $user->id,
+        ]);
+      }
 
+      $duty = $duties[0];
       $duty->load('user');
 
       // Alert HR and the manager (bell + push), the same people a leave request
       // reaches. Nothing was sent before, so a request sat unseen until someone
       // opened Leave Approvals. A failed alert must not fail the request.
+      // One alert for the whole span, not one per day.
       try {
         \App\Helpers\NotificationHelper::notifyAdminHR(new \App\Notifications\Leave\NewOutdoorDuty($duty));
       } catch (Exception $e) {
         Log::error('OutdoorDuty notify error: ' . $e->getMessage());
       }
 
-      return response()->json(['status' => 'success', 'message' => 'Outdoor duty request submitted successfully.']);
+      $message = count($duties) === 1
+        ? 'Outdoor duty request submitted successfully.'
+        : 'Outdoor duty request submitted for ' . count($duties) . ' days (' . \Carbon\Carbon::parse($fromDate)->format('d M') . ' - ' . \Carbon\Carbon::parse($toDate)->format('d M Y') . ').';
+      return response()->json(['status' => 'success', 'message' => $message]);
     } catch (Exception $e) {
       Log::error('OutdoorDuty store error: ' . $e->getMessage());
       return response()->json(['status' => 'error', 'message' => 'Something went wrong. Please try again.'], 500);

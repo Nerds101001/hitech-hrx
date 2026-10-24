@@ -527,9 +527,15 @@
               </select>
             </div>
             @endif
-            <div class="mb-3">
-              <label class="form-label fw-semibold">Date <span class="text-danger">*</span></label>
-              <input type="date" name="od_date" class="form-control" required value="{{ date('Y-m-d') }}">
+            <div class="row g-3 mb-3">
+              <div class="col-6">
+                <label class="form-label fw-semibold">From Date <span class="text-danger">*</span></label>
+                <input type="date" name="od_date" id="od_date" class="form-control" required value="{{ date('Y-m-d') }}">
+              </div>
+              <div class="col-6">
+                <label class="form-label fw-semibold">To Date <span class="text-muted small">(optional)</span></label>
+                <input type="date" name="od_to_date" id="od_to_date" class="form-control">
+              </div>
             </div>
             <div class="mb-3">
               <label class="form-label fw-semibold">Purpose <span class="text-danger">*</span></label>
@@ -789,6 +795,14 @@ $(function () {
       $(id).on('change', () => odTable.ajax.reload()));
     let st; $('#odSearchInput').on('input', () => { clearTimeout(st); st = setTimeout(() => odTable.ajax.reload(), 400); });
   }
+
+  // "To Date" can't be before "From Date" - mirrors the regular leave form.
+  $('#od_date').on('change', function() {
+    $('#od_to_date').attr('min', this.value);
+    if ($('#od_to_date').val() && $('#od_to_date').val() < this.value) {
+      $('#od_to_date').val(this.value);
+    }
+  });
 
   // Apply form submit
   $('#odApplyForm').on('submit', function (e) {
