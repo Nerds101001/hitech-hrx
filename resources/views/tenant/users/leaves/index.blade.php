@@ -344,7 +344,10 @@
             <div class="modal-body">
                 <div class="mb-3">
                     <label class="form-label fw-semibold">Date <span class="text-danger">*</span></label>
-                    <input type="date" id="od_date" class="form-control" min="{{ date('Y-m-d') }}">
+                    {{-- Same backdate rule as regular leave (up to 1 week back, or
+                         further with an HR unlock window) - this used to be locked
+                         to today only, with no backdating at all. --}}
+                    <input type="date" id="od_date" class="form-control" min="{{ \App\Support\LeaveBackdate::earliestFor(auth()->id()) }}">
                 </div>
                 <div class="mb-3">
                     <label class="form-label fw-semibold">Purpose <span class="text-danger">*</span></label>

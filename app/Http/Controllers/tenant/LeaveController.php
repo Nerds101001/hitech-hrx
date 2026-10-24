@@ -704,6 +704,14 @@ class LeaveController extends Controller
       $userId = ($user->hasRole(['admin', 'hr', 'manager']) && !empty($validated['od_user_id']))
         ? $validated['od_user_id'] : $user->id;
 
+      // Same one-week backdate rule as regular leave (LeaveBackdate) - the date
+      // picker enforces it, but this endpoint took any date at all with no
+      // server-side check, so a direct POST (or a stale page) could backdate
+      // an outdoor duty indefinitely.
+      if ($backdateError = \App\Support\LeaveBackdate::error($validated['od_date'], null, $userId)) {
+        return response()->json(['status' => 'error', 'message' => $backdateError], 422);
+      }
+
       $existing = OutdoorDuty::where('user_id', $userId)
         ->whereDate('date', $validated['od_date'])
         ->whereIn('status', ['pending', 'approved'])->first();
