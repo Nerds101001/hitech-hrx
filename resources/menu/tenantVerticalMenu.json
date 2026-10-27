@@ -1149,8 +1149,18 @@
                 },
                 {
                     "url": "/tally-explorer/trend",
-                    "name": "Tally Explorer",
+                    "name": "Tally Explorer - Trend",
                     "slug": "tally-explorer.trend",
+                    "roles": [
+                        "admin",
+                        "hr",
+                        "accounts"
+                    ]
+                },
+                {
+                    "url": "/tally-explorer/purchases",
+                    "name": "Tally Explorer - Data",
+                    "slug": "tally-explorer.purchases",
                     "roles": [
                         "admin",
                         "hr",

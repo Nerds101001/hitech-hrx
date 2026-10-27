@@ -39,15 +39,22 @@
       </div>
     @endif
 
+    @php
+      // Trend and everything else are gated to two different named accounts (see routes/tenant.php) --
+      // show each viewer only the tabs their account can actually open, so neither sees a dead link.
+      $txViewerEmail = mb_strtolower((string) auth()->user()?->email);
+      $txTabs = $txViewerEmail === 'mukul@rustx.com'
+        ? ['trend' => ['tally-explorer.trend', 'bx-trending-up', 'Trend']]
+        : [
+            'purchases'       => ['tally-explorer.purchases',       'bx-cart-download', 'Purchases'],
+            'purchase-orders' => ['tally-explorer.purchase-orders', 'bx-receipt',       'Purchase Orders'],
+            'payments'        => ['tally-explorer.payments',        'bx-money-withdraw','Payments'],
+            'stock'           => ['tally-explorer.stock',           'bx-box',           'Stock Items'],
+            'ledgers'         => ['tally-explorer.ledgers',         'bx-book-content',  'Ledgers (master)'],
+          ];
+    @endphp
     <ul class="nav tx-tabs" role="tablist">
-      @foreach([
-        'trend'           => ['tally-explorer.trend',           'bx-trending-up',   'Trend'],
-        'purchases'       => ['tally-explorer.purchases',       'bx-cart-download', 'Purchases'],
-        'purchase-orders' => ['tally-explorer.purchase-orders', 'bx-receipt',       'Purchase Orders'],
-        'payments'        => ['tally-explorer.payments',        'bx-money-withdraw','Payments'],
-        'stock'           => ['tally-explorer.stock',           'bx-box',           'Stock Items'],
-        'ledgers'         => ['tally-explorer.ledgers',         'bx-book-content',  'Ledgers (master)'],
-      ] as $key => [$route, $icon, $label])
+      @foreach($txTabs as $key => [$route, $icon, $label])
         <li class="nav-item">
           <a class="nav-link {{ $tab === $key ? 'active' : '' }}" href="{{ route($route) }}">
             <i class="bx {{ $icon }} me-1"></i>{{ $label }}

@@ -380,10 +380,21 @@ Route::middleware([
 
     // Tally Explorer -- browse the raw Tally data synced into HRX (purchases,
     // purchase orders, payments, the stock-item master, the full ledger master).
-    // Same company-wide, admin/HR/accounts-only gate as Sales Sources below.
-    Route::middleware(['role_or_permission:admin|hr|accounts', 'tally.viewer', \App\Http\Middleware\RelaxSalesSourcesSqlMode::class])->prefix('tally-explorer')->name('tally-explorer.')->group(function () {
-      $tx = \App\Http\Controllers\tenant\TallyExplorerController::class;
+    // Deliberately restricted to two named accounts, not a role -- replaces the former
+    // admin/HR/accounts-wide gate entirely. Trend (the Sales reconciliation view built/verified
+    // across this whole Tally accuracy effort) goes to mukul@rustx.com only; everything else in
+    // Tally Explorer (the read-only Purchases/Purchase Orders/Payments/Stock/Ledgers browsers, plus
+    // the local-only Quick Sync trigger) goes to ai@rustx.com only.
+    $tx = \App\Http\Controllers\tenant\TallyExplorerController::class;
+    Route::middleware(['auth', 'tally.viewer', \App\Http\Middleware\RelaxSalesSourcesSqlMode::class, \App\Http\Middleware\RestrictToEmail::class . ':mukul@rustx.com'])->prefix('tally-explorer')->name('tally-explorer.')->group(function () use ($tx) {
       Route::get('', [$tx, 'index'])->name('index');
+      Route::get('trend', [$tx, 'trend'])->name('trend');
+      Route::get('trend/export', [$tx, 'trendExport'])->name('trend.export');
+      Route::get('trend/values', [$tx, 'trendValues'])->name('trend.values');
+      Route::get('trend/cell', [$tx, 'trendCellDetail'])->name('trend.cell');
+      Route::get('trend/cell/export', [$tx, 'trendCellExport'])->name('trend.cell.export');
+    });
+    Route::middleware(['auth', 'tally.viewer', \App\Http\Middleware\RelaxSalesSourcesSqlMode::class, \App\Http\Middleware\RestrictToEmail::class . ':ai@rustx.com'])->prefix('tally-explorer')->name('tally-explorer.')->group(function () use ($tx) {
       Route::get('purchases', [$tx, 'purchases'])->name('purchases');
       Route::get('purchases/detail', [$tx, 'purchaseDetail'])->name('purchases.detail');
       Route::get('purchases/show', [$tx, 'purchaseShow'])->name('purchases.show');
@@ -393,11 +404,6 @@ Route::middleware([
       Route::get('stock', [$tx, 'stock'])->name('stock');
       Route::get('ledgers', [$tx, 'ledgers'])->name('ledgers');
       Route::get('ledgers/show', [$tx, 'ledgerShow'])->name('ledgers.show');
-      Route::get('trend', [$tx, 'trend'])->name('trend');
-      Route::get('trend/export', [$tx, 'trendExport'])->name('trend.export');
-      Route::get('trend/values', [$tx, 'trendValues'])->name('trend.values');
-      Route::get('trend/cell', [$tx, 'trendCellDetail'])->name('trend.cell');
-      Route::get('trend/cell/export', [$tx, 'trendCellExport'])->name('trend.cell.export');
       Route::post('quick-sync', [$tx, 'quickSync'])->name('quick-sync');
     });
 
