@@ -386,7 +386,7 @@ Route::middleware([
     // Tally Explorer (the read-only Purchases/Purchase Orders/Payments/Stock/Ledgers browsers, plus
     // the local-only Quick Sync trigger) goes to ai@rustx.com only.
     $tx = \App\Http\Controllers\tenant\TallyExplorerController::class;
-    Route::middleware(['auth', 'tally.viewer', \App\Http\Middleware\RelaxSalesSourcesSqlMode::class, \App\Http\Middleware\RestrictToEmail::class . ':mukul@rustx.com'])->prefix('tally-explorer')->name('tally-explorer.')->group(function () use ($tx) {
+    Route::middleware(['auth', 'tally.viewer', \App\Http\Middleware\RelaxSalesSourcesSqlMode::class, 'restrict.email:mukul@rustx.com'])->prefix('tally-explorer')->name('tally-explorer.')->group(function () use ($tx) {
       Route::get('', [$tx, 'index'])->name('index');
       Route::get('trend', [$tx, 'trend'])->name('trend');
       Route::get('trend/export', [$tx, 'trendExport'])->name('trend.export');
@@ -394,7 +394,7 @@ Route::middleware([
       Route::get('trend/cell', [$tx, 'trendCellDetail'])->name('trend.cell');
       Route::get('trend/cell/export', [$tx, 'trendCellExport'])->name('trend.cell.export');
     });
-    Route::middleware(['auth', 'tally.viewer', \App\Http\Middleware\RelaxSalesSourcesSqlMode::class, \App\Http\Middleware\RestrictToEmail::class . ':ai@rustx.com'])->prefix('tally-explorer')->name('tally-explorer.')->group(function () use ($tx) {
+    Route::middleware(['auth', 'tally.viewer', \App\Http\Middleware\RelaxSalesSourcesSqlMode::class, 'restrict.email:ai@rustx.com'])->prefix('tally-explorer')->name('tally-explorer.')->group(function () use ($tx) {
       Route::get('purchases', [$tx, 'purchases'])->name('purchases');
       Route::get('purchases/detail', [$tx, 'purchaseDetail'])->name('purchases.detail');
       Route::get('purchases/show', [$tx, 'purchaseShow'])->name('purchases.show');
