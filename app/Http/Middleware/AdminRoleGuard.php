@@ -98,6 +98,21 @@ class AdminRoleGuard
         'my-holidays',
         'my-warnings-complaints',
         'my-assets',
+
+        // The actions on that my-warnings-complaints page (acknowledge, post
+        // a reply, download the attachment) live under employee-lifecycle/*,
+        // not my-warnings-complaints/*, so the entry above never covered
+        // them. Each one is already ownership-checked inside
+        // EmployeeLifecycleController (user_id/respondent_id === Auth::id(),
+        // 403 otherwise) — this guard was simply bouncing a plain 'employee'
+        // role to the dashboard before the controller ever ran, with no
+        // error shown, so Acknowledge looked like it silently did nothing.
+        'employee-lifecycle/warnings/*/attachment',
+        'employee-lifecycle/warnings/*/acknowledge',
+        'employee-lifecycle/warnings/*/reply',
+        'employee-lifecycle/complaints/*/attachment',
+        'employee-lifecycle/complaints/*/acknowledge',
+        'employee-lifecycle/complaints/*/reply',
     ];
 
     public function handle(Request $request, Closure $next): Response
