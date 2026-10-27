@@ -1102,18 +1102,18 @@
                     ]
                 },
                 {
-                    "url": "/setu-mappings",
-                    "name": "Setu Salesperson Mappings",
-                    "slug": "setu-mappings.index",
+                    "url": "/sales-group-mappings",
+                    "name": "Sales Group Mapping",
+                    "slug": "sales-group-mappings.index",
                     "roles": [
                         "admin",
                         "hr"
                     ]
                 },
                 {
-                    "url": "/setu-sync",
-                    "name": "Setu Sales Sync",
-                    "slug": "setu-sync.index",
+                    "url": "/tally-sync",
+                    "name": "Tally Sales Sync",
+                    "slug": "tally-sync.index",
                     "roles": [
                         "admin",
                         "hr"

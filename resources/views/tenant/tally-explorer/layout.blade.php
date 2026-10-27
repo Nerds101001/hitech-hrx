@@ -18,8 +18,26 @@
           <h1 class="tx-hero-title">Tally Explorer</h1>
           <p class="tx-hero-sub">Everything synced from Tally — purchases, purchase orders, payments, the stock-item master and the full ledger master — each one searchable, with a drill-down to every field. Read-only.</p>
         </div>
+        @if(app()->environment('local'))
+          <button type="button" class="btn btn-sm btn-light tx-quicksync-btn" data-bs-toggle="modal" data-bs-target="#txQuickSyncModal">
+            <i class="bx bx-sync me-1"></i>Quick Sync
+          </button>
+        @endif
       </div>
     </section>
+
+    @if(session('success'))
+      <div class="alert alert-success alert-dismissible fade show tx-flash" role="alert">
+        <i class="bx bx-check-circle me-1"></i>{{ session('success') }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+      </div>
+    @endif
+    @if(session('error'))
+      <div class="alert alert-danger alert-dismissible fade show tx-flash" role="alert">
+        <i class="bx bx-error-circle me-1"></i>{{ session('error') }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+      </div>
+    @endif
 
     <ul class="nav tx-tabs" role="tablist">
       @foreach([
@@ -43,6 +61,61 @@
   </div>
 </div>
 
+@if(app()->environment('local'))
+<div class="modal fade" id="txQuickSyncModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <form method="POST" action="{{ route('tally-explorer.quick-sync') }}" id="txQuickSyncForm">
+        @csrf
+        <div class="modal-header">
+          <h6 class="modal-title mb-0">Quick Sync</h6>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <p class="tx-sub mb-3">Pulls fresh data straight from Tally for a short date range (max 7 days) — for a full month or more, use the regular backfill job instead.</p>
+          <div class="mb-3">
+            <label class="form-label small fw-bold">Company</label>
+            <select name="company" class="form-select form-select-sm" required>
+              <option value="hitech">Hi Tech</option>
+              <option value="kif">Keep It Fresh</option>
+            </select>
+          </div>
+          <div class="row g-2">
+            <div class="col-6">
+              <label class="form-label small fw-bold">From</label>
+              <input type="date" name="from" class="form-control form-control-sm" value="{{ now()->format('Y-m-d') }}" max="{{ now()->format('Y-m-d') }}" required>
+            </div>
+            <div class="col-6">
+              <label class="form-label small fw-bold">To</label>
+              <input type="date" name="to" class="form-control form-control-sm" value="{{ now()->format('Y-m-d') }}" max="{{ now()->format('Y-m-d') }}" required>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-sm btn-primary" id="txQuickSyncSubmit">
+            <i class="bx bx-sync me-1"></i>Sync now
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+<script>
+  document.getElementById('txQuickSyncForm')?.addEventListener('submit', function () {
+    const btn = document.getElementById('txQuickSyncSubmit');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Syncing… this can take a minute';
+  });
+  @if(session('success') || session('error'))
+    document.addEventListener('DOMContentLoaded', function () {
+      const modalEl = document.getElementById('txQuickSyncModal');
+      if (modalEl && window.bootstrap) { bootstrap.Modal.getOrCreateInstance(modalEl).hide(); }
+    });
+  @endif
+</script>
+@endif
+
 @yield('tab-modals')
 
 <style>
@@ -56,6 +129,8 @@
                 radial-gradient(720px 420px at 8% 118%, rgba(59,130,246,.40), transparent 62%),
                 linear-gradient(115deg,#0a2740 0%,#0d4266 48%,#0f6b78 100%); }
   #txPage .tx-hero-top { position:relative; z-index:1; display:flex; align-items:center; gap:1.3rem; padding:1.6rem 2rem 1.4rem; }
+  #txPage .tx-quicksync-btn { margin-left:auto; flex-shrink:0; align-self:flex-start; font-weight:600; }
+  #txPage .tx-flash { border-radius:12px; margin-bottom:1rem; font-size:.85rem; }
   #txPage .tx-hero-icon { width:66px; height:66px; flex-shrink:0; display:flex; align-items:center; justify-content:center; border-radius:18px; background:#fff; color:#0f4c75; font-size:1.9rem; box-shadow:0 10px 28px rgba(0,0,0,.18); }
   #txPage .tx-hero-title { margin:0 0 .35rem; font-size:1.8rem; font-weight:700; letter-spacing:-.025em; color:#fff !important; }
   #txPage .tx-hero-sub { margin:0; max-width:64rem; font-size:.85rem; line-height:1.5; color:rgba(255,255,255,.80); }

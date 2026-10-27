@@ -95,16 +95,24 @@ class TallyFileReader
         return mb_check_encoding($raw, 'UTF-8') ? $raw : mb_convert_encoding($raw, 'UTF-8', 'Windows-1252');
     }
 
-    /** "1,14,558.00" -> 114558.0 ; "(-)1,234.00" -> -1234.0 ; null when it isn't a number at all. */
+    /**
+     * "1,14,558.00" -> 114558.0 ; "(-)1,234.00" -> -1234.0 ; null when it isn't a number at all.
+     * An export/forex-denominated voucher line writes this as "USD$ 26250.0000 @ ?95.10/USD$ = ?2496375.00"
+     * instead of a plain figure (confirmed real, 2026-10-26, on a live export Sales GST voucher) -- the INR
+     * value actually booked is the one after the last "=", not the foreign-currency quantity before it.
+     */
     public static function amount(?string $s): ?float
     {
         $s = trim((string) $s);
         if ($s === '') {
             return null;
         }
+        if (($eq = strrpos($s, '=')) !== false) {
+            $s = trim(substr($s, $eq + 1));
+        }
         $negative = str_starts_with($s, '(-)') || str_starts_with($s, '-');
-        $digits = str_replace([',', '(-)', '-', ' '], '', $s);
-        if (!preg_match('/^\d+(\.\d+)?$/', $digits)) {
+        $digits = preg_replace('/[^\d.]/', '', $s) ?? '';
+        if ($digits === '' || !preg_match('/^\d+(\.\d+)?$/', $digits)) {
             return null;
         }
         return $negative ? -((float) $digits) : (float) $digits;
@@ -134,10 +142,21 @@ class TallyFileReader
         return preg_match('/^(\d+)\s*Days?$/i', trim((string) $s), $m) ? (int) $m[1] : null;
     }
 
-    /** "462.30/Ltr." -> [462.3, "Ltr"] ; "1,05,000.00/No." -> [105000.0, "No"] ; "" -> [null, null]. */
+    /**
+     * "462.30/Ltr." -> [462.3, "Ltr"] ; "1,05,000.00/No." -> [105000.0, "No"] ; "" -> [null, null].
+     * Same forex-voucher exception as amount(): "USD$ 175.0000 = ?16642.50/Roll" -- take the INR rate after
+     * the last "=", dropping the foreign-currency figure and the currency-symbol prefix on what remains.
+     */
     public static function rate(?string $s): array
     {
         $s = trim((string) $s);
+        if ($s === '') {
+            return [null, null];
+        }
+        if (($eq = strrpos($s, '=')) !== false) {
+            $s = trim(substr($s, $eq + 1));
+        }
+        $s = preg_replace('/^[^\d]+/', '', $s) ?? '';
         if ($s === '' || !preg_match('/^([\d,]+(?:\.\d+)?)\s*(?:\/\s*(.*))?$/', $s, $m)) {
             return [null, null];
         }

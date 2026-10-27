@@ -7,10 +7,12 @@ use App\Models\CcSalespersonMap;
 use App\Models\SalesPipeline;
 use App\Models\SalesPipelineMonth;
 use App\Models\SetuSalespersonMapping;
+use App\Models\SalesGroupMapping;
 use App\Models\User;
 use App\ApiClasses\Success;
 use App\ApiClasses\Error;
 use App\Services\SetuReportService;
+use App\Services\TallyReportService;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Carbon\Carbon;
@@ -2041,6 +2043,225 @@ class SalesPipelineController extends Controller
                 } else { // create
                     $pipeline = SalesPipeline::withTrashed()->updateOrCreate(
                         ['party_name' => $setuName, 'salesperson_id' => $target->id],
+                        ['is_locked' => true, 'type' => 'Customer', 'tenant_id' => $tenantId]
+                    );
+                    $created++;
+                }
+
+                foreach ($months as $monthYear => $amount) {
+                    SalesPipelineMonth::updateOrCreate(
+                        ['sales_pipeline_id' => $pipeline->id, 'month_year' => $monthYear],
+                        ['sale_amount' => $amount, 'tenant_id' => $pipeline->tenant_id]
+                    );
+                }
+                if ($r['action'] === 'update') { $updated++; }
+            }
+        });
+
+        return Success::response([
+            'salesperson' => trim($target->first_name . ' ' . $target->last_name),
+            'updated' => $updated,
+            'created' => $created,
+            'skipped' => $skipped,
+            'missing' => $missing,
+        ]);
+    }
+
+    /**
+     * Resolve the common context for the Tally sync/resolve endpoints —
+     * mirrors setuSyncContext() exactly, except the identity lookup is every
+     * CONFIRMED SalesGroupMapping ledger_group for this user (a salesperson
+     * can own more than one ledger group) instead of a single Setu name.
+     */
+    private function tallySyncContext(Request $request, $salespersonId, TallyReportService $tally): array
+    {
+        $user = auth()->user();
+        $isPrivileged = $user->hasRole(['admin', 'Admin', 'hr', 'HR', 'manager', 'Manager']) || $user->can('sales_report.manage');
+        if (!$isPrivileged && (int) $salespersonId !== $user->id) {
+            return ['response' => Error::response('You can only sync your own Sales Report.', 403)];
+        }
+
+        $target = User::find($salespersonId);
+        if (!$target) {
+            return ['response' => Error::response('That salesperson was not found.', 404)];
+        }
+
+        $ledgerGroups = SalesGroupMapping::where('user_id', $target->id)
+            ->where('status', SalesGroupMapping::STATUS_CONFIRMED)->pluck('tally_salesperson')->all();
+        if (!$ledgerGroups) {
+            return ['response' => Error::response("{$target->first_name} isn't linked to a Tally sales group yet — an admin needs to confirm their mapping first.", 422)];
+        }
+
+        $request->validate([
+            'fy' => ['nullable', Rule::in($tally->availableFiscalYears())],
+            'period' => ['nullable', 'in:whole,Q1,Q2,Q3,Q4,custom'],
+            'from' => ['nullable', 'date_format:Y-m'],
+            'to' => ['nullable', 'date_format:Y-m', 'after_or_equal:from'],
+        ]);
+        $fy = $request->input('fy');
+        $period = $request->input('period', 'whole');
+        $from = $request->input('from');
+        $to = $request->input('to');
+        if ($period === 'custom') {
+            $fyForBounds = $fy ?? $tally->currentFiscalYearLabel();
+            [$fyStart] = $tally->quarterMonthRange($fyForBounds, 'Q1');
+            [, $fyEnd] = $tally->quarterMonthRange($fyForBounds, 'Q4');
+            if (!$from || !$to || $from < $fyStart || $to > $fyEnd) {
+                return ['response' => Error::response("Custom range must fall within {$fyForBounds} ({$fyStart} to {$fyEnd}).", 422)];
+            }
+        }
+        try {
+            [$fyLabel, $fromMonth, $toMonth] = $tally->resolvePeriod($fy, $period, $from, $to);
+        } catch (\InvalidArgumentException $e) {
+            return ['response' => Error::response($e->getMessage(), 422)];
+        }
+
+        return ['response' => null, 'target' => $target, 'ledgerGroups' => $ledgerGroups,
+                'fyLabel' => $fyLabel, 'fromMonth' => $fromMonth, 'toMonth' => $toMonth];
+    }
+
+    /**
+     * A quick "what does Tally say right now" sanity check for one salesperson — current month-by-month sales
+     * total and distinct customer count straight from the already-synced local Tally tables, with no Sales
+     * Pipeline book comparison involved (that's what syncTally()/resolveTally() are for) and no Tally gateway
+     * call (periodMonthlySales() only ever reads tally_sale_lines/tally_ledgers/tally_credit_debit_note_lines).
+     * Meant to be fast enough to click repeatedly while eyeballing numbers, not a reconciliation step.
+     */
+    public function recheckTally(Request $request, $salespersonId, TallyReportService $tally)
+    {
+        // Deliberately restricted to one named account rather than a role, per explicit request -- this is a
+        // brand-new, not-yet-broadly-reviewed feature, not a permissions tier like the admin/hr/accounts roles
+        // used elsewhere on this page.
+        if (strcasecmp((string) auth()->user()?->email, 'ai@rustx.com') !== 0) {
+            return Error::response('Not available.', 403);
+        }
+
+        $ctx = $this->tallySyncContext($request, $salespersonId, $tally);
+        if ($ctx['response']) {
+            return $ctx['response'];
+        }
+        ['target' => $target, 'ledgerGroups' => $ledgerGroups, 'fyLabel' => $fyLabel, 'fromMonth' => $fromMonth, 'toMonth' => $toMonth] = $ctx;
+
+        $byCustomer = $tally->periodMonthlySales($ledgerGroups, $fyLabel, $fromMonth, $toMonth);
+
+        $monthTotals = [];
+        $grandTotal = 0.0;
+        $customersBilled = 0;
+        foreach ($byCustomer as $customer => $months) {
+            $customerTotal = array_sum($months);
+            if (abs($customerTotal) < 0.0005) {
+                continue; // a customer with every month netting to ~zero (e.g. a credit note cancelling a sale) isn't "billed"
+            }
+            $customersBilled++;
+            foreach ($months as $monthYear => $lakhs) {
+                $monthTotals[$monthYear] = ($monthTotals[$monthYear] ?? 0.0) + $lakhs;
+                $grandTotal += $lakhs;
+            }
+        }
+        ksort($monthTotals);
+
+        return Success::response([
+            'salesperson' => trim($target->first_name . ' ' . $target->last_name),
+            'fyLabel' => $fyLabel,
+            'period' => ($fromMonth && $toMonth)
+                ? Carbon::createFromFormat('Y-m-d', $fromMonth . '-01')->format('M Y') . ' – ' . Carbon::createFromFormat('Y-m-d', $toMonth . '-01')->format('M Y')
+                : "Whole Year {$fyLabel}",
+            'grandTotalLakhs' => round($grandTotal, 3),
+            'customersBilled' => $customersBilled,
+            'monthTotalsLakhs' => array_map(fn ($v) => round($v, 3), $monthTotals),
+            'checkedAt' => now()->format('d-M-Y H:i'),
+        ]);
+    }
+
+    /** Tally equivalent of syncSetu() — same preview/apply two-phase shape, see that method's docblock. */
+    public function syncTally(Request $request, $salespersonId, TallyReportService $tally)
+    {
+        $ctx = $this->tallySyncContext($request, $salespersonId, $tally);
+        if ($ctx['response']) {
+            return $ctx['response'];
+        }
+        ['target' => $target, 'ledgerGroups' => $ledgerGroups, 'fyLabel' => $fyLabel, 'fromMonth' => $fromMonth, 'toMonth' => $toMonth] = $ctx;
+
+        $apply = $request->boolean('apply');
+        $result = $tally->reconcileSalesperson($target, $ledgerGroups, live: $apply, fyLabel: $fyLabel, fromMonth: $fromMonth, toMonth: $toMonth, overwrite: true);
+
+        $roster = [];
+        if ($result['reviewItems']) {
+            $roster = SalesPipeline::withTrashed()
+                ->where('salesperson_id', $target->id)->where('is_locked', true)
+                ->withSum('months as months_total', 'sale_amount')
+                ->orderBy('party_name')
+                ->get(['id', 'party_name'])
+                ->map(fn($p) => ['pipeline_id' => $p->id, 'party_name' => $p->party_name, 'total' => round((float) $p->months_total, 3)])
+                ->values();
+        }
+
+        return Success::response([
+            'salesperson' => trim($target->first_name . ' ' . $target->last_name),
+            'salespersonId' => $target->id,
+            'applied' => $apply,
+            'fyLabel' => $result['fyLabel'],
+            'period' => $result['period'],
+            'months' => $tally->fiscalYearMonths($result['fyLabel'], $fromMonth, $toMonth),
+            'blankFills' => $result['blankFills'],
+            'overwrites' => $result['overwrites'],
+            'renames' => $result['renames'],
+            'newCustomers' => $result['newCustomers'],
+            'reviewItems' => $result['reviewItems'],
+            'allCustomers' => $result['allCustomers'],
+            'roster' => $roster,
+            'counts' => [
+                'blankFills' => count($result['blankFills']),
+                'overwrites' => count($result['overwrites']),
+                'renames' => count($result['renames']),
+                'newCustomers' => count($result['newCustomers']),
+                'reviewItems' => count($result['reviewItems']),
+            ],
+        ]);
+    }
+
+    /** Tally equivalent of resolveSetu() — same per-item update/create/skip shape, see that method's docblock. */
+    public function resolveTally(Request $request, $salespersonId, TallyReportService $tally)
+    {
+        $ctx = $this->tallySyncContext($request, $salespersonId, $tally);
+        if ($ctx['response']) {
+            return $ctx['response'];
+        }
+        ['target' => $target, 'ledgerGroups' => $ledgerGroups, 'fyLabel' => $fyLabel, 'fromMonth' => $fromMonth, 'toMonth' => $toMonth] = $ctx;
+
+        $request->validate([
+            'resolutions' => ['required', 'array', 'min:1'],
+            'resolutions.*.setuCustomer' => ['required', 'string'],
+            'resolutions.*.action' => ['required', 'in:update,create,skip'],
+            'resolutions.*.targetPipelineId' => ['nullable', 'integer'],
+        ]);
+        $resolutions = $request->input('resolutions');
+
+        $tallyByCustomer = $tally->periodMonthlySales($ledgerGroups, $fyLabel, $fromMonth, $toMonth);
+
+        $tenantId = SalesPipeline::withTrashed()
+            ->where('salesperson_id', $target->id)->where('is_locked', true)->value('tenant_id');
+
+        $updated = 0; $created = 0; $skipped = 0; $missing = 0;
+
+        \Illuminate\Support\Facades\DB::transaction(function () use ($resolutions, $tallyByCustomer, $target, $tenantId, &$updated, &$created, &$skipped, &$missing) {
+            foreach ($resolutions as $r) {
+                if (($r['action'] ?? '') === 'skip') { $skipped++; continue; }
+
+                $tallyName = $r['setuCustomer'];
+                $months = array_filter($tallyByCustomer[$tallyName] ?? []);
+                if (!$months) { $missing++; continue; }
+
+                if ($r['action'] === 'update') {
+                    $pipeline = SalesPipeline::withTrashed()
+                        ->where('salesperson_id', $target->id)->where('is_locked', true)
+                        ->find((int) ($r['targetPipelineId'] ?? 0));
+                    if (!$pipeline) { $missing++; continue; }
+                    $pipeline->party_name = $tallyName;
+                    $pipeline->save();
+                } else {
+                    $pipeline = SalesPipeline::withTrashed()->updateOrCreate(
+                        ['party_name' => $tallyName, 'salesperson_id' => $target->id],
                         ['is_locked' => true, 'type' => 'Customer', 'tenant_id' => $tenantId]
                     );
                     $created++;

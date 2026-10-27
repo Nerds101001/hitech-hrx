@@ -123,7 +123,9 @@ class TallyPushController extends Controller
                 'sale_orders.*.pack_net_wt_qty' => ['nullable', 'string', 'max:40'],
                 'sale_orders.*.pack_qty_number' => ['nullable', 'string', 'max:120'],
                 'sale_orders.*.financial_approval' => ['nullable', 'string', 'max:60'],
-                'sale_orders.*.remarks' => ['nullable', 'string', 'max:500'],
+                // No max here -- the column is TEXT (a real voucher already carries 629 chars) and Tally itself
+                // enforces no limit worth guessing at a second time.
+                'sale_orders.*.remarks' => ['nullable', 'string'],
 
                 'deliveries' => ['sometimes', 'array'],
                 'deliveries.*.delivery_no' => ['required_with:deliveries', 'string', 'max:60'],
@@ -204,6 +206,26 @@ class TallyPushController extends Controller
                 'payments.*.amount' => ['nullable', 'numeric'],
                 'payments.*.bank_ledger' => ['nullable', 'string'],
                 'payments.*.reference' => ['nullable', 'string'],
+
+                'credit_debit_note_lines' => ['sometimes', 'array'],
+                'credit_debit_note_lines.*.note_key' => ['required_with:credit_debit_note_lines', 'string', 'max:80'],
+                'credit_debit_note_lines.*.note_type' => ['required_with:credit_debit_note_lines', 'string', 'max:20'],
+                'credit_debit_note_lines.*.note_no' => ['nullable', 'string', 'max:60'],
+                'credit_debit_note_lines.*.series' => ['nullable', 'string', 'max:20'],
+                'credit_debit_note_lines.*.note_date' => ['required_with:credit_debit_note_lines', 'date'],
+                'credit_debit_note_lines.*.party_name' => ['nullable', 'string'],
+                'credit_debit_note_lines.*.normalized_name' => ['nullable', 'string'],
+                'credit_debit_note_lines.*.item_name' => ['nullable', 'string', 'max:500'],
+                'credit_debit_note_lines.*.product_group' => ['nullable', 'string', 'max:60'],
+                'credit_debit_note_lines.*.hsn' => ['nullable', 'string', 'max:16'],
+                'credit_debit_note_lines.*.gst_rate' => ['nullable', 'numeric'],
+                'credit_debit_note_lines.*.quantity' => ['nullable', 'numeric'],
+                'credit_debit_note_lines.*.unit' => ['nullable', 'string', 'max:20'],
+                'credit_debit_note_lines.*.rate' => ['nullable', 'numeric'],
+                'credit_debit_note_lines.*.amount' => ['required_with:credit_debit_note_lines', 'numeric'],
+                'credit_debit_note_lines.*.tax_amount' => ['nullable', 'numeric'],
+                'credit_debit_note_lines.*.reference' => ['nullable', 'string', 'max:120'],
+                'credit_debit_note_lines.*.order_no' => ['nullable', 'string', 'max:60'],
             ]);
         } catch (\Illuminate\Validation\ValidationException $e) {
             DB::table('tally_push_runs')->where('id', $run)->update([
@@ -303,6 +325,10 @@ class TallyPushController extends Controller
                 if (!empty($data['payments'])) {
                     $counts['payments'] = $this->replaceByKey('tally_payments', 'payment_key', $company, $data['payments'],
                         fn ($r) => $this->paymentRow($r, $company));
+                }
+                if (!empty($data['credit_debit_note_lines'])) {
+                    $counts['credit_debit_note_lines'] = $this->replaceByKey('tally_credit_debit_note_lines', 'note_key', $company, $data['credit_debit_note_lines'],
+                        fn ($r) => $this->creditDebitNoteLineRow($r, $company));
                 }
             });
         } catch (\Throwable $e) {
@@ -554,6 +580,31 @@ class TallyPushController extends Controller
             'rate_unit' => $r['rate_unit'] ?? null,
             'taxable_amount' => $r['taxable_amount'] ?? 0,
             'tax_amount' => $r['tax_amount'] ?? null,
+        ];
+    }
+
+    private function creditDebitNoteLineRow(array $r, string $company): array
+    {
+        return [
+            'company' => $company,
+            'note_key' => $r['note_key'],
+            'note_type' => $r['note_type'],
+            'note_no' => $r['note_no'] ?? null,
+            'series' => $r['series'] ?? null,
+            'note_date' => $r['note_date'],
+            'party_name' => $r['party_name'] ?? null,
+            'normalized_name' => $r['normalized_name'] ?? null,
+            'item_name' => $r['item_name'] ?? null,
+            'product_group' => $r['product_group'] ?? null,
+            'hsn' => $r['hsn'] ?? null,
+            'gst_rate' => $r['gst_rate'] ?? null,
+            'quantity' => $r['quantity'] ?? null,
+            'unit' => $r['unit'] ?? null,
+            'rate' => $r['rate'] ?? null,
+            'amount' => $r['amount'] ?? 0,
+            'tax_amount' => $r['tax_amount'] ?? null,
+            'reference' => $r['reference'] ?? null,
+            'order_no' => $r['order_no'] ?? null,
         ];
     }
 

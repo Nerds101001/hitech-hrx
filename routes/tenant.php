@@ -343,12 +343,30 @@ Route::middleware([
       Route::post('addOrUpdateAjax', [SetuMappingController::class, 'addOrUpdateAjax'])->name('addOrUpdateAjax');
     });
 
+    // Sales Group Mapping — supersedes Setu Salesperson Mappings above: maps
+    // a Tally LEDGER GROUP (tally_ledgers.ledger_group) to the HRX user it
+    // refers to, pulled live from the already-synced local Tally tables
+    // instead of an external export. Same admin/HR-only gate.
+    Route::middleware(['role_or_permission:admin|hr|setu.manage'])->prefix('sales-group-mappings')->name('sales-group-mappings.')->group(function () {
+      Route::get('', [\App\Http\Controllers\tenant\SalesGroupMappingController::class, 'index'])->name('index');
+      Route::get('getListAjax', [\App\Http\Controllers\tenant\SalesGroupMappingController::class, 'getListAjax'])->name('getListAjax');
+      Route::get('getByIdAjax/{id}', [\App\Http\Controllers\tenant\SalesGroupMappingController::class, 'getByIdAjax'])->name('getByIdAjax');
+      Route::post('addOrUpdateAjax', [\App\Http\Controllers\tenant\SalesGroupMappingController::class, 'addOrUpdateAjax'])->name('addOrUpdateAjax');
+    });
+
     // Setu Sales Sync — trigger a sync for any confirmed salesperson directly
     // (the actual sync POST reuses sales-visits.pipeline.sync-setu; this is
     // only the listing page).
     // Same admin/HR-only gate as Setu Salesperson Mappings above.
     Route::middleware(['role_or_permission:admin|hr|setu.manage'])->prefix('setu-sync')->name('setu-sync.')->group(function () {
       Route::get('', [SetuSyncController::class, 'index'])->name('index');
+    });
+
+    // Tally Sales Sync — supersedes Setu Sales Sync: same direct-trigger
+    // listing page, sourced from Sales Group Mapping (local Tally data)
+    // instead of Setu Salesperson Mappings (external API). Same gate.
+    Route::middleware(['role_or_permission:admin|hr|setu.manage'])->prefix('tally-sync')->name('tally-sync.')->group(function () {
+      Route::get('', [\App\Http\Controllers\tenant\TallySyncController::class, 'index'])->name('index');
     });
 
     // CRM Mapping Sync — data reconciliation audit's step 1 ("give
@@ -378,6 +396,9 @@ Route::middleware([
       Route::get('trend', [$tx, 'trend'])->name('trend');
       Route::get('trend/export', [$tx, 'trendExport'])->name('trend.export');
       Route::get('trend/values', [$tx, 'trendValues'])->name('trend.values');
+      Route::get('trend/cell', [$tx, 'trendCellDetail'])->name('trend.cell');
+      Route::get('trend/cell/export', [$tx, 'trendCellExport'])->name('trend.cell.export');
+      Route::post('quick-sync', [$tx, 'quickSync'])->name('quick-sync');
     });
 
     // Sales Sources -- the manual Sales Report, Setu and the Tally daily
@@ -994,6 +1015,9 @@ Route::middleware([
             Route::get('/sales-report/targets/export', [\App\Http\Controllers\tenant\SalesPipelineController::class, 'exportTargetAchievement'])->name('pipeline.targets.export');
             Route::post('/sales-report/sync-setu/{salespersonId}', [\App\Http\Controllers\tenant\SalesPipelineController::class, 'syncSetu'])->name('pipeline.sync-setu');
             Route::post('/sales-report/resolve-setu/{salespersonId}', [\App\Http\Controllers\tenant\SalesPipelineController::class, 'resolveSetu'])->name('pipeline.resolve-setu');
+            Route::post('/sales-report/sync-tally/{salespersonId}', [\App\Http\Controllers\tenant\SalesPipelineController::class, 'syncTally'])->name('pipeline.sync-tally');
+            Route::post('/sales-report/resolve-tally/{salespersonId}', [\App\Http\Controllers\tenant\SalesPipelineController::class, 'resolveTally'])->name('pipeline.resolve-tally');
+            Route::get('/sales-report/recheck-tally/{salespersonId}', [\App\Http\Controllers\tenant\SalesPipelineController::class, 'recheckTally'])->name('pipeline.recheck-tally');
 
             // Hand a leaver's customers to a replacement from a chosen month (hidden: named viewers who are Admin / HR).
             Route::middleware(['handover.viewer'])->prefix('leaver-handover')->name('leaver-handover.')->group(function () {   // RestrictHandoverAccess: config('handover.viewer_emails') + Admin/HR
@@ -1025,6 +1049,16 @@ Route::middleware([
             Route::post('/sales-report/customers/bulk-confirm-setu', [\App\Http\Controllers\tenant\CustomerSetuMappingController::class, 'bulkConfirmSuggested'])->name('pipeline.customers.bulk-confirm-setu');
             Route::get('/sales-report/customer/{customer}/sync-current-month-preview', [\App\Http\Controllers\tenant\CustomerSetuMappingController::class, 'syncCurrentMonthPreview'])->name('pipeline.customer.sync-current-month-preview');
             Route::post('/sales-report/customer/{customer}/sync-current-month', [\App\Http\Controllers\tenant\CustomerSetuMappingController::class, 'syncCurrentMonth'])->name('pipeline.customer.sync-current-month');
+
+            // Customer <-> Tally verification badge/popup — same shape as the
+            // Setu block above, but sourced from the app's own local Tally
+            // tables (tally_invoices) instead of the external Setu API.
+            Route::get('/sales-report/customer/{customer}/tally-preview', [\App\Http\Controllers\tenant\CustomerTallyMappingController::class, 'preview'])->name('pipeline.customer.tally-preview');
+            Route::get('/sales-report/tally-customers/search', [\App\Http\Controllers\tenant\CustomerTallyMappingController::class, 'search'])->name('pipeline.tally-customers.search');
+            Route::post('/sales-report/customer/{customer}/map-tally', [\App\Http\Controllers\tenant\CustomerTallyMappingController::class, 'mapTally'])->name('pipeline.customer.map-tally');
+            Route::post('/sales-report/customers/bulk-confirm-tally', [\App\Http\Controllers\tenant\CustomerTallyMappingController::class, 'bulkConfirmSuggested'])->name('pipeline.customers.bulk-confirm-tally');
+            Route::get('/sales-report/customer/{customer}/tally-sync-current-month-preview', [\App\Http\Controllers\tenant\CustomerTallyMappingController::class, 'syncCurrentMonthPreview'])->name('pipeline.customer.tally-sync-current-month-preview');
+            Route::post('/sales-report/customer/{customer}/tally-sync-current-month', [\App\Http\Controllers\tenant\CustomerTallyMappingController::class, 'syncCurrentMonth'])->name('pipeline.customer.tally-sync-current-month');
 
             Route::get('/sales-report/import', [\App\Http\Controllers\tenant\PipelineImportController::class, 'showImport'])->name('pipeline.import');
             Route::post('/sales-report/import/preview', [\App\Http\Controllers\tenant\PipelineImportController::class, 'previewImport'])->name('pipeline.import.preview');

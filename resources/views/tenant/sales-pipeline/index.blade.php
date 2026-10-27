@@ -36,7 +36,8 @@
       'resources/assets/js/app/setu-period-picker.js',
       'resources/assets/js/app/setu-review-common.js',
       'resources/assets/js/app/crm-mapping-review-common.js',
-      'resources/assets/js/app/customer-setu-mapping.js'
+      'resources/assets/js/app/customer-setu-mapping.js',
+      'resources/assets/js/app/customer-tally-mapping.js'
     ])
 @endsection
 
@@ -556,6 +557,20 @@
                                               data-customer-id="{{ $row->customer->id }}"
                                               title="Click to verify against Setu">
                                             <i class="bx {{ $setuBadge[1] }}"></i> {{ $setuBadge[2] }}
+                                        </span>
+                                        @php
+                                            $tallyBadge = match($row->customer->tally_match_status) {
+                                                'verified' => ['bg-label-success', 'bx-check-shield', 'Tally: Verified'],
+                                                'suggested' => ['bg-label-warning', 'bx-search-alt', 'Tally: Match Found'],
+                                                'similar' => ['bg-label-info', 'bx-git-compare', 'Tally: Similar Match'],
+                                                default => ['bg-label-danger', 'bx-x-circle', 'Tally: Not Found'],
+                                            };
+                                        @endphp
+                                        <span class="badge {{ $tallyBadge[0] }} js-tally-badge d-inline-flex align-items-center gap-1"
+                                              style="cursor:pointer; font-size:0.62rem; margin:0 0 2px 4px;"
+                                              data-customer-id="{{ $row->customer->id }}"
+                                              title="Click to verify against Tally — once mapped, this customer's sales auto-update from Tally">
+                                            <i class="bx {{ $tallyBadge[1] }}"></i> {{ $tallyBadge[2] }}
                                         </span>
                                     @endif
                                 </td>
@@ -1132,6 +1147,7 @@
 {{-- Per-customer Setu verification badge/popup — click any badge in the Party
      Name column to confirm or search-and-map. --}}
 @include('tenant.partials.customer-setu-mapping-modal')
+@include('tenant.partials.customer-tally-mapping-modal')
 
 {{-- ─── STYLES ──────────────────────────────────────────────────────── --}}
 <style>
