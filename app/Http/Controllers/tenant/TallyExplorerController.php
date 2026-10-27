@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\tenant;
 
 use App\Http\Controllers\Controller;
+use App\Models\CrmClientMapping;
+use App\Support\NameMatcher;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -328,8 +330,30 @@ class TallyExplorerController extends Controller
             ->orderByDesc('delivery_date')->limit(10)
             ->get(['delivery_date', 'delivery_no', 'item_name', 'quantity', 'unit', 'transporter_name', 'vehicle_number', 'consignee_name']) : collect();
 
+        // This ledger's matching CRM client record, if one exists -- same normalized-name equality
+        // CrmCustomerResolver uses to connect a CrmClientMapping to Tally data (see its keysFor()),
+        // just run in the opposite direction (Tally ledger -> CRM mapping). Loads the whole mapping
+        // table's id+name only (cheap, a few hundred rows) to find the match in PHP, since the
+        // normalization itself isn't expressible as a SQL predicate.
+        $crmMapping = null;
+        $crmContacts = collect();
+        $crmActivities = collect();
+        $crmFollowUps = collect();
+        $crmTeam = collect();
+        if ($norm) {
+            $crmMapping = CrmClientMapping::query()->get(['id', 'crm_company_name', 'crm_city', 'crm_state', 'crm_stage', 'created_at'])
+                ->first(fn ($m) => NameMatcher::normalize($m->crm_company_name) === $norm);
+            if ($crmMapping) {
+                $crmContacts = $crmMapping->contacts()->orderByDesc('is_primary')->get();
+                $crmActivities = $crmMapping->activities()->with(['createdBy'])->limit(15)->get();
+                $crmFollowUps = $crmMapping->activities()->where('needs_follow_up', true)->whereNull('follow_up_completed_at')->orderBy('follow_up_due_at')->get();
+                $crmTeam = $crmMapping->teamMembersByRole();
+            }
+        }
+
         return view('tenant.tally-explorer.ledger-detail', compact(
-            'ledger', 'kpi', 'terms', 'ageing', 'trend', 'outstanding', 'feed', 'deliveries', 'isCustomer', 'isSupplier'
+            'ledger', 'kpi', 'terms', 'ageing', 'trend', 'outstanding', 'feed', 'deliveries', 'isCustomer', 'isSupplier',
+            'crmMapping', 'crmContacts', 'crmActivities', 'crmFollowUps', 'crmTeam'
         ) + ['pageConfigs' => ['contentLayout' => 'wide']]);
     }
 
@@ -524,6 +548,256 @@ class TallyExplorerController extends Controller
         }, $filename, ['Content-Type' => 'text/csv']);
     }
 
+    /** doc-no column name per trend part table -- the one field trendParts() doesn't already carry, since it differs per table. */
+    private function partDocNoColumn(string $table): string
+    {
+        return match ($table) {
+            'tally_sale_lines' => 'invoice_no',
+            'tally_purchase_lines' => 'purchase_no',
+            'tally_payments' => 'payment_no',
+            'tally_receipts' => 'receipt_no',
+            'tally_outstanding' => 'bill_ref',
+            default => 'id',
+        };
+    }
+
+    /**
+     * Underlying transaction-level rows behind one trend cell (one dimension
+     * value x one month) -- the drill-down a click on any cell opens. Shared
+     * by trendCellDetail() (JSON, for the popup) and trendCellExport() (CSV).
+     * Applies the exact same dimension/filter logic as partPivot() so the
+     * popup's total always reconciles with the cell that was clicked.
+     */
+    private function buildCellData(Request $request): array
+    {
+        $measures = $this->trendMeasures();
+        $measure = isset($measures[$request->get('measure')]) ? (string) $request->get('measure') : 'sales';
+        $parts = $measures[$measure]['parts'];
+        $partDefs = $this->trendParts();
+
+        $dims = $this->trendDims();
+        $dim = isset($dims[$request->get('dim')]) ? (string) $request->get('dim') : 'party';
+        $dimkey = (string) $request->get('dimkey', '');
+        $ym = (string) $request->get('ym', '');
+
+        $filterDim = in_array($request->get('filter_dim'), array_keys($dims), true) ? (string) $request->get('filter_dim') : '';
+        $filterVals = array_values(array_filter(array_map('trim', (array) $request->get('filter_vals', []))));
+
+        $label = null;
+        $sections = [];
+        foreach ($parts as $pk) {
+            $part = $partDefs[$pk];
+            $section = $this->cellRowsForPart($part, $dim, $dimkey, $ym, $filterDim, $filterVals);
+            $label ??= $section['label'];
+            $sections[] = ['part' => $part['label'], 'columns' => $section['columns'], 'rows' => $section['rows'], 'total' => $section['total']];
+        }
+
+        // Credit/Debit Notes aren't one of the trend measures (Tally books them as their own voucher type, not
+        // sales/purchases), but they adjust what a customer/supplier actually owes -- worth surfacing alongside
+        // whatever the cell was already showing for that party and month, not hidden behind a separate screen.
+        if ($dim === 'party' && $dimkey !== '' && $ym !== '') {
+            $noteSection = $this->creditDebitNoteSection($dimkey, $ym);
+            if ($noteSection['rows']) {
+                $sections[] = $noteSection;
+            }
+        }
+
+        // A cell grouped by Salesperson covers MANY customers' transactions at once -- a flat line-item dump
+        // alone leaves "how did this person do this month" buried. Surface the roll-up a sales manager actually
+        // wants (total, how many distinct customers, vs last month) above the raw rows.
+        $summary = null;
+        if ($dim === 'salesperson' && $dimkey !== '' && $ym !== '') {
+            $summary = $this->salespersonMonthSummary($parts, $partDefs, $dimkey, $ym);
+        }
+
+        return ['label' => $label ?? $dimkey, 'measure' => $measures[$measure]['label'], 'ym' => $ym, 'sections' => $sections, 'summary' => $summary];
+    }
+
+    /**
+     * Total sales, distinct customers billed, and the month-on-month change for one Salesperson (sales group)
+     * cell -- the roll-up the popup shows above the raw transaction rows when the cell is grouped by salesperson.
+     */
+    private function salespersonMonthSummary(array $parts, array $partDefs, string $salesperson, string $ym): array
+    {
+        $monthTotals = function (string $month) use ($parts, $partDefs, $salesperson) {
+            $total = 0.0;
+            $customers = collect();
+            foreach ($parts as $pk) {
+                $part = $partDefs[$pk];
+                $table = $part['table'];
+                $base = DB::table($table)
+                    ->join('tally_ledgers as l', "{$table}.normalized_name", '=', 'l.normalized_name')
+                    ->where('l.ledger_group', $salesperson)
+                    ->whereRaw("DATE_FORMAT({$table}.{$part['date']}, '%Y-%m') = ?", [$month]);
+                $sign = $part['sign'] ?? 1;
+                $valueExpr = $part['value_sql'] ?? "{$table}.{$part['value']}";
+                $total += ((float) (clone $base)->selectRaw("SUM({$valueExpr}) as t")->value('t')) * $sign;
+                (clone $base)->whereNotNull("{$table}.normalized_name")->distinct()
+                    ->pluck("{$table}.normalized_name")->each(fn ($n) => $customers->push($n));
+
+                // Same Credit/Debit Note netting as partPivot() -- keeps this summary's total in sync with
+                // the grid cell it's opened from, instead of a "Sales" figure that silently excludes returns.
+                if (!empty($part['note_side'])) {
+                    $side = $part['note_side'];
+                    $signedSum = "SUM(CASE WHEN note_type = 'credit_{$side}' THEN -(amount + IFNULL(tax_amount, 0)) ELSE (amount + IFNULL(tax_amount, 0)) END)";
+                    $total += (float) DB::table('tally_credit_debit_note_lines')
+                        ->join('tally_ledgers as l', 'tally_credit_debit_note_lines.normalized_name', '=', 'l.normalized_name')
+                        ->where('l.ledger_group', $salesperson)
+                        ->whereIn('note_type', ["credit_{$side}", "debit_{$side}"])
+                        ->whereRaw("DATE_FORMAT(note_date, '%Y-%m') = ?", [$month])
+                        ->selectRaw("{$signedSum} as t")->value('t');
+                }
+            }
+            return ['total' => round($total, 2), 'customers' => $customers->unique()->count()];
+        };
+
+        $this_ = $monthTotals($ym);
+        $prevYm = date('Y-m', strtotime($ym . '-01 -1 month'));
+        $prev = $monthTotals($prevYm);
+
+        $pctChange = $prev['total'] != 0.0 ? round((($this_['total'] - $prev['total']) / abs($prev['total'])) * 100, 1) : null;
+
+        return [
+            'salesperson' => $salesperson,
+            'month' => $ym,
+            'total' => $this_['total'],
+            'customers' => $this_['customers'],
+            'prev_month' => $prevYm,
+            'prev_total' => $prev['total'],
+            'pct_change' => $pctChange,
+        ];
+    }
+
+    /** Credit/Debit Note lines for one party x month, regardless of which trend measure the cell belongs to. */
+    private function creditDebitNoteSection(string $normalizedName, string $ym): array
+    {
+        $labels = [
+            'credit_sale' => 'Credit Note (Sale)', 'debit_sale' => 'Debit Note (Sale)',
+            'credit_purchase' => 'Credit Note (Purchase)', 'debit_purchase' => 'Debit Note (Purchase)',
+        ];
+        $dbRows = DB::table('tally_credit_debit_note_lines')
+            ->where('normalized_name', $normalizedName)
+            ->whereRaw("DATE_FORMAT(note_date, '%Y-%m') = ?", [$ym])
+            ->orderBy('note_date')->orderBy('note_no')
+            ->get(['note_type', 'note_date', 'note_no', 'party_name', 'item_name', 'hsn', 'gst_rate', 'quantity', 'unit', 'rate', 'amount', 'tax_amount']);
+
+        $rows = $dbRows->map(fn ($r) => [
+            'type' => $labels[$r->note_type] ?? $r->note_type,
+            'date' => $r->note_date ? \Illuminate\Support\Carbon::parse($r->note_date)->format('d-M-Y') : '',
+            'doc_no' => $r->note_no, 'party' => $r->party_name, 'item' => $r->item_name, 'hsn' => $r->hsn,
+            'gst' => $r->gst_rate, 'qty' => $r->quantity, 'unit' => $r->unit, 'rate' => $r->rate,
+            'taxable' => round((float) $r->amount, 2), 'tax' => round((float) $r->tax_amount, 2),
+            'total' => round((float) $r->amount + (float) $r->tax_amount, 2),
+        ])->values()->all();
+
+        // Signed so this figure matches what actually got netted into the Sales/Purchase total above -- a
+        // credit note SUBTRACTS (what it's for), a debit note adds.
+        $signedTotal = $dbRows->sum(fn ($r) => (str_starts_with($r->note_type, 'credit') ? -1 : 1) * ((float) $r->amount + (float) $r->tax_amount));
+
+        return [
+            'part' => 'Credit/Debit Notes',
+            'columns' => ['Type', 'Date', 'Doc No', 'Customer', 'Item', 'HSN', 'GST %', 'Qty', 'Unit', 'Rate', 'Taxable Amount', 'Tax Amount', 'Total'],
+            'rows' => $rows,
+            'total' => round($signedTotal, 2),
+        ];
+    }
+
+    /** One part's raw rows for buildCellData() -- line-item detail for sales/purchases, header-level rows otherwise. */
+    private function cellRowsForPart(array $part, string $dim, string $dimkey, string $ym, string $filterDim, array $filterVals): array
+    {
+        $dims = $this->trendDims();
+        $d = $dims[$dim] ?? null;
+        $table = $part['table'];
+        if (!$d || $dimkey === '' || $ym === '' || (!empty($d[4]) && empty($part['line']))) {
+            return ['label' => null, 'columns' => [], 'rows' => [], 'total' => 0];
+        }
+
+        $groupExpr = $d[1] === 'ledger' ? "l.{$d[2]}" : "{$table}.{$d[2]}";
+        $needJoin = $d[1] === 'ledger' || ($filterDim !== '' && ($dims[$filterDim][1] ?? '') === 'ledger');
+
+        $base = DB::table($table);
+        if ($needJoin) {
+            $base->join('tally_ledgers as l', "{$table}.normalized_name", '=', 'l.normalized_name');
+        }
+        $base->where($groupExpr, $dimkey)
+            ->whereRaw("DATE_FORMAT({$table}.{$part['date']}, '%Y-%m') = ?", [$ym]);
+
+        if ($filterDim !== '' && $filterVals) {
+            $fd = $dims[$filterDim];
+            if (empty($fd[4]) || !empty($part['line'])) {
+                $base->whereIn($fd[1] === 'ledger' ? "l.{$fd[2]}" : "{$table}.{$fd[2]}", $filterVals);
+            }
+        }
+
+        $docNoCol = $this->partDocNoColumn($table);
+        $sign = $part['sign'] ?? 1;
+
+        if (!empty($part['line'])) {
+            $columns = ['Date', 'Bill No', 'Customer', 'Item', 'HSN', 'GST %', 'Qty', 'Unit', 'Rate', 'Taxable Amount', 'Tax Amount', 'Total'];
+            $rows = (clone $base)
+                ->orderBy("{$table}.{$part['date']}")->orderBy("{$table}.{$docNoCol}")
+                ->get(["{$table}.{$part['date']} as date", "{$table}.{$docNoCol} as doc_no", "{$table}.party_name",
+                       "{$table}.item_name", "{$table}.hsn", "{$table}.gst_rate", "{$table}.quantity", "{$table}.unit",
+                       "{$table}.rate", "{$table}.taxable_amount", "{$table}.tax_amount"])
+                ->map(fn ($r) => [
+                    'date' => $r->date ? \Illuminate\Support\Carbon::parse($r->date)->format('d-M-Y') : '',
+                    'doc_no' => $r->doc_no, 'party' => $r->party_name, 'item' => $r->item_name, 'hsn' => $r->hsn,
+                    'gst' => $r->gst_rate, 'qty' => $r->quantity, 'unit' => $r->unit, 'rate' => $r->rate,
+                    'taxable' => round((float) $r->taxable_amount, 2), 'tax' => round((float) $r->tax_amount, 2),
+                    'total' => round((float) $r->taxable_amount + (float) $r->tax_amount, 2),
+                ])->values()->all();
+            // Matches partPivot()'s own column choice: tax-inclusive total when this part aggregates on
+            // value_sql (Sales/Purchases), the per-line rate for Purchase Rate (an average, not a sum of money).
+            $totalCol = $part['value'] === 'rate' ? 'rate' : (isset($part['value_sql']) ? 'total' : 'taxable');
+            $total = round(array_sum(array_column($rows, $totalCol)) * $sign, 2);
+        } else {
+            $columns = ['Date', 'Doc No', 'Party', 'Amount'];
+            $rows = (clone $base)
+                ->orderBy("{$table}.{$part['date']}")
+                ->get(["{$table}.{$part['date']} as date", "{$table}.{$docNoCol} as doc_no", "{$table}.party_name", "{$table}.{$part['value']} as amount"])
+                ->map(fn ($r) => [
+                    'date' => $r->date ? \Illuminate\Support\Carbon::parse($r->date)->format('d-M-Y') : '',
+                    'doc_no' => $r->doc_no, 'party' => $r->party_name, 'amount' => round((float) $r->amount, 2),
+                ])->values()->all();
+            $total = round(array_sum(array_column($rows, 'amount')) * $sign, 2);
+        }
+
+        // Only meaningful when grouped by Customer/Supplier itself (dimkey IS the party there). For every other
+        // dimension (salesperson, city, state, ...) this table's party_name is just whichever row happened to
+        // come back first -- an arbitrary customer, not the thing the popup is titled after -- so fall back to
+        // the dimension value the cell was actually clicked for.
+        $label = $dim === 'party' ? (clone $base)->value("{$table}.party_name") : $dimkey;
+
+        return ['label' => $label, 'columns' => $columns, 'rows' => $rows, 'total' => $total];
+    }
+
+    public function trendCellDetail(Request $request): JsonResponse
+    {
+        return response()->json($this->buildCellData($request));
+    }
+
+    public function trendCellExport(Request $request): \Symfony\Component\HttpFoundation\StreamedResponse
+    {
+        $data = $this->buildCellData($request);
+        $filename = 'tally-' . str_replace(' ', '-', strtolower($data['measure'])) . '-' . ($data['label'] ?: 'detail') . '-' . $data['ym'] . '.csv';
+        $filename = preg_replace('/[^A-Za-z0-9\-\.]+/', '_', $filename);
+
+        return response()->streamDownload(function () use ($data) {
+            $out = fopen('php://output', 'w');
+            foreach ($data['sections'] as $section) {
+                if (count($data['sections']) > 1) {
+                    fputcsv($out, [$section['part']]);
+                }
+                fputcsv($out, $section['columns']);
+                foreach ($section['rows'] as $row) {
+                    fputcsv($out, array_values($row));
+                }
+                fputcsv($out, []);
+            }
+            fclose($out);
+        }, $filename, ['Content-Type' => 'text/csv']);
+    }
+
     /** Pivot one base part by one dimension. @return array<string,array{label:string,cells:array<string,?float>}> */
     private function partPivot(array $part, string $dim, string $filterDim, array $filterVals, $start, $end): array
     {
@@ -537,7 +811,7 @@ class TallyExplorerController extends Controller
         $groupExpr = $d[1] === 'ledger' ? "l.{$d[2]}" : "{$table}.{$d[2]}";
         $labelExpr = ($d[1] === 'self' && $d[2] === 'normalized_name') ? "MAX({$table}.party_name)" : $groupExpr;
         $sign = $part['sign'] ?? 1;
-        $valExpr = "{$part['agg']}({$table}.{$part['value']}) * {$sign}";
+        $valExpr = "{$part['agg']}(" . ($part['value_sql'] ?? "{$table}.{$part['value']}") . ") * {$sign}";
 
         $needJoin = $d[1] === 'ledger' || ($filterDim !== '' && ($dims[$filterDim][1] ?? '') === 'ledger');
         $base = DB::table($table);
@@ -561,6 +835,62 @@ class TallyExplorerController extends Controller
         foreach ($rows as $r) {
             $out[$r->dimkey]['label'] ??= $r->dimlabel;
             $out[$r->dimkey]['cells'][$r->ym] = (float) $r->amt;
+        }
+
+        if (!empty($part['note_side'])) {
+            foreach ($this->creditDebitNoteAdjustmentPivot($part['note_side'], $dim, $filterDim, $filterVals, $start, $end) as $k => $d) {
+                $out[$k]['label'] ??= $d['label'];
+                foreach ($d['cells'] as $ym => $adj) {
+                    $out[$k]['cells'][$ym] = ($out[$k]['cells'][$ym] ?? 0.0) + $adj;
+                }
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * Credit/Debit Note adjustment for one side ('sale' or 'purchase'), same (dimkey => [label, cells]) shape
+     * partPivot() itself returns, so it merges straight in. A Credit Note reduces what the party owes
+     * (subtracted); a Debit Note increases it (added) -- matches how Setu's own "Sales" figure already nets
+     * these, confirmed against a real month where the gap to Setu was accounted for almost exactly by that
+     * month's Credit (Sale) Notes. tally_credit_debit_note_lines has no `city` column (unlike the sale/purchase
+     * line tables it otherwise mirrors), so the 'city' dim is skipped here -- a known, narrow gap, not a bug.
+     */
+    private function creditDebitNoteAdjustmentPivot(string $side, string $dim, string $filterDim, array $filterVals, $start, $end): array
+    {
+        if ($dim === 'city') {
+            return [];
+        }
+        $dims = $this->trendDims();
+        $d = $dims[$dim];
+        $table = 'tally_credit_debit_note_lines';
+
+        $groupExpr = $d[1] === 'ledger' ? "l.{$d[2]}" : "{$table}.{$d[2]}";
+        $labelExpr = ($d[1] === 'self' && $d[2] === 'normalized_name') ? "MAX({$table}.party_name)" : $groupExpr;
+
+        $needJoin = $d[1] === 'ledger' || ($filterDim !== '' && ($dims[$filterDim][1] ?? '') === 'ledger');
+        $base = DB::table($table)->whereIn('note_type', ["credit_{$side}", "debit_{$side}"]);
+        if ($needJoin) {
+            $base->join('tally_ledgers as l', "{$table}.normalized_name", '=', 'l.normalized_name');
+        }
+        $base->whereBetween("{$table}.note_date", [$start, $end])
+            ->whereNotNull($groupExpr)->where($groupExpr, '!=', '');
+
+        if ($filterDim !== '' && $filterVals) {
+            $fd = $dims[$filterDim];
+            $base->whereIn($fd[1] === 'ledger' ? "l.{$fd[2]}" : "{$table}.{$fd[2]}", $filterVals);
+        }
+
+        // credit_* subtracts, debit_* adds -- the CASE expression does that without a second query per sign.
+        $signedSum = "SUM(CASE WHEN {$table}.note_type = 'credit_{$side}' THEN -({$table}.amount + IFNULL({$table}.tax_amount, 0)) ELSE ({$table}.amount + IFNULL({$table}.tax_amount, 0)) END)";
+        $rows = $base->selectRaw("$groupExpr dimkey, $labelExpr dimlabel, DATE_FORMAT({$table}.note_date, '%Y-%m') ym, $signedSum adj")
+            ->groupBy(DB::raw($groupExpr), DB::raw("DATE_FORMAT({$table}.note_date, '%Y-%m')"))->get();
+
+        $out = [];
+        foreach ($rows as $r) {
+            $out[$r->dimkey]['label'] ??= $r->dimlabel;
+            $out[$r->dimkey]['cells'][$r->ym] = (float) $r->adj;
         }
         return $out;
     }
@@ -610,8 +940,18 @@ class TallyExplorerController extends Controller
     private function trendParts(): array
     {
         return [
-            'sales' => ['label' => 'Sales', 'table' => 'tally_sale_lines', 'date' => 'invoice_date', 'value' => 'taxable_amount', 'agg' => 'SUM', 'line' => true],
-            'purchases' => ['label' => 'Purchase', 'table' => 'tally_purchase_lines', 'date' => 'purchase_date', 'value' => 'taxable_amount', 'agg' => 'SUM', 'line' => true],
+            // 'value' stays taxable_amount (used for the Purchase Rate measure's own math and as the CSV/line
+            // fallback); 'value_sql' is what Sales/Purchase actually AGGREGATE with -- taxable + GST, so the
+            // Trend totals match an invoice's/Setu's own tax-inclusive total instead of silently under-reporting
+            // by the GST portion (confirmed against a real customer: taxable-only was short by exactly the GST).
+            // 'note_side' nets Credit/Debit Notes into this part's totals (see creditDebitNoteAdjustmentPivot):
+            // a Credit Note reduces what the party owes (subtracted), a Debit Note increases it (added) -- same
+            // convention Setu's own "Sales" figure already uses, confirmed against a real month where the gap
+            // was accounted for almost exactly by that month's Credit (Sale) Notes.
+            'sales' => ['label' => 'Sales', 'table' => 'tally_sale_lines', 'date' => 'invoice_date', 'value' => 'taxable_amount',
+                        'value_sql' => 'tally_sale_lines.taxable_amount + IFNULL(tally_sale_lines.tax_amount, 0)', 'agg' => 'SUM', 'line' => true, 'note_side' => 'sale'],
+            'purchases' => ['label' => 'Purchase', 'table' => 'tally_purchase_lines', 'date' => 'purchase_date', 'value' => 'taxable_amount',
+                        'value_sql' => 'tally_purchase_lines.taxable_amount + IFNULL(tally_purchase_lines.tax_amount, 0)', 'agg' => 'SUM', 'line' => true, 'note_side' => 'purchase'],
             'payments' => ['label' => 'Payments', 'table' => 'tally_payments', 'date' => 'payment_date', 'value' => 'amount', 'agg' => 'SUM', 'line' => false, 'sign' => -1],
             'receipts' => ['label' => 'Receipts', 'table' => 'tally_receipts', 'date' => 'receipt_date', 'value' => 'amount', 'agg' => 'SUM', 'line' => false],
             'outstanding' => ['label' => 'Outstanding', 'table' => 'tally_outstanding', 'date' => 'bill_date', 'value' => 'amount', 'agg' => 'SUM', 'line' => false],
@@ -644,6 +984,87 @@ class TallyExplorerController extends Controller
     }
 
     /** Shared layout data: which tab is active, and a "last synced" hint per dataset. */
+    /**
+     * Web-triggered "quick sync" for a short, recent date range -- a fast way for anyone to pull just today's
+     * (or the last few days') Tally data without waiting on a full-month backfill. Capped at 7 days so a click
+     * here always stays "quick"; a longer backfill belongs to the existing TallySyncJob/poller pipeline
+     * (app/Console/Commands/TallyJobsPollCommand.php), not this synchronous action.
+     *
+     * target-url is hardcoded to the LOCAL dev server, never read from config/env -- config('tally_push.outbound
+     * .target_url') defaults to the PRODUCTION push endpoint (TALLY_PUSH_TARGET_URL in .env points at
+     * hrx.hitechgroup.in), and this project's standing rule is local-only, never deploy/push unasked. A
+     * web-triggered sync is exactly the kind of action an accidental click could fire, so the guard against
+     * ever hitting prod has to be unconditional here, not just "the default happens to be safe right now."
+     */
+    public function quickSync(Request $request): \Illuminate\Http\RedirectResponse
+    {
+        // The Tally gateway (192.168.2.195:9080) is a LAN address only reachable from the office PC --
+        // production (Hostinger, a remote host) has no network path to it, same reason the scheduled sync
+        // tasks run on the office PC and push TO production rather than production pulling from Tally. The
+        // button itself is hidden outside local (see layout.blade.php); this is the server-side backstop.
+        if (!app()->environment('local')) {
+            abort(404);
+        }
+
+        $data = $request->validate([
+            'company' => ['required', 'string', 'in:hitech,kif'],
+            'from' => ['required', 'date'],
+            'to' => ['required', 'date', 'after_or_equal:from'],
+        ]);
+
+        $from = \Illuminate\Support\Carbon::parse($data['from'])->startOfDay();
+        $to = \Illuminate\Support\Carbon::parse($data['to'])->startOfDay();
+        if ($from->diffInDays($to) > 6) {
+            return back()->with('error', 'Quick Sync is capped at 7 days -- use the full backfill job for a longer range.');
+        }
+        if ($to->gt(now())) {
+            return back()->with('error', 'The "to" date cannot be in the future.');
+        }
+
+        $companyCode = $data['company'];
+        $gatewayUrl = (string) config('services.tally.write_gateway_url');
+        $gatewayCompany = $companyCode === 'kif'
+            ? (string) config('services.tally.companies.kif.name')
+            : (string) config('services.tally.write_gateway_company');
+
+        if ($gatewayUrl === '' || $gatewayCompany === '') {
+            return back()->with('error', "No gateway configured for company \"{$companyCode}\" -- check TALLY_WRITE_GATEWAY_URL / TALLY_COMPANY_KIF_NAME in .env.");
+        }
+
+        $exitCode = \Illuminate\Support\Facades\Artisan::call('hrx:tally-push', [
+            '--from' => $from->format('Y-m-d'),
+            '--to' => $to->format('Y-m-d'),
+            '--company' => $companyCode,
+            '--gateway-url' => $gatewayUrl,
+            '--gateway-company' => $gatewayCompany,
+            '--target-url' => 'http://127.0.0.1:8003/api/tally-push/sync',
+            '--emit-totals' => true,
+        ]);
+
+        $output = \Illuminate\Support\Facades\Artisan::output();
+        preg_match('/TALLY_TOTALS\s+(\{.*\})/s', $output, $m);
+        $totals = isset($m[1]) ? json_decode($m[1], true) : null;
+
+        if ($exitCode !== 0) {
+            // The command's own "FAILED -- ..." line names the exact day and reason (usually a Tally gateway
+            // timeout) -- surface that instead of a bare non-zero exit code.
+            preg_match('/FAILED.*$/m', $output, $fm);
+            return back()->with('error', 'Quick Sync stopped partway: ' . ($fm[0] ?? 'see server logs for details.'));
+        }
+
+        $summary = $totals
+            ? sprintf('invoices %s · sale lines %s · credit/debit notes %s · purchases %s',
+                number_format((int) ($totals['invoices'] ?? 0)), number_format((int) ($totals['sale_lines'] ?? 0)),
+                number_format((int) ($totals['credit_debit_note_lines'] ?? 0)), number_format((int) ($totals['purchases'] ?? 0)))
+            : 'done';
+
+        return back()->with('success', sprintf(
+            'Quick Sync complete: %s (%s) %s to %s — %s',
+            config("services.tally.companies.{$companyCode}.label", $companyCode), $companyCode,
+            $from->format('d-M-Y'), $to->format('d-M-Y'), $summary
+        ));
+    }
+
     private function common(string $tab): array
     {
         return [

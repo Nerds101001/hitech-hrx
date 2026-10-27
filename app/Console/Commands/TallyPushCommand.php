@@ -127,7 +127,7 @@ class TallyPushCommand extends Command
 
         $totals = [
             'invoices' => 0, 'invoice_lines' => 0, 'sale_lines' => 0, 'sale_orders' => 0, 'deliveries' => 0, 'receipts' => 0,
-            'purchases' => 0, 'purchase_lines' => 0, 'purchase_orders' => 0, 'payments' => 0,
+            'purchases' => 0, 'purchase_lines' => 0, 'purchase_orders' => 0, 'payments' => 0, 'credit_debit_note_lines' => 0,
         ];
         $daysDone = 0;
         for ($day = $start->copy(); $day->lte($end); $day = $day->copy()->addDay()) {
@@ -181,9 +181,9 @@ class TallyPushCommand extends Command
         $this->newLine();
         $this->line($dry ? 'Dry run complete. Nothing was pushed.' : sprintf(
             "Done. Sales: %d invoices, %d invoice lines, %d sale lines, %d order lines, %d deliveries, %d receipts.\n"
-            . '      Purchases: %d bills, %d bill lines, %d order lines, %d payments.',
+            . '      Purchases: %d bills, %d bill lines, %d order lines, %d payments. Credit/debit note lines: %d.',
             $totals['invoices'], $totals['invoice_lines'], $totals['sale_lines'], $totals['sale_orders'], $totals['deliveries'], $totals['receipts'],
-            $totals['purchases'], $totals['purchase_lines'], $totals['purchase_orders'], $totals['payments']
+            $totals['purchases'], $totals['purchase_lines'], $totals['purchase_orders'], $totals['payments'], $totals['credit_debit_note_lines']
         ));
 
         // One machine-readable line for hrx:tally-jobs-poll to parse back into the sync job's counts.
@@ -214,12 +214,12 @@ class TallyPushCommand extends Command
         return [$start, $end];
     }
 
-    /** @return array{invoices: array, invoice_lines: array, sale_lines: array, sale_orders: array, deliveries: array, receipts: array, purchases: array, purchase_lines: array, purchase_orders: array, payments: array} */
+    /** @return array{invoices: array, invoice_lines: array, sale_lines: array, sale_orders: array, deliveries: array, receipts: array, purchases: array, purchase_lines: array, purchase_orders: array, payments: array, credit_debit_note_lines: array} */
     private function mapDay(Carbon $day, array $vouchers): array
     {
         $out = [
             'invoices' => [], 'invoice_lines' => [], 'sale_lines' => [], 'sale_orders' => [], 'deliveries' => [], 'receipts' => [],
-            'purchases' => [], 'purchase_lines' => [], 'purchase_orders' => [], 'payments' => [],
+            'purchases' => [], 'purchase_lines' => [], 'purchase_orders' => [], 'payments' => [], 'credit_debit_note_lines' => [],
         ];
         $date = $day->format('Y-m-d');
 
@@ -228,11 +228,17 @@ class TallyPushCommand extends Command
                 continue;
             }
             // Voucher type names in this company carry a suffix (e.g. "Sales GST - CHN", "Purchase Order - PG",
-            // "Payment - HR"), so classify on the PREFIX. Order matters: "Purchase Order" must be tested before
-            // "Purchase", and "Receipt Note" (goods received) excluded before "Receipt" (money received).
+            // "Payment - HR"), so classify on the PREFIX for everything except Sales itself. Order matters:
+            // "Purchase Order" must be tested before "Purchase", and "Receipt Note" (goods received) excluded
+            // before "Receipt" (money received).
+            //
+            // Sales is matched by WORD anywhere in the type, not just the prefix -- some marketplace vouchers
+            // (confirmed live: "amazon Sales-EV-GJ", "amazon Sales-EV-MH") don't start with "Sales" at all and
+            // were being silently dropped entirely (not pushed as anything), found while reconciling a month's
+            // total against Setu and coming up short by more than credit notes or missing ledgers accounted for.
             $type = (string) $v['type'];
-            $isSalesOrder = (bool) preg_match('/^Sales\s*Order/i', $type);
-            $isSalesBill = !$isSalesOrder && (bool) preg_match('/^Sales\b/i', $type);
+            $isSalesOrder = (bool) preg_match('/\bSales\s*Order\b/i', $type);
+            $isSalesBill = !$isSalesOrder && (bool) preg_match('/\bSales\b/i', $type);
             $isPurchaseOrder = (bool) preg_match('/^Purchase\s*Order/i', $type);
             $isPurchaseBill = !$isPurchaseOrder && (bool) preg_match('/^Purchase\b/i', $type);
             $isDeliveryNote = (bool) preg_match('/^Delivery\s*Note/i', $type);
@@ -355,8 +361,39 @@ class TallyPushCommand extends Command
                 }
                 continue;
             }
+            // Credit/Debit Note voucher types in this company carry a "(Sale)"/"(Pur)" suffix (e.g. "Debit Note
+            // (Pur)-RMG", "Credit Note (Sale)-PB") identifying which side of the ledger it adjusts; fall back to
+            // "sale" when absent rather than dropping the voucher, since most of this company's are sale-side.
+            if (preg_match('/credit\s*note|debit\s*note/i', $type)) {
+                $number = (string) $v['number'];
+                $series = TallyFileReader::series($number);
+                $party = (string) $v['party'];
+                $normalized = NameMatcher::normalize($party) ?: null;
+                $key = (string) ($v['guid'] ?: "{$date}|{$type}|{$number}");
+                $noteType = (preg_match('/credit\s*note/i', $type) ? 'credit' : 'debit')
+                    . '_' . (preg_match('/\(\s*pur/i', $type) ? 'purchase' : 'sale');
+                foreach ($v['lines'] as $line) {
+                    $item = preg_replace('/\s+/', ' ', trim((string) $line['item']));
+                    $hsn = $line['hsn'];
+                    $group = ProductGroup::detect($item, $hsn);
+                    $rate = $this->gstRate($line['gst']);
+                    $amount = abs((float) ($line['amount'] ?? 0));
+                    $out['credit_debit_note_lines'][] = array_filter([
+                        'note_key' => $key, 'note_type' => $noteType, 'note_no' => $number, 'series' => $series, 'note_date' => $date,
+                        'party_name' => $party ?: null, 'normalized_name' => $normalized,
+                        'item_name' => $item, 'product_group' => $group, 'hsn' => $hsn, 'gst_rate' => $rate,
+                        'quantity' => $line['qty'], 'unit' => $line['unit'], 'rate' => $line['rate'],
+                        // 'amount' is the taxable portion, same convention as sale_lines/purchase_lines -- GST
+                        // computed the identical way those do, so netting this against a tax-inclusive Sales/
+                        // Purchase total doesn't silently under-subtract by the note's own GST.
+                        'amount' => $amount, 'tax_amount' => $rate !== null ? round($amount * $rate / 100, 2) : null,
+                        'reference' => $v['reference'] ?? null, 'order_no' => $line['order_no'] ?? ($v['order_no'] ?? null),
+                    ], fn ($val) => $val !== null);
+                }
+                continue;
+            }
             if (!$isSalesOrder && !$isSalesBill) {
-                continue;   // journals, credit/debit notes, stock journals -- not what this push carries
+                continue;   // journals, stock journals -- not what this push carries
             }
 
             $number = (string) $v['number'];

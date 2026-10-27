@@ -29,11 +29,16 @@ class Customer extends Model implements AuditableContract
         'setu_matched_name',
         'setu_verified_at',
         'setu_verified_by_id',
+        'tally_match_status',
+        'tally_matched_name',
+        'tally_verified_at',
+        'tally_verified_by_id',
         'tenant_id',
     ];
 
     protected $casts = [
         'setu_verified_at' => 'datetime',
+        'tally_verified_at' => 'datetime',
     ];
 
     public const STATUS_NONE = 'none';
@@ -49,5 +54,10 @@ class Customer extends Model implements AuditableContract
     public function verifiedBy()
     {
         return $this->belongsTo(User::class, 'setu_verified_by_id');
+    }
+
+    public function tallyVerifiedBy()
+    {
+        return $this->belongsTo(User::class, 'tally_verified_by_id');
     }
 }
