@@ -660,7 +660,12 @@ class EmployeeLifecycleController extends Controller
             $warning->update(['acknowledged_at' => now()]);
         }
 
-        return redirect()->back()->with('success', 'Acknowledged.');
+        // Explicit destination, not back(): back() falls through to the site
+        // root when Laravel has no usable "previous URL" in session (e.g. a
+        // delegate-access session, or a background poll overwriting it), and
+        // the root route IS the dashboard (routes/web.php) — so the click
+        // silently landed on the dashboard instead of staying on this page.
+        return redirect()->route('employee-lifecycle.my-notices')->with('success', 'Acknowledged.');
     }
 
     /**
@@ -676,7 +681,10 @@ class EmployeeLifecycleController extends Controller
             $complaint->update(['acknowledged_at' => now()]);
         }
 
-        return redirect()->back()->with('success', 'Acknowledged.');
+        // See the comment in acknowledgeWarning() above: explicit destination,
+        // not back(), so a stale/missing "previous URL" can't silently bounce
+        // this to the dashboard instead of this page.
+        return redirect()->route('employee-lifecycle.my-notices')->with('success', 'Acknowledged.');
     }
 
     /**
@@ -700,7 +708,9 @@ class EmployeeLifecycleController extends Controller
             'employee_remarks_at' => now(),
         ]);
 
-        return redirect()->back()->with('success', 'Your reply was posted.');
+        // See acknowledgeWarning() above for why this is an explicit route,
+        // not back().
+        return redirect()->route('employee-lifecycle.my-notices')->with('success', 'Your reply was posted.');
     }
 
     /**
@@ -721,7 +731,9 @@ class EmployeeLifecycleController extends Controller
             'employee_remarks_at' => now(),
         ]);
 
-        return redirect()->back()->with('success', 'Your reply was posted.');
+        // See acknowledgeWarning() above for why this is an explicit route,
+        // not back().
+        return redirect()->route('employee-lifecycle.my-notices')->with('success', 'Your reply was posted.');
     }
 
     /**
