@@ -208,12 +208,22 @@ class CustomerTallyMappingController extends Controller
             return Error::response('Could not find that Tally party anymore — it may have no recent sales.');
         }
 
+        // Tally becomes the name of record on verify -- adopting its exact spelling is what "verified" means,
+        // same convention as CustomerSetuMappingController::mapSetu(). canonical_name is the identity-level
+        // name; sales_pipelines.party_name is the SEPARATE per-row field the Sales Report grid's "Party Name"
+        // column actually edits (deliberately free text otherwise, per Customer's own docblock, so several
+        // spellings can share one identity) -- renamed here too, on every linked row, per explicit request
+        // (2026-10-28) that verifying should rename AND lock what's shown in that column, not just the
+        // identity record underneath it. The grid itself (index.blade.php) makes the field readonly once
+        // tally_match_status is VERIFIED.
         $customer->update([
+            'canonical_name' => $party['name'],
             'tally_match_status' => Customer::STATUS_VERIFIED,
             'tally_matched_name' => $normalizedName,
             'tally_verified_at' => now(),
             'tally_verified_by_id' => Auth::id(),
         ]);
+        $customer->salesPipelineRows()->update(['party_name' => $party['name']]);
 
         $filled = $this->fillCurrentMonth($customer, $party, overwrite: false);
 

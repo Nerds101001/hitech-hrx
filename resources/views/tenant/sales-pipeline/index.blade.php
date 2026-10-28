@@ -540,9 +540,17 @@
                                 class="{{ $row->converted_from_newbiz ? 'converted-row' : '' }}">
 
                                 <td class="text-center col-sno">{{ $index + 1 }}</td>
-                                <td class="col-party text-dark p-0" title="{{ $row->party_name }}">
+                                @php
+                                    // Locked once Tally has verified this customer's name -- the row was
+                                    // just renamed to Tally's own spelling (CustomerTallyMappingController::
+                                    // mapTally()) and editing it back out of sync would defeat the point of
+                                    // verifying it in the first place. Per explicit request (2026-10-28).
+                                    $tallyLocked = optional($row->customer)->tally_match_status === \App\Models\Customer::STATUS_VERIFIED;
+                                @endphp
+                                <td class="col-party text-dark p-0" title="{{ $row->party_name }}{{ $tallyLocked ? ' (locked -- Tally verified)' : '' }}">
                                     <input type="text" class="excel-input row-field fw-semibold" data-field="party_name"
-                                           value="{{ $row->party_name }}" style="font-size:0.72rem;">
+                                           value="{{ $row->party_name }}" style="font-size:0.72rem;"
+                                           @if($tallyLocked) readonly title="Locked — name verified against Tally" @endif>
                                     @if($row->customer)
                                         @php
                                             $setuBadge = match($row->customer->setu_match_status) {

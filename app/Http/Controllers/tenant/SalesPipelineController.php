@@ -2488,6 +2488,16 @@ class SalesPipelineController extends Controller
             return redirect()->back()->with('error', $message);
         }
 
+        // Server-side backstop for the grid's readonly state (index.blade.php) -- a verified Tally match
+        // renamed this row to Tally's own spelling; a direct POST bypassing the disabled input must not be
+        // able to un-sync it. Per explicit request (2026-10-28).
+        if (array_key_exists('party_name', $data) && optional($pipeline->customer)->tally_match_status === \App\Models\Customer::STATUS_VERIFIED
+            && $data['party_name'] !== $pipeline->party_name) {
+            $message = 'This customer\'s name is locked — verified against Tally.';
+            if ($wantsJson) return response()->json(['success' => false, 'message' => $message], 403);
+            return redirect()->back()->with('error', $message);
+        }
+
         // These 5 columns are NOT NULL (with a DB default of 0 for inserts
         // only - an explicit null still violates the constraint on update).
         // An inline-edit save with the field cleared sent an empty string
