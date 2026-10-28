@@ -42,6 +42,51 @@ class CustomerTallyMappingController extends Controller
     private const RECENT_MONTHS = 6;
 
     /**
+     * Security boundary for this controller: search()/salesPool() deliberately stay company-wide
+     * (the whole point is finding a match among ALL Tally parties, same as SalesScope::canClaimCustomer's
+     * documented "search the whole customer database" carve-out) -- but every endpoint that reads or
+     * writes a SPECIFIC customer's mapping/sales figures must first confirm that customer is actually
+     * one this user is allowed to see, via the same SalesScope ownership rule the main Sales Report grid
+     * already enforces (admin/hr/sales_ops.view_all unrestricted; everyone else, own book only).
+     * Found missing entirely during a security audit (2026-10-28) -- preview()/mapTally()/
+     * syncCurrentMonth(Preview)/bulkConfirmSuggested() previously let ANY sales-floor user view or
+     * write sale_amount for ANY customer company-wide, not just their own.
+     */
+    private function scopedCustomerQuery()
+    {
+        $user = Auth::user();
+        $query = Customer::query();
+        if ($user && ($user->hasRole(['admin', 'Admin', 'hr', 'HR']) || $user->can('sales_ops.view_all'))) {
+            return $query;
+        }
+
+        $ids = $user ? \App\Support\SalesScope::allowedUserIds($user) : [0];
+        if ($ids === null) {
+            return $query;
+        }
+
+        return $query->whereHas('salesPipelineRows', function ($q) use ($ids) {
+            $q->where(function ($qq) use ($ids) {
+                $qq->whereIn('salesperson_id', $ids)
+                    ->orWhereIn('ccare_id', $ids)
+                    ->orWhereIn('new_biz_id', $ids)
+                    ->orWhereIn('new_biz_2_id', $ids)
+                    ->orWhereIn('former_new_biz_id', $ids)
+                    ->orWhereExists(function ($s) use ($ids) {
+                        $s->selectRaw('1')->from('sales_pipeline_extra_reps as er')
+                            ->whereColumn('er.sales_pipeline_id', 'sales_pipelines.id')
+                            ->whereIn('er.user_id', $ids);
+                    });
+            });
+        });
+    }
+
+    private function customerVisibleToCurrentUser(Customer $customer): bool
+    {
+        return $this->scopedCustomerQuery()->whereKey($customer->id)->exists();
+    }
+
+    /**
      * Every distinct Tally party that has actual invoiced sales, each with
      * its own recent_months/recent_total — built fresh from tally_invoices
      * rather than a separate cache table, since the data already lives
@@ -104,6 +149,10 @@ class CustomerTallyMappingController extends Controller
     /** What the badge's popup shows on open. */
     public function preview(Customer $customer)
     {
+        if (!$this->customerVisibleToCurrentUser($customer)) {
+            return Error::response('You do not have access to this customer.', 403);
+        }
+
         return Success::response([
             'customer' => [
                 'id' => $customer->id,
@@ -138,6 +187,9 @@ class CustomerTallyMappingController extends Controller
     {
         if (!self::canVerify(Auth::user())) {
             return Error::response('You are not allowed to verify customer mappings.');
+        }
+        if (!$this->customerVisibleToCurrentUser($customer)) {
+            return Error::response('You do not have access to this customer.', 403);
         }
 
         if ($customer->tally_match_status === Customer::STATUS_VERIFIED) {
@@ -221,6 +273,9 @@ class CustomerTallyMappingController extends Controller
     /** Read-only preview of what "Sync current month" would change, before it changes anything. */
     public function syncCurrentMonthPreview(Customer $customer)
     {
+        if (!$this->customerVisibleToCurrentUser($customer)) {
+            return Error::response('You do not have access to this customer.', 403);
+        }
         if ($customer->tally_match_status !== Customer::STATUS_VERIFIED) {
             return Error::response('This customer is not matched to a Tally party yet.');
         }
@@ -253,6 +308,9 @@ class CustomerTallyMappingController extends Controller
         if (!self::canVerify(Auth::user())) {
             return Error::response('You are not allowed to verify customer mappings.');
         }
+        if (!$this->customerVisibleToCurrentUser($customer)) {
+            return Error::response('You do not have access to this customer.', 403);
+        }
         if ($customer->tally_match_status !== Customer::STATUS_VERIFIED) {
             return Error::response('This customer is not matched to a Tally party yet.');
         }
@@ -283,7 +341,7 @@ class CustomerTallyMappingController extends Controller
             return Error::response('You are not allowed to verify customer mappings.');
         }
 
-        $count = Customer::where('tally_match_status', Customer::STATUS_SUGGESTED)->update([
+        $count = $this->scopedCustomerQuery()->where('tally_match_status', Customer::STATUS_SUGGESTED)->update([
             'tally_match_status' => Customer::STATUS_VERIFIED,
             'tally_verified_at' => now(),
             'tally_verified_by_id' => Auth::id(),
