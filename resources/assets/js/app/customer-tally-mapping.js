@@ -50,7 +50,13 @@ window.CustomerTallyMapping = (function () {
     }
     var html = '';
     candidates.forEach(function (c) {
-      var action = c.is_current
+      // "Currently verified" only means what it says when the customer is actually
+      // locked (tally_match_status === verified) -- is_current alone just means this
+      // candidate equals the current suggestion, which may still be unconfirmed. That
+      // used to show the same green "Currently verified" label either way, and skipped
+      // the Confirm button for the top suggestion even when nothing had been verified
+      // yet (2026-10-28 fix).
+      var action = (c.is_current && locked)
         ? '<span class="badge bg-label-success">Currently verified</span>'
         : locked
           ? ''
