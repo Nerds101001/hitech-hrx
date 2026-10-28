@@ -24,16 +24,20 @@ use Illuminate\Support\Facades\DB;
  */
 class CustomerTallyMappingController extends Controller
 {
-    /** Same book-edit rule as SalesPipelineController::canEditBook() / CustomerSetuMappingController::canVerify(). */
+    /**
+     * Deliberately narrower than CustomerSetuMappingController::canVerify() (which this used to mirror) --
+     * per explicit request (2026-10-28), verifying/mapping/syncing a Tally match is CCare's job specifically,
+     * not every manager/New Biz agent/sales_report.manage holder that could reach it before. admin/hr keep
+     * override access, same as every other access rule in this codebase (SalesScope, SalesAccessGuard, etc.)
+     * -- not a request to lock the app's own administrators out of their own data.
+     */
     private static function canVerify($user): bool
     {
         if (!$user) {
             return false;
         }
-        return $user->hasRole(['admin', 'Admin', 'super_admin', 'hr', 'HR', 'manager', 'Manager'])
-            || $user->isCcareAgent()
-            || $user->isNewBizAgent()
-            || $user->can('sales_report.manage');
+        return $user->hasRole(['admin', 'Admin', 'super_admin', 'hr', 'HR'])
+            || $user->isCcareAgent();
     }
 
     private const FUZZY_FLOOR = 80.0;
