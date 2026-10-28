@@ -831,47 +831,86 @@ class SalesPipelineController extends Controller
             // for someone tagged on it twice.
             $targetHolderIds = $allTargets->pluck('salesperson_id')->unique()->all();
             $actualByKey = [];
-            foreach ($targetHolderIds as $spId) {
+
+            // Batched: this used to run the full OR/EXISTS scope query below
+            // once PER target holder (100+ near-identical full-table scans on
+            // every Sales Report load, over half the page's DB time). Now it
+            // runs once for every target holder combined, and which holder(s)
+            // each returned row counts for is resolved in memory below --
+            // same result, one query instead of 100+.
+            $heldBeforeByUser = [];
+            if ($targetHolderIds && \App\Models\SalesPipelineHandover::hasAny()) {
+                $heldBeforeByUser = \Illuminate\Support\Facades\DB::table('sales_pipeline_handovers')
+                    ->whereNull('reverted_at')
+                    ->whereIn('from_user_id', $targetHolderIds)
+                    ->select('sales_pipeline_id', 'from_user_id')
+                    ->get()
+                    ->groupBy('from_user_id')
+                    ->map(fn ($rows) => $rows->pluck('sales_pipeline_id')->unique()->all())
+                    ->all();
+            }
+            $allHeldBeforeIds = collect($heldBeforeByUser)->flatten()->unique()->values()->all();
+
+            if ($targetHolderIds) {
                 // Named distinctly from the page's own $pipelines (the main
                 // customer table's paginator, set far above in this same
                 // method) -- PHP has no block scope, so reusing that name
                 // here silently overwrote the paginator with this plain
                 // Collection, and every visit to this page fatal-errored the
                 // instant the view called $pipelines->firstItem().
-                $achieverPipelines = SalesPipeline::with(['months' => function ($q) use ($achieveMonthKeys) {
-                        $q->whereIn('month_year', $achieveMonthKeys);
-                    }])
+                $achieverPipelinesAll = SalesPipeline::with([
+                        'months' => function ($q) use ($achieveMonthKeys) {
+                            $q->whereIn('month_year', $achieveMonthKeys);
+                        },
+                        // Unfiltered (not the type-scoped extraReps() relation) --
+                        // the per-row OR/EXISTS below never filtered by type either.
+                        'allExtraReps',
+                    ])
                     ->where('is_locked', true)
                     ->whereNull('deleted_at')
-                    ->where(function ($q) use ($spId) {
-                        $q->where('salesperson_id', $spId)
-                          ->orWhere('ccare_id', $spId)
-                          ->orWhere('new_biz_id', $spId)
-                          ->orWhere('new_biz_2_id', $spId)
-                          ->orWhereExists(function ($s) use ($spId) {
+                    ->where(function ($q) use ($targetHolderIds, $allHeldBeforeIds) {
+                        $q->whereIn('salesperson_id', $targetHolderIds)
+                          ->orWhereIn('ccare_id', $targetHolderIds)
+                          ->orWhereIn('new_biz_id', $targetHolderIds)
+                          ->orWhereIn('new_biz_2_id', $targetHolderIds)
+                          ->orWhereExists(function ($s) use ($targetHolderIds) {
                               $s->selectRaw('1')->from('sales_pipeline_extra_reps as er')
                                 ->whereColumn('er.sales_pipeline_id', 'sales_pipelines.id')
-                                ->where('er.user_id', $spId);
-                          })
-                          // Customers held before a leaver handover still count for the earlier months.
-                          ->orWhereIn('id', \App\Models\SalesPipelineHandover::pipelineIdsHeldBefore([(int) $spId])->all());
+                                ->whereIn('er.user_id', $targetHolderIds);
+                          });
+                        // Customers held before a leaver handover still count for the earlier months.
+                        if ($allHeldBeforeIds) {
+                            $q->orWhereIn('id', $allHeldBeforeIds);
+                        }
                     })
                     ->get();
-                foreach ($achieveMonthKeys as $mk) {
-                    $actual = 0.0;
-                    $pending = 0.0;
-                    $forecast = 0.0;
-                    foreach ($achieverPipelines as $p) {
-                        $m = $p->months->firstWhere('month_year', $mk);
-                        if ($m && $p->heldInMonth((int) $spId, $mk)) {
-                            $actual   += (float) $m->sale_amount;
-                            $pending  += (float) $m->pending_amount;
-                            // Same population as Actual and Pending above, so the
-                            // three columns describe one set of customers.
-                            $forecast += (float) $m->forecast_amount;
+
+                foreach ($targetHolderIds as $spId) {
+                    $heldBeforeIds = $heldBeforeByUser[$spId] ?? [];
+                    $achieverPipelines = $achieverPipelinesAll->filter(function ($p) use ($spId, $heldBeforeIds) {
+                        return (int) $p->salesperson_id === (int) $spId
+                            || (int) $p->ccare_id === (int) $spId
+                            || (int) $p->new_biz_id === (int) $spId
+                            || (int) $p->new_biz_2_id === (int) $spId
+                            || $p->allExtraReps->contains(fn ($er) => (int) $er->user_id === (int) $spId)
+                            || in_array($p->id, $heldBeforeIds, true);
+                    });
+                    foreach ($achieveMonthKeys as $mk) {
+                        $actual = 0.0;
+                        $pending = 0.0;
+                        $forecast = 0.0;
+                        foreach ($achieverPipelines as $p) {
+                            $m = $p->months->firstWhere('month_year', $mk);
+                            if ($m && $p->heldInMonth((int) $spId, $mk)) {
+                                $actual   += (float) $m->sale_amount;
+                                $pending  += (float) $m->pending_amount;
+                                // Same population as Actual and Pending above, so the
+                                // three columns describe one set of customers.
+                                $forecast += (float) $m->forecast_amount;
+                            }
                         }
+                        $actualByKey[$mk . '|' . $spId] = (object) ['actual' => $actual, 'pending' => $pending, 'forecast' => $forecast];
                     }
-                    $actualByKey[$mk . '|' . $spId] = (object) ['actual' => $actual, 'pending' => $pending, 'forecast' => $forecast];
                 }
             }
             $nameMap = User::whereIn('id', $targetHolderIds)
@@ -1809,34 +1848,47 @@ class SalesPipelineController extends Controller
         // salesperson cc_salesperson_map ever mapped them to.
         $targetHolderIds = $targets->pluck('salesperson_id')->unique()->all();
         $actuals = [];
-        foreach ($targetHolderIds as $spId) {
-            $pipelines = SalesPipeline::with(['months' => function ($q) use ($month) {
+
+        // Batched (same fix as index()): one query for every target holder
+        // combined instead of one full OR/EXISTS scan per holder.
+        if ($targetHolderIds) {
+            $pipelinesAll = SalesPipeline::with(['months' => function ($q) use ($month) {
                     $q->where('month_year', $month);
-                }])
+                }, 'allExtraReps'])
                 ->where('is_locked', true)
                 ->whereNull('deleted_at')
-                ->where(function ($q) use ($spId) {
-                    $q->where('salesperson_id', $spId)
-                      ->orWhere('ccare_id', $spId)
-                      ->orWhere('new_biz_id', $spId)
-                      ->orWhere('new_biz_2_id', $spId)
-                      ->orWhereExists(function ($s) use ($spId) {
+                ->where(function ($q) use ($targetHolderIds) {
+                    $q->whereIn('salesperson_id', $targetHolderIds)
+                      ->orWhereIn('ccare_id', $targetHolderIds)
+                      ->orWhereIn('new_biz_id', $targetHolderIds)
+                      ->orWhereIn('new_biz_2_id', $targetHolderIds)
+                      ->orWhereExists(function ($s) use ($targetHolderIds) {
                           $s->selectRaw('1')->from('sales_pipeline_extra_reps as er')
                             ->whereColumn('er.sales_pipeline_id', 'sales_pipelines.id')
-                            ->where('er.user_id', $spId);
+                            ->whereIn('er.user_id', $targetHolderIds);
                       });
                 })
                 ->get();
-            $actual = 0.0;
-            $pending = 0.0;
-            foreach ($pipelines as $p) {
-                $m = $p->months->first();
-                if ($m) {
-                    $actual  += (float) $m->sale_amount;
-                    $pending += (float) $m->pending_amount;
+
+            foreach ($targetHolderIds as $spId) {
+                $pipelines = $pipelinesAll->filter(function ($p) use ($spId) {
+                    return (int) $p->salesperson_id === (int) $spId
+                        || (int) $p->ccare_id === (int) $spId
+                        || (int) $p->new_biz_id === (int) $spId
+                        || (int) $p->new_biz_2_id === (int) $spId
+                        || $p->allExtraReps->contains(fn ($er) => (int) $er->user_id === (int) $spId);
+                });
+                $actual = 0.0;
+                $pending = 0.0;
+                foreach ($pipelines as $p) {
+                    $m = $p->months->first();
+                    if ($m) {
+                        $actual  += (float) $m->sale_amount;
+                        $pending += (float) $m->pending_amount;
+                    }
                 }
+                $actuals[$spId] = (object) ['actual' => $actual, 'pending' => $pending];
             }
-            $actuals[$spId] = (object) ['actual' => $actual, 'pending' => $pending];
         }
 
         $names = User::whereIn('id', $targetHolderIds)
