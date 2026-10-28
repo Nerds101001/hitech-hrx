@@ -893,16 +893,42 @@ class SalesPipelineController extends Controller
                 // exists, that was thousands of one-row queries.
                 \App\Models\SalesPipelineHandover::eventsFor($achieverPipelinesAll->pluck('id')->all());
 
+                // Single pass bucketing each pipeline to the target holder(s) it
+                // matches, instead of scanning the whole batched collection once
+                // PER target holder (that was O(holders x pipelines) in PHP --
+                // for an unrestricted admin, $achieverPipelinesAll can be most of
+                // the table, so 103 holders x thousands of rows added up to the
+                // same wall-clock cost the DB-side N+1 fix was meant to remove).
+                $targetHolderSet = array_flip($targetHolderIds);
+                $heldBeforeByPipeline = [];
+                foreach ($heldBeforeByUser as $uid => $pids) {
+                    foreach ($pids as $pid) {
+                        $heldBeforeByPipeline[$pid][] = (int) $uid;
+                    }
+                }
+                $pipelinesBySpId = [];
+                foreach ($achieverPipelinesAll as $p) {
+                    $matched = [];
+                    foreach ([$p->salesperson_id, $p->ccare_id, $p->new_biz_id, $p->new_biz_2_id] as $uid) {
+                        if ($uid !== null && isset($targetHolderSet[(int) $uid])) {
+                            $matched[(int) $uid] = true;
+                        }
+                    }
+                    foreach ($p->allExtraReps as $er) {
+                        if (isset($targetHolderSet[(int) $er->user_id])) {
+                            $matched[(int) $er->user_id] = true;
+                        }
+                    }
+                    foreach ($heldBeforeByPipeline[$p->id] ?? [] as $uid) {
+                        $matched[$uid] = true;
+                    }
+                    foreach (array_keys($matched) as $uid) {
+                        $pipelinesBySpId[$uid][] = $p;
+                    }
+                }
+
                 foreach ($targetHolderIds as $spId) {
-                    $heldBeforeIds = $heldBeforeByUser[$spId] ?? [];
-                    $achieverPipelines = $achieverPipelinesAll->filter(function ($p) use ($spId, $heldBeforeIds) {
-                        return (int) $p->salesperson_id === (int) $spId
-                            || (int) $p->ccare_id === (int) $spId
-                            || (int) $p->new_biz_id === (int) $spId
-                            || (int) $p->new_biz_2_id === (int) $spId
-                            || $p->allExtraReps->contains(fn ($er) => (int) $er->user_id === (int) $spId)
-                            || in_array($p->id, $heldBeforeIds, true);
-                    });
+                    $achieverPipelines = $pipelinesBySpId[$spId] ?? [];
                     foreach ($achieveMonthKeys as $mk) {
                         $actual = 0.0;
                         $pending = 0.0;
@@ -1878,14 +1904,29 @@ class SalesPipelineController extends Controller
                 })
                 ->get();
 
+            // Single pass bucketing (see index() for why: O(holders x rows)
+            // from scanning the whole batch once per holder, done once instead).
+            $targetHolderSet = array_flip($targetHolderIds);
+            $pipelinesBySpId = [];
+            foreach ($pipelinesAll as $p) {
+                $matched = [];
+                foreach ([$p->salesperson_id, $p->ccare_id, $p->new_biz_id, $p->new_biz_2_id] as $uid) {
+                    if ($uid !== null && isset($targetHolderSet[(int) $uid])) {
+                        $matched[(int) $uid] = true;
+                    }
+                }
+                foreach ($p->allExtraReps as $er) {
+                    if (isset($targetHolderSet[(int) $er->user_id])) {
+                        $matched[(int) $er->user_id] = true;
+                    }
+                }
+                foreach (array_keys($matched) as $uid) {
+                    $pipelinesBySpId[$uid][] = $p;
+                }
+            }
+
             foreach ($targetHolderIds as $spId) {
-                $pipelines = $pipelinesAll->filter(function ($p) use ($spId) {
-                    return (int) $p->salesperson_id === (int) $spId
-                        || (int) $p->ccare_id === (int) $spId
-                        || (int) $p->new_biz_id === (int) $spId
-                        || (int) $p->new_biz_2_id === (int) $spId
-                        || $p->allExtraReps->contains(fn ($er) => (int) $er->user_id === (int) $spId);
-                });
+                $pipelines = $pipelinesBySpId[$spId] ?? [];
                 $actual = 0.0;
                 $pending = 0.0;
                 foreach ($pipelines as $p) {
