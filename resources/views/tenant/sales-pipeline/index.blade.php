@@ -559,18 +559,22 @@
                                             <i class="bx {{ $setuBadge[1] }}"></i> {{ $setuBadge[2] }}
                                         </span>
                                         @php
+                                            // A compact "T" dot, not a full text pill -- the Setu badge next to it already
+                                            // says enough in words; this one just needs to be glanceable by color, with the
+                                            // actual status in the tooltip. Requested 2026-10-28: the old full-text version
+                                            // ("Tally: Similar Match"/"Tally: Match Found") was too wide, crowding the row.
                                             $tallyBadge = match($row->customer->tally_match_status) {
-                                                'verified' => ['bg-label-success', 'bx-check-shield', 'Tally: Verified'],
-                                                'suggested' => ['bg-label-warning', 'bx-search-alt', 'Tally: Match Found'],
-                                                'similar' => ['bg-label-info', 'bx-git-compare', 'Tally: Similar Match'],
-                                                default => ['bg-label-danger', 'bx-x-circle', 'Tally: Not Found'],
+                                                'verified' => ['bg-label-success', 'Tally: Verified'],
+                                                'suggested' => ['bg-label-warning', 'Tally: Match Found — click to confirm'],
+                                                'similar' => ['bg-label-info', 'Tally: Similar Match — click to review'],
+                                                default => ['bg-label-danger', 'Tally: Not Found — click to search'],
                                             };
                                         @endphp
-                                        <span class="badge {{ $tallyBadge[0] }} js-tally-badge d-inline-flex align-items-center gap-1"
-                                              style="cursor:pointer; font-size:0.62rem; margin:0 0 2px 4px;"
+                                        <span class="badge {{ $tallyBadge[0] }} js-tally-badge d-inline-flex align-items-center justify-content-center"
+                                              style="cursor:pointer; font-size:0.6rem; font-weight:700; width:16px; height:16px; padding:0; margin:0 0 2px 4px; border-radius:50%; line-height:1;"
                                               data-customer-id="{{ $row->customer->id }}"
-                                              title="Click to verify against Tally — once mapped, this customer's sales auto-update from Tally">
-                                            <i class="bx {{ $tallyBadge[1] }}"></i> {{ $tallyBadge[2] }}
+                                              title="{{ $tallyBadge[1] }} — once mapped, this customer's sales auto-update from Tally">
+                                            T
                                         </span>
                                     @endif
                                 </td>
