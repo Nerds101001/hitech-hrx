@@ -57,7 +57,7 @@ window.CustomerTallyMapping = (function () {
       // the Confirm button for the top suggestion even when nothing had been verified
       // yet (2026-10-28 fix).
       var action = (c.is_current && locked)
-        ? '<span class="badge bg-label-success">Currently verified</span>'
+        ? '<span class="badge bg-label-success">Currently mapped</span>'
         : locked
           ? ''
           : '<button type="button" class="btn btn-sm btn-outline-primary js-ctm-confirm" data-tally-norm="' + esc(c.normalized_name) + '">'
@@ -70,7 +70,9 @@ window.CustomerTallyMapping = (function () {
   function open(customerId, customerName) {
     ctx.customerId = customerId;
     ctx.locked = false;
-    $('#ctmCustomerName').text(customerName || '');
+    // Shown so a reviewer can identify/reference this exact customer -- e.g. when told elsewhere
+    // "already mapped to Customer #1234", they can confirm whether that's the row in front of them.
+    $('#ctmCustomerName').text((customerName || '') + ' (#' + customerId + ')');
     $('#ctmSuggestedBlock').addClass('d-none');
     $('#ctmSuggestedCard').empty();
     $('#ctmSearchResults').empty();
@@ -86,7 +88,7 @@ window.CustomerTallyMapping = (function () {
       ctx.locked = !!cust.locked;
       var statusLabel = {
         none: 'Not Found in Tally', similar: 'Similar match found — review below',
-        suggested: 'Match Found — review and confirm below', verified: 'Verified',
+        suggested: 'Match Found — review and confirm below', verified: 'Mapped',
       }[cust.status] || cust.status;
       var line = statusLabel;
       if (cust.status === 'verified') {
@@ -99,7 +101,7 @@ window.CustomerTallyMapping = (function () {
       $('#ctmLockedNotice').toggleClass('d-none', !ctx.locked);
 
       $('#ctmSuggestedBlock').removeClass('d-none');
-      $('#ctmSuggestedTitle').text(cust.status === 'verified' ? 'Nearest matches — currently verified one is marked' : 'Nearest matches');
+      $('#ctmSuggestedTitle').text(cust.status === 'verified' ? 'Nearest matches — currently mapped one is marked' : 'Nearest matches');
       renderCandidates($('#ctmSuggestedCard'), d.data.candidates, 'Map Customer', ctx.locked);
     }).catch(function () { $('#ctmStatusLine').text('Could not reach the server.'); });
   }
@@ -159,25 +161,27 @@ window.CustomerTallyMapping = (function () {
     if (!ctx.customerId) return;
     postJson(mapUrl(ctx.customerId), { tally_normalized_name: normalizedName }).then(function (d) {
       if (d.status !== 'success') { swalErr((d.data && d.data.message) || d.data || 'Could not save this mapping.'); return; }
-      swalOk(d.data.message || 'Verified.');
-      updateBadgeInGrid(ctx.customerId, 'verified');
+      swalOk(d.data.message || 'Mapped.');
+      updateBadgeInGrid(ctx.customerId);
       $('#customerTallyModal').modal('hide');
     }).catch(function () { swalErr('Could not reach the server.'); });
   }
 
-  function updateBadgeInGrid(customerId, status) {
+  // Keeps the compact "T" dot's existing shape (just the letter, see index.blade.php) -- used to re-add a
+  // full icon+text badge here, which only matched the grid's look until the next page load (2026-10-28 fix).
+  function updateBadgeInGrid(customerId) {
     var $badge = $('.js-tally-badge[data-customer-id="' + customerId + '"]');
     if (!$badge.length) return;
     $badge.removeClass('bg-label-danger bg-label-warning bg-label-info bg-label-success')
       .addClass('bg-label-success')
-      .html('<i class="bx bx-check-shield"></i> Verified');
+      .attr('title', 'Tally: Mapped — once mapped, this customer\'s sales auto-update from Tally');
   }
 
   function bulkConfirm() {
     if (!window.Swal) { if (!confirm('Confirm every exact Tally match now?')) return; return doBulkConfirm(); }
     Swal.fire({
       title: 'Confirm all exact matches?',
-      text: 'Every customer already flagged as an exact Tally match will be marked Verified.',
+      text: 'Every customer already flagged as an exact Tally match will be marked Mapped.',
       icon: 'question', showCancelButton: true, confirmButtonText: 'Yes, confirm all',
     }).then(function (r) { if (r.isConfirmed) doBulkConfirm(); });
   }
@@ -186,8 +190,8 @@ window.CustomerTallyMapping = (function () {
     postJson(bulkConfirmUrl(), {}).then(function (d) {
       if (d.status !== 'success') { swalErr((d.data && d.data.message) || 'Could not confirm.'); return; }
       swalOk(d.data.message);
-      $('.js-tally-badge.bg-label-warning').each(function () {
-        $(this).removeClass('bg-label-warning').addClass('bg-label-success').html('<i class="bx bx-check-shield"></i> Verified');
+      $('.js-tally-badge.bg-label-warning, .js-tally-badge.bg-label-info').each(function () {
+        updateBadgeInGrid($(this).data('customer-id'));
       });
     }).catch(function () { swalErr('Could not reach the server.'); });
   }

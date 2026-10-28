@@ -197,7 +197,7 @@ class CustomerTallyMappingController extends Controller
         }
 
         if ($customer->tally_match_status === Customer::STATUS_VERIFIED) {
-            return Error::response('This customer is already verified — a verified match cannot be changed.');
+            return Error::response('This customer is already mapped — a mapped match cannot be changed.');
         }
 
         $request->validate(['tally_normalized_name' => 'required|string']);
@@ -206,6 +206,21 @@ class CustomerTallyMappingController extends Controller
         $party = collect($this->salesPool())->firstWhere('normalized_name', $normalizedName);
         if (!$party) {
             return Error::response('Could not find that Tally party anymore — it may have no recent sales.');
+        }
+
+        // One Tally party maps to exactly one Customer -- never two. lockForUpdate() inside a transaction
+        // closes the race where two people confirm the same party at nearly the same moment; without it,
+        // both checks could pass before either write lands. Per explicit request (2026-10-28): show the
+        // OTHER customer's id, not just "already mapped", so a CCare agent can go straighten it out there.
+        $conflict = DB::transaction(function () use ($normalizedName, $customer) {
+            return Customer::where('tally_matched_name', $normalizedName)
+                ->where('tally_match_status', Customer::STATUS_VERIFIED)
+                ->where('id', '!=', $customer->id)
+                ->lockForUpdate()
+                ->first();
+        });
+        if ($conflict) {
+            return Error::response("This Tally party is already mapped to Customer #{$conflict->id} (\"{$conflict->canonical_name}\"). One Tally party can only map to one customer.");
         }
 
         // Tally becomes the name of record on verify -- adopting its exact spelling is what "verified" means,
@@ -227,7 +242,7 @@ class CustomerTallyMappingController extends Controller
 
         $filled = $this->fillCurrentMonth($customer, $party, overwrite: false);
 
-        $message = "Verified as \"{$party['name']}\".";
+        $message = "Mapped as \"{$party['name']}\".";
         if ($filled['count'] > 0) {
             $message .= " Also filled in {$filled['monthLabel']}'s figure (₹" . number_format($filled['amount'], 2) . "L) on {$filled['count']} row(s).";
         }

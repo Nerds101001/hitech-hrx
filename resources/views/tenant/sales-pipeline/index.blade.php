@@ -547,7 +547,7 @@
                                     // verifying it in the first place. Per explicit request (2026-10-28).
                                     $tallyLocked = optional($row->customer)->tally_match_status === \App\Models\Customer::STATUS_VERIFIED;
                                 @endphp
-                                <td class="col-party text-dark p-0" title="{{ $row->party_name }}{{ $tallyLocked ? ' (locked -- Tally verified)' : '' }}">
+                                <td class="col-party text-dark p-0" title="{{ $row->party_name }}{{ $tallyLocked ? ' (locked -- Tally mapped)' : '' }}">
                                     <div class="d-flex align-items-center gap-1">
                                         @if($row->customer)
                                             @php
@@ -572,7 +572,7 @@
                                         @endif
                                         <input type="text" class="excel-input row-field fw-semibold flex-grow-1" data-field="party_name"
                                                value="{{ $row->party_name }}" style="font-size:0.72rem; min-width:0;"
-                                               @if($tallyLocked) readonly title="Locked — name verified against Tally" @endif>
+                                               @if($tallyLocked) readonly title="Locked — name mapped against Tally" @endif>
                                     </div>
                                 </td>
 
