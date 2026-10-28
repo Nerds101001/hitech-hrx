@@ -441,6 +441,20 @@ class SalesPipelineController extends Controller
             $query->whereNull('new_biz_id')->whereNull('ccare_id');
         }
 
+        // Tally mapping filter — "Mapped" = this row's customer is confirmed
+        // against Tally; "Not Mapped" is everything else (no Customer record
+        // yet, or one still suggested/similar/unmatched), matching the grid's
+        // own green/blue/red "T" badge logic.
+        $fTally = trim((string) $request->input('tally', ''));
+        if ($fTally === 'mapped') {
+            $query->whereHas('customer', fn ($q) => $q->where('tally_match_status', \App\Models\Customer::STATUS_VERIFIED));
+        } elseif ($fTally === 'not_mapped') {
+            $query->where(function ($q) {
+                $q->whereDoesntHave('customer')
+                  ->orWhereHas('customer', fn ($q2) => $q2->where('tally_match_status', '!=', \App\Models\Customer::STATUS_VERIFIED));
+            });
+        }
+
         // ── Aggregates over the FULL filtered set (before pagination) so the
         //    stat cards and month-totals row stay correct across all pages ──
         $currentMonthKey = \Carbon\Carbon::now()->format('Y-m');
@@ -1089,7 +1103,7 @@ class SalesPipelineController extends Controller
         $ccareOnly   = $ccareUsers->whereNotIn('id', $bothUsers->pluck('id'))->values();
         $newBizOnly  = $newBizUsers->whereNotIn('id', $bothUsers->pluck('id'))->values();
 
-        return view('tenant.sales-pipeline.index', compact('bothUsers', 'ccareOnly', 'newBizOnly', 'canDeleteCustomer', 'canEditBook', 'canEditOwnRow', 'isAdminOrHr', 'pipelines', 'months', 'selectedFy', 'defaultFy', 'assignedUsers', 'salespersons', 'newBizUsers', 'isCcare', 'isNewBiz', 'totals', 'salespersonTargets', 'monthlyActuals', 'monthlyForecast', 'monthlyPending', 'monthlyTargets', 'currentMonthKey', 'totalNewClients', 'totalPendingCurrentMonth', 'totalPotential', 'annualMap', 'annualGrand', 'salespersonFilterUsers', 'ccareFilterUsers', 'newBizFilterUsers', 'spFilterCounts', 'ccareFilterCounts', 'nbFilterCounts', 'spNoneCount', 'ccareNoneCount', 'nbNoneCount', 'brandCounts', 'fBrand', 'kbByName', 'fParty', 'fType', 'fSp', 'fCcare', 'fNb', 'fBoth', 'bothFilterUsers', 'bothFilterCounts', 'targetAchievers', 'targetAchieversByMonth', 'achieveMonthKeys', 'kAchieved', 'bAchieved', 'skAchieved', 'isManager', 'teamView', 'hasTeam', 'teamMembers', 'ccareUsers', 'syncTargetId', 'syncTargetLabel', 'syncMapped', 'isUnrestricted', 'selectedPersonId', 'selectedPersonHasTeam', 'showTeamActive', 'monthCategory', 'creditPeople'));
+        return view('tenant.sales-pipeline.index', compact('bothUsers', 'ccareOnly', 'newBizOnly', 'canDeleteCustomer', 'canEditBook', 'canEditOwnRow', 'isAdminOrHr', 'pipelines', 'months', 'selectedFy', 'defaultFy', 'assignedUsers', 'salespersons', 'newBizUsers', 'isCcare', 'isNewBiz', 'totals', 'salespersonTargets', 'monthlyActuals', 'monthlyForecast', 'monthlyPending', 'monthlyTargets', 'currentMonthKey', 'totalNewClients', 'totalPendingCurrentMonth', 'totalPotential', 'annualMap', 'annualGrand', 'salespersonFilterUsers', 'ccareFilterUsers', 'newBizFilterUsers', 'spFilterCounts', 'ccareFilterCounts', 'nbFilterCounts', 'spNoneCount', 'ccareNoneCount', 'nbNoneCount', 'brandCounts', 'fBrand', 'kbByName', 'fParty', 'fType', 'fSp', 'fCcare', 'fNb', 'fBoth', 'fTally', 'bothFilterUsers', 'bothFilterCounts', 'targetAchievers', 'targetAchieversByMonth', 'achieveMonthKeys', 'kAchieved', 'bAchieved', 'skAchieved', 'isManager', 'teamView', 'hasTeam', 'teamMembers', 'ccareUsers', 'syncTargetId', 'syncTargetLabel', 'syncMapped', 'isUnrestricted', 'selectedPersonId', 'selectedPersonHasTeam', 'showTeamActive', 'monthCategory', 'creditPeople'));
     }
 
     public function actualPipelineIndex(Request $request)

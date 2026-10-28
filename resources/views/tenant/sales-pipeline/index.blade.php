@@ -54,7 +54,7 @@
         <form action="{{ route('sales-visits.pipeline.index') }}" method="GET" class="mb-0">
             {{-- Changing the year kept only ?fy, so it also dropped the Team
                  context and every active filter. Carry them through. --}}
-            @foreach(['team','party','type','cat','sp','ccare','brand','nb','per','sort','dir'] as $keep)
+            @foreach(['team','party','type','cat','tally','sp','ccare','brand','nb','per','sort','dir'] as $keep)
                 @if(request()->filled($keep))
                     <input type="hidden" name="{{ $keep }}" value="{{ request($keep) }}">
                 @endif
@@ -262,6 +262,12 @@
                     <option value="New Biz" {{ request('cat') === 'New Biz' ? 'selected' : '' }}>New Biz</option>
                     <option value="CCare" {{ request('cat') === 'CCare' ? 'selected' : '' }}>CCare</option>
                     <option value="None" {{ request('cat') === 'None' ? 'selected' : '' }}>No Category</option>
+                </select>
+                <select class="form-select" name="tally" style="width:150px;" onchange="this.form.submit()"
+                        title="Whether this row's customer is confirmed against Tally">
+                    <option value="">Tally Mapped?</option>
+                    <option value="mapped" {{ ($fTally ?? '') === 'mapped' ? 'selected' : '' }}>Mapped</option>
+                    <option value="not_mapped" {{ ($fTally ?? '') === 'not_mapped' ? 'selected' : '' }}>Not Mapped</option>
                 </select>
                 {{-- Full directory filters for every role: rows stay scoped, so an
                      out-of-scope pick simply shows only what the user may see. --}}
