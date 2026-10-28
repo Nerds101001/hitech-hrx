@@ -553,22 +553,6 @@
                                            @if($tallyLocked) readonly title="Locked — name verified against Tally" @endif>
                                     @if($row->customer)
                                         @php
-                                            // Compact "S" dot, same treatment as the Tally "T" dot below -- full-text
-                                            // pills ("Verified"/"Similar Match"/"Not Found") were still too wide.
-                                            // Same 3-state collapse too (suggested + similar -> one "matching" blue).
-                                            $setuBadge = match($row->customer->setu_match_status) {
-                                                'verified' => ['bg-label-success', 'Setu: Mapped'],
-                                                'suggested', 'similar' => ['bg-label-info', 'Setu: Matching — click to confirm'],
-                                                default => ['bg-label-danger', 'Setu: No Match — click to search'],
-                                            };
-                                        @endphp
-                                        <span class="badge {{ $setuBadge[0] }} js-setu-badge d-inline-flex align-items-center justify-content-center"
-                                              style="cursor:pointer; font-size:0.6rem; font-weight:700; width:16px; height:16px; padding:0; margin:0 0 2px 4px; border-radius:50%; line-height:1;"
-                                              data-customer-id="{{ $row->customer->id }}"
-                                              title="{{ $setuBadge[1] }}">
-                                            S
-                                        </span>
-                                        @php
                                             // A compact "T" dot, not a full text pill -- the Setu badge next to it already
                                             // says enough in words; this one just needs to be glanceable by color, with the
                                             // actual status in the tooltip. Requested 2026-10-28: the old full-text version
