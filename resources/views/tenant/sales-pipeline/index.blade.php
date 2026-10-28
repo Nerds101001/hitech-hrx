@@ -548,31 +548,32 @@
                                     $tallyLocked = optional($row->customer)->tally_match_status === \App\Models\Customer::STATUS_VERIFIED;
                                 @endphp
                                 <td class="col-party text-dark p-0" title="{{ $row->party_name }}{{ $tallyLocked ? ' (locked -- Tally verified)' : '' }}">
-                                    <input type="text" class="excel-input row-field fw-semibold" data-field="party_name"
-                                           value="{{ $row->party_name }}" style="font-size:0.72rem;"
-                                           @if($tallyLocked) readonly title="Locked — name verified against Tally" @endif>
-                                    @if($row->customer)
-                                        @php
-                                            // A compact "T" dot, not a full text pill -- the Setu badge next to it already
-                                            // says enough in words; this one just needs to be glanceable by color, with the
-                                            // actual status in the tooltip. Requested 2026-10-28: the old full-text version
-                                            // ("Tally: Similar Match"/"Tally: Match Found") was too wide, crowding the row.
-                                            // Three states, not four: 'suggested' and 'similar' are both still just
-                                            // "a candidate exists, go confirm it" from a glance-at-the-grid point of
-                                            // view -- collapsed to one blue "matching" state (2026-10-28 follow-up).
-                                            $tallyBadge = match($row->customer->tally_match_status) {
-                                                'verified' => ['bg-label-success', 'Tally: Mapped'],
-                                                'suggested', 'similar' => ['bg-label-info', 'Tally: Matching — click to confirm'],
-                                                default => ['bg-label-danger', 'Tally: No Match — click to search'],
-                                            };
-                                        @endphp
-                                        <span class="badge {{ $tallyBadge[0] }} js-tally-badge d-inline-flex align-items-center justify-content-center"
-                                              style="cursor:pointer; font-size:0.6rem; font-weight:700; width:16px; height:16px; padding:0; margin:0 0 2px 4px; border-radius:50%; line-height:1;"
-                                              data-customer-id="{{ $row->customer->id }}"
-                                              title="{{ $tallyBadge[1] }} — once mapped, this customer's sales auto-update from Tally">
-                                            T
-                                        </span>
-                                    @endif
+                                    <div class="d-flex align-items-center gap-1">
+                                        @if($row->customer)
+                                            @php
+                                                // A compact "T" dot, placed BEFORE the name (not below it) -- per explicit
+                                                // request (2026-10-28) the badge used to sit on its own line under the
+                                                // input, which read as "below the name" rather than attached to it.
+                                                // Three states, not four: 'suggested' and 'similar' are both still just
+                                                // "a candidate exists, go confirm it" from a glance-at-the-grid point of
+                                                // view -- collapsed to one blue "matching" state.
+                                                $tallyBadge = match($row->customer->tally_match_status) {
+                                                    'verified' => ['bg-label-success', 'Tally: Mapped'],
+                                                    'suggested', 'similar' => ['bg-label-info', 'Tally: Matching — click to confirm'],
+                                                    default => ['bg-label-danger', 'Tally: No Match — click to search'],
+                                                };
+                                            @endphp
+                                            <span class="badge {{ $tallyBadge[0] }} js-tally-badge d-inline-flex align-items-center justify-content-center flex-shrink-0"
+                                                  style="cursor:pointer; font-size:0.6rem; font-weight:700; width:16px; height:16px; padding:0; border-radius:50%; line-height:1;"
+                                                  data-customer-id="{{ $row->customer->id }}"
+                                                  title="{{ $tallyBadge[1] }} — once mapped, this customer's sales auto-update from Tally">
+                                                T
+                                            </span>
+                                        @endif
+                                        <input type="text" class="excel-input row-field fw-semibold flex-grow-1" data-field="party_name"
+                                               value="{{ $row->party_name }}" style="font-size:0.72rem; min-width:0;"
+                                               @if($tallyLocked) readonly title="Locked — name verified against Tally" @endif>
+                                    </div>
                                 </td>
 
                                 <td class="col-status p-0 align-middle">
