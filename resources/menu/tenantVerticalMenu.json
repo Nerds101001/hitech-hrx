@@ -1149,22 +1149,28 @@
                 },
                 {
                     "url": "/tally-explorer/trend",
-                    "name": "Tally Explorer - Trend",
+                    "name": "Tally Explorer",
                     "slug": "tally-explorer.trend",
                     "roles": [
                         "admin",
                         "hr",
                         "accounts"
+                    ],
+                    "emails": [
+                        "mukul@rustx.com"
                     ]
                 },
                 {
                     "url": "/tally-explorer/purchases",
-                    "name": "Tally Explorer - Data",
+                    "name": "Tally Explorer",
                     "slug": "tally-explorer.purchases",
                     "roles": [
                         "admin",
                         "hr",
                         "accounts"
+                    ],
+                    "emails": [
+                        "ai@rustx.com"
                     ]
                 },
                 {
