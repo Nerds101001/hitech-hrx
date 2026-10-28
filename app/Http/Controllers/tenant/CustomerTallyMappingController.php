@@ -24,12 +24,20 @@ use Illuminate\Support\Facades\DB;
  */
 class CustomerTallyMappingController extends Controller
 {
+    /** Named accounts allowed to verify/map/sync a Tally match -- see canVerify()'s docblock. */
+    private const VERIFIER_EMAILS = ['ai@rustx.com', 'newbiz10@drbio.in']; // ai@rustx.com, Geet Kaur
+
     /**
      * Deliberately narrower than CustomerSetuMappingController::canVerify() (which this used to mirror) --
-     * per explicit request (2026-10-28), verifying/mapping/syncing a Tally match is CCare's job specifically,
-     * not every manager/New Biz agent/sales_report.manage holder that could reach it before. admin/hr keep
-     * override access, same as every other access rule in this codebase (SalesScope, SalesAccessGuard, etc.)
-     * -- not a request to lock the app's own administrators out of their own data.
+     * first narrowed to "CCare's job" (any isCcareAgent()), then per a further explicit request (2026-10-28)
+     * narrowed again to two specific named accounts: ai@rustx.com and Geet Kaur. Geet's real account
+     * (newbiz10@drbio.in) is in the New Biz department, not Customer Care, so isCcareAgent() would have
+     * excluded her entirely -- an identity check is what was actually asked for, not a department one.
+     * admin/hr keep override access, same as every other access rule in this codebase (SalesScope,
+     * SalesAccessGuard, etc.) -- not a request to lock the app's own administrators out of their own data.
+     * Either named account still only sees/edits customers in THEIR OWN sales book -- see
+     * customerVisibleToCurrentUser()/scopedCustomerQuery(), unchanged by this, already enforces that via
+     * SalesScope the same way the main Sales Report grid does.
      */
     private static function canVerify($user): bool
     {
@@ -37,7 +45,7 @@ class CustomerTallyMappingController extends Controller
             return false;
         }
         return $user->hasRole(['admin', 'Admin', 'super_admin', 'hr', 'HR'])
-            || $user->isCcareAgent();
+            || in_array(strtolower((string) $user->email), array_map('strtolower', self::VERIFIER_EMAILS), true);
     }
 
     private const FUZZY_FLOOR = 80.0;
