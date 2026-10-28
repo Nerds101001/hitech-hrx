@@ -885,6 +885,14 @@ class SalesPipelineController extends Controller
                     })
                     ->get();
 
+                // Warm SalesPipelineHandover's internal per-pipeline event cache
+                // for every pipeline in one batched query. heldInMonth() below
+                // (called once per target holder x month x pipeline) queries
+                // a single pipeline's events on its own the first time it sees
+                // that id uncached -- on production, where real handover history
+                // exists, that was thousands of one-row queries.
+                \App\Models\SalesPipelineHandover::eventsFor($achieverPipelinesAll->pluck('id')->all());
+
                 foreach ($targetHolderIds as $spId) {
                     $heldBeforeIds = $heldBeforeByUser[$spId] ?? [];
                     $achieverPipelines = $achieverPipelinesAll->filter(function ($p) use ($spId, $heldBeforeIds) {
