@@ -563,11 +563,13 @@
                                             // says enough in words; this one just needs to be glanceable by color, with the
                                             // actual status in the tooltip. Requested 2026-10-28: the old full-text version
                                             // ("Tally: Similar Match"/"Tally: Match Found") was too wide, crowding the row.
+                                            // Three states, not four: 'suggested' and 'similar' are both still just
+                                            // "a candidate exists, go confirm it" from a glance-at-the-grid point of
+                                            // view -- collapsed to one blue "matching" state (2026-10-28 follow-up).
                                             $tallyBadge = match($row->customer->tally_match_status) {
-                                                'verified' => ['bg-label-success', 'Tally: Verified'],
-                                                'suggested' => ['bg-label-warning', 'Tally: Match Found — click to confirm'],
-                                                'similar' => ['bg-label-info', 'Tally: Similar Match — click to review'],
-                                                default => ['bg-label-danger', 'Tally: Not Found — click to search'],
+                                                'verified' => ['bg-label-success', 'Tally: Mapped'],
+                                                'suggested', 'similar' => ['bg-label-info', 'Tally: Matching — click to confirm'],
+                                                default => ['bg-label-danger', 'Tally: No Match — click to search'],
                                             };
                                         @endphp
                                         <span class="badge {{ $tallyBadge[0] }} js-tally-badge d-inline-flex align-items-center justify-content-center"
