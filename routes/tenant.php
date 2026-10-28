@@ -381,16 +381,14 @@ Route::middleware([
     // Tally Explorer -- browse the raw Tally data synced into HRX (purchases,
     // purchase orders, payments, the stock-item master, the full ledger master).
     // Deliberately restricted to two named accounts, not a role -- replaces the former
-    // admin/HR/accounts-wide gate entirely. Trend (the Sales reconciliation view built/verified
-    // across this whole Tally accuracy effort) goes to mukul@rustx.com only; everything else in
-    // Tally Explorer (the read-only Purchases/Purchase Orders/Payments/Stock/Ledgers browsers, plus
-    // the local-only Quick Sync trigger) goes to ai@rustx.com only.
+    // admin/HR/accounts-wide gate entirely. ai@rustx.com sees everything in Tally Explorer;
+    // mukul@rustx.com sees Trend only; nobody else sees any of it.
     $tx = \App\Http\Controllers\tenant\TallyExplorerController::class;
     // Deliberately NOT 'tally.viewer' here -- that older gate is a single shared TALLY_VIEWER_EMAILS whitelist
     // covering Sales Sources/Customer Profile too (see RestrictTallyAccess's docblock), and adding Mukul to it
     // would grant him those other Tally-derived pages as well, not just Trend. restrict.email below is the
-    // precise, Trend-only gate that was actually asked for.
-    Route::middleware(['auth', \App\Http\Middleware\RelaxSalesSourcesSqlMode::class, 'restrict.email:mukul@rustx.com'])->prefix('tally-explorer')->name('tally-explorer.')->group(function () use ($tx) {
+    // precise gate that was actually asked for.
+    Route::middleware(['auth', \App\Http\Middleware\RelaxSalesSourcesSqlMode::class, 'restrict.email:ai@rustx.com,mukul@rustx.com'])->prefix('tally-explorer')->name('tally-explorer.')->group(function () use ($tx) {
       Route::get('', [$tx, 'index'])->name('index');
       Route::get('trend', [$tx, 'trend'])->name('trend');
       Route::get('trend/export', [$tx, 'trendExport'])->name('trend.export');

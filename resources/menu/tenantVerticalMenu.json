@@ -1157,20 +1157,8 @@
                         "accounts"
                     ],
                     "emails": [
+                        "ai@rustx.com",
                         "mukul@rustx.com"
-                    ]
-                },
-                {
-                    "url": "/tally-explorer/purchases",
-                    "name": "Tally Explorer",
-                    "slug": "tally-explorer.purchases",
-                    "roles": [
-                        "admin",
-                        "hr",
-                        "accounts"
-                    ],
-                    "emails": [
-                        "ai@rustx.com"
                     ]
                 },
                 {
