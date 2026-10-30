@@ -793,10 +793,35 @@ class TallyAnalytics
     }
 
     /** Price history, customers and recent bills for one item. $scope: 'period' (current filters) or 'all' (all loaded data). */
+    /**
+     * Item master specs (SKU code, colour, size, lamination, printing, description) from the
+     * StockItem collection -- see TallyGateway::stockItemsRequest()'s own doc comment for which of
+     * these are genuine Tally fields vs. this company's custom UDF ones. "SKU code" in particular is
+     * NOT a text code for this company -- confirmed live, 2026-10-30, against the company's own
+     * "SKU Report - Sales Order": it's a decimal, and it's the item's WEIGHT PER PIECE in Kg (e.g.
+     * 0.002 for a small bag). Looked up by item name only, not scoped by company -- this class has no
+     * company concept anywhere else either (Sales Sources already treats both companies as one
+     * unified dataset), and item names are effectively unique in practice.
+     */
+    private static function itemSpecs(string $name): ?array
+    {
+        $s = DB::table('tally_stock_items')->where('name', $name)->first();
+        if (!$s) {
+            return null;
+        }
+        return [
+            'sku_code' => $s->sku_code, 'colour' => $s->colour ?: null, 'size' => $s->size ?: null,
+            'lamination' => $s->lamination === null ? null : (bool) $s->lamination,
+            'printing' => $s->printing === null ? null : (bool) $s->printing,
+            'description' => $s->description ?: null,
+        ];
+    }
+
     public function item(string $name, ?string $unit, string $scope): array
     {
         $a = $scope === 'all' ? $this->withoutPeriod() : $this;
         return $a->remember('item', ['n' => $name, 'u' => $unit, 's' => $scope], function () use ($a, $name, $unit) {
+            $specs = self::itemSpecs($name);
             $lines = $a->sale()->where('l.item_name', $name)->when($unit !== null && $unit !== '', fn($w) => $w->where('l.unit', $unit), fn($w) => $w->where(fn($x) => $x->whereNull('l.unit')->orWhere('l.unit', '')))
                 ->orderBy('l.invoice_date')->orderBy('l.id')
                 ->get(['l.invoice_no', 'l.invoice_date', 'l.party_code', 'l.party_name', 'l.hsn', 'l.gst_rate', 'l.quantity', 'l.unit', 'l.rate', 'l.rate_unit', 'l.taxable_amount', 'l.tax_amount', 'l.product_group']);
@@ -806,7 +831,7 @@ class TallyAnalytics
                 $t = (clone $q)->selectRaw('COUNT(DISTINCT q.invoice_no) AS bills, COUNT(DISTINCT q.party_code) AS customers, SUM(q.quantity) AS qty')->first();
                 $recent = $q->orderByDesc('q.invoice_date')->limit(25)->get(['q.invoice_no', 'q.invoice_date', 'q.party_name', 'q.quantity', 'q.unit']);
                 return [
-                    'item' => $name, 'unit' => $unit, 'family' => ProductGroup::detect($name), 'value_detail' => false,
+                    'item' => $name, 'unit' => $unit, 'family' => ProductGroup::detect($name), 'value_detail' => false, 'specs' => $specs,
                     'kpis' => ['bills' => (int) $t->bills, 'customers' => (int) $t->customers, 'qty' => self::f($t->qty, 3)],
                     'recent' => $recent->map(fn($r) => ['date' => $r->invoice_date, 'invoice_no' => $r->invoice_no, 'party' => $r->party_name, 'qty' => $r->quantity === null ? null : (float) $r->quantity, 'unit' => $r->unit])->all(),
                     'range' => [$a->f['from'], $a->f['to']],
@@ -832,7 +857,7 @@ class TallyAnalytics
 
             return [
                 'item' => $name, 'unit' => $unit, 'family' => $lines->first()->product_group, 'hsn' => $lines->first()->hsn, 'gst' => $lines->first()->gst_rate === null ? null : (float) $lines->first()->gst_rate,
-                'value_detail' => true,
+                'value_detail' => true, 'specs' => $specs,
                 'kpis' => [
                     'taxable' => self::f($taxable), 'tax' => self::f($lines->sum('tax_amount')), 'qty' => round($qty, 3),
                     'bills' => $lines->pluck('invoice_no')->unique()->count(), 'customers' => $byParty->count(),
