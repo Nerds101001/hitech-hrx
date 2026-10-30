@@ -69,6 +69,8 @@ class AttendanceLogsExport implements FromQuery, WithTitle, WithHeadings, WithMa
         return match ($code) {
             'sp' => 'SP',
             'hp' => 'HP',
+            'sp_half' => 'SP (Half)',
+            'hp_half' => 'HP (Half)',
             'absent' => 'Absent',
             'miss-punch' => 'Miss Punch',
             'half-day' => 'Half-Day',

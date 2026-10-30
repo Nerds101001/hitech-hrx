@@ -35,8 +35,8 @@
 
     /* ── Header banner (identical recipe to .cp-hero) ───────────────────── */
     #lgPage .cp-hero {
-        position: relative; isolation: isolate; margin-bottom: 1.25rem; border-radius: 22px; overflow: hidden; color: #fff;
-        background: #0a2740; box-shadow: 0 14px 34px rgba(10,39,64,.20);
+        position: relative; isolation: isolate; margin-bottom: .8rem; border-radius: 16px; overflow: hidden; color: #fff;
+        background: #0a2740; box-shadow: 0 8px 20px rgba(10,39,64,.18);
         animation: lgRise .5s ease backwards;
     }
     #lgPage .cp-hero-bg {
@@ -61,19 +61,23 @@
     @keyframes lgDrift { from { transform: translate(0,0) scale(1); } to { transform: translate(-70px,46px) scale(1.14); } }
     @keyframes lgRise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
 
-    #lgPage .cp-hero-top { position: relative; display: flex; align-items: center; gap: 1.5rem; padding: 1.9rem 2.1rem 1.6rem; }
+    #lgPage .cp-hero-top { position: relative; display: flex; align-items: center; gap: .9rem; padding: .9rem 1.3rem .7rem; }
     #lgPage .cp-hero-logo {
-        width: 92px; height: 92px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; border-radius: 22px;
-        background: #fff; color: #0f4c75; font-size: 2rem; font-weight: 800; letter-spacing: .01em;
-        box-shadow: 0 10px 28px rgba(0,0,0,.20);
+        width: 54px; height: 54px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; border-radius: 14px;
+        background: #fff; color: #0f4c75; font-size: 1.2rem; font-weight: 800; letter-spacing: .01em;
+        box-shadow: 0 6px 16px rgba(0,0,0,.18);
     }
     #lgPage .cp-hero-info { min-width: 0; flex: 1; }
-    #lgPage .cp-hero-meta { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; margin-bottom: .55rem; font-size: .8rem; color: rgba(255,255,255,.80); }
+    #lgPage .cp-hero-meta { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; margin-bottom: .3rem; font-size: .72rem; color: rgba(255,255,255,.80); }
     #lgPage .cp-hero-since i { margin-right: 4px; opacity: .85; }
-    #lgPage .cp-hero-title { margin: 0 0 .8rem; font-size: 2rem; font-weight: 700; line-height: 1.15; letter-spacing: -.025em; color: #fff !important; }
-    #lgPage .cp-hero-tags { display: flex; flex-wrap: wrap; gap: .5rem; }
+    #lgPage .cp-hero-title { margin: 0 0 .4rem; font-size: 1.25rem; font-weight: 700; line-height: 1.2; letter-spacing: -.02em; color: #fff !important; }
+    #lgPage .cp-hero-alias { margin-left: .5rem; font-size: .85rem; font-weight: 500; color: rgba(255,255,255,.65); }
+    #lgPage .cp-hero-address { flex-shrink: 0; max-width: 300px; margin-left: 1rem; text-align: right; align-self: flex-start; }
+    #lgPage .cp-hero-address .lbl { font-size: .62rem; text-transform: uppercase; letter-spacing: .04em; color: rgba(255,255,255,.55); font-weight: 700; display: flex; align-items: center; justify-content: flex-end; gap: 3px; }
+    #lgPage .cp-hero-address .val { margin-top: 2px; font-size: .74rem; line-height: 1.4; color: rgba(255,255,255,.9); }
+    #lgPage .cp-hero-tags { display: flex; flex-wrap: wrap; gap: .4rem; }
     #lgPage .cp-tag {
-        display: inline-flex; align-items: center; gap: .4rem; padding: 5px 12px; border-radius: 999px; font-size: .78rem; font-weight: 500; color: #fff;
+        display: inline-flex; align-items: center; gap: .35rem; padding: 3px 9px; border-radius: 999px; font-size: .7rem; font-weight: 500; color: #fff;
         background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.18); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
         min-width: 0;
     }
@@ -81,6 +85,16 @@
     #lgPage .cp-tag i { font-size: .95rem; opacity: .85; }
     #lgPage a.cp-tag { text-decoration: none; transition: background-color .15s ease; }
     #lgPage a.cp-tag:hover { background: rgba(255,255,255,.22); color: #fff; }
+    #lgPage .lg-copy-btn {
+        display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; margin-left: 2px;
+        padding: 0; border: 0; border-radius: 5px; background: rgba(255,255,255,.14); color: inherit; cursor: pointer;
+        font-size: .72rem; line-height: 1; vertical-align: -3px; transition: background-color .15s ease, color .15s ease;
+    }
+    #lgPage .lg-copy-btn:hover { background: rgba(255,255,255,.3); }
+    #lgPage .lg-copy-btn.copied { background: #16a34a; color: #fff; }
+    #lgPage .lg-copy-btn.light { background: var(--cp-soft); color: var(--cp-muted); vertical-align: -2px; }
+    #lgPage .lg-copy-btn.light:hover { background: var(--cp-line); }
+    #lgPage .lg-copy-btn.light.copied { background: #16a34a; color: #fff; }
     #lgPage .cp-pill {
         display: inline-flex; align-items: center; gap: 6px; padding: 3px 11px; border-radius: 999px; font-size: .75rem; font-weight: 600;
         background: rgba(34,197,94,.20); border: 1px solid rgba(74,222,128,.42); color: #bbf7d0;
@@ -88,58 +102,60 @@
     #lgPage .cp-pill::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: #4ade80; box-shadow: 0 0 0 3px rgba(74,222,128,.22); }
     #lgPage .cp-pill.cp-pill-warn { background: rgba(234,179,8,.20); border-color: rgba(253,224,71,.42); color: #fef08a; }
     #lgPage .cp-pill.cp-pill-warn::before { background: #facc15; box-shadow: 0 0 0 3px rgba(250,204,21,.22); }
-    #lgPage .cp-hero-actions { position: absolute; top: 1.9rem; right: 2.1rem; display: flex; gap: .6rem; }
+    #lgPage .cp-hero-actions { position: absolute; top: .9rem; right: 1.3rem; display: flex; gap: .5rem; }
 
     /* key figures: a glass strip along the bottom of the banner */
     #lgPage .cp-kpis {
-        position: relative; display: grid; grid-template-columns: repeat(var(--lg-kpi-cols, 5), minmax(0, 1fr)); margin: 0 1.6rem 1.6rem; padding: 1.15rem .3rem; border-radius: 18px;
+        position: relative; display: grid; grid-template-columns: repeat(var(--lg-kpi-cols, 5), minmax(0, 1fr)); margin: 0 1rem .9rem; padding: .55rem .2rem; border-radius: 13px;
         background: rgba(255,255,255,.10); border: 1px solid rgba(255,255,255,.16);
         -webkit-backdrop-filter: blur(14px) saturate(140%); backdrop-filter: blur(14px) saturate(140%);
     }
-    #lgPage .cp-kpi { display: flex; align-items: center; gap: .9rem; min-width: 0; padding: .2rem 1.25rem; }
+    #lgPage .cp-kpi { display: flex; align-items: center; gap: .6rem; min-width: 0; padding: .1rem .85rem; }
     #lgPage .cp-kpi + .cp-kpi { border-left: 1px solid rgba(255,255,255,.15); }
-    #lgPage .cp-kpi-icon { width: 46px; height: 46px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; border-radius: 13px; font-size: 1.4rem; }
+    #lgPage .cp-kpi-icon { width: 32px; height: 32px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; border-radius: 9px; font-size: 1rem; }
     #lgPage .tone-blue   { background: #e3edff; color: #2563eb; }
     #lgPage .tone-violet { background: #ece8ff; color: #7c3aed; }
     #lgPage .tone-green  { background: #dcfce9; color: #16a34a; }
     #lgPage .tone-cyan   { background: #d5f5fb; color: #0891b2; }
     #lgPage .tone-amber  { background: #ffead6; color: #ea580c; }
     #lgPage .cp-kpi-body { min-width: 0; }
-    #lgPage .cp-kpi-value { display: flex; flex-wrap: wrap; align-items: baseline; gap: .1rem .5rem; font-size: 1.55rem; font-weight: 700; line-height: 1.15; letter-spacing: -.02em; color: #fff; font-variant-numeric: tabular-nums; }
-    #lgPage .cp-kpi-value.is-text { font-size: 1.2rem; }
-    #lgPage .cp-kpi-label { margin-top: 2px; font-size: .82rem; color: rgba(255,255,255,.88); }
-    #lgPage .cp-kpi-sub { font-size: .72rem; line-height: 1.4; color: rgba(255,255,255,.64); }
+    #lgPage .cp-kpi-value { display: flex; flex-wrap: wrap; align-items: baseline; gap: .1rem .4rem; font-size: 1.1rem; font-weight: 700; line-height: 1.15; letter-spacing: -.02em; color: #fff; font-variant-numeric: tabular-nums; }
+    #lgPage .cp-kpi-value.is-text { font-size: .95rem; }
+    #lgPage .cp-kpi-label { margin-top: 1px; font-size: .68rem; color: rgba(255,255,255,.88); }
+    #lgPage .cp-kpi-sub { font-size: .62rem; line-height: 1.3; color: rgba(255,255,255,.64); }
+
+    #lgPage .cp-hero-warn {
+        margin: 0 1.3rem .9rem; padding: .5rem .8rem; border-radius: 10px; font-size: .74rem; line-height: 1.4;
+        background: rgba(250,204,21,.14); border: 1px solid rgba(250,204,21,.3); color: #fef08a;
+    }
+    #lgPage .cp-hero-warn i { margin-right: 4px; }
+    @media (max-width: 575px) {
+        #lgPage .cp-hero-warn { margin: 0 .75rem .8rem; }
+    }
     @media (max-width: 1199px) {
         #lgPage .cp-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); row-gap: 1.1rem; }
         #lgPage .cp-kpi:nth-child(3n+1) { border-left: 0; }
     }
     @media (max-width: 991px) {
-        #lgPage .cp-hero-top { flex-wrap: wrap; padding: 1.4rem 1.3rem 1.2rem; }
+        #lgPage .cp-hero-top { flex-wrap: wrap; }
         #lgPage .cp-hero-actions { position: static; width: 100%; }
-        #lgPage .cp-hero-title { font-size: 1.6rem; }
-        #lgPage .cp-kpis { margin: 0 1rem 1rem; }
     }
     @media (max-width: 767px) {
-        #lgPage .cp-hero-top { padding: 1.2rem 1.2rem 1rem; }
-        #lgPage .cp-hero-logo { width: 72px; height: 72px; border-radius: 18px; font-size: 1.6rem; }
-        #lgPage .cp-kpis { display: flex; gap: .6rem; margin: 0 1rem 1rem; padding: .6rem; overflow-x: auto; scroll-snap-type: x proximity; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+        #lgPage .cp-kpis { display: flex; gap: .5rem; margin: 0 1rem .8rem; padding: .5rem; overflow-x: auto; scroll-snap-type: x proximity; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
         #lgPage .cp-kpis::-webkit-scrollbar { display: none; }
-        #lgPage .cp-kpi, #lgPage .cp-kpi:nth-child(n) { flex: 0 0 auto; width: min(46%, 260px); gap: .7rem; padding: .6rem .8rem; border: 1px solid rgba(255,255,255,.14); border-radius: 13px; background: rgba(255,255,255,.07); scroll-snap-align: start; }
-        #lgPage .cp-kpi-icon { width: 40px; height: 40px; border-radius: 11px; font-size: 1.2rem; }
+        #lgPage .cp-kpi, #lgPage .cp-kpi:nth-child(n) { flex: 0 0 auto; width: min(46%, 220px); gap: .5rem; padding: .4rem .6rem; border: 1px solid rgba(255,255,255,.14); border-radius: 11px; background: rgba(255,255,255,.07); scroll-snap-align: start; }
     }
     @media (max-width: 575px) {
-        #lgPage .cp-hero { margin-bottom: .9rem; border-radius: 18px; }
-        #lgPage .cp-hero-top { display: grid; grid-template-columns: 56px minmax(0, 1fr); align-items: center; gap: .55rem .8rem; padding: 1rem 1rem .8rem; }
+        #lgPage .cp-hero-top { display: grid; grid-template-columns: 46px minmax(0, 1fr); align-items: center; gap: .5rem .7rem; }
         #lgPage .cp-hero-info { display: contents; }
-        #lgPage .cp-hero-logo { grid-row: 1 / span 2; width: 56px; height: 56px; border-radius: 15px; font-size: 1.2rem; }
-        #lgPage .cp-hero-meta { grid-column: 2; gap: .5rem; margin: 0; font-size: .74rem; }
-        #lgPage .cp-hero-title { grid-column: 2; margin: 0; font-size: 1.25rem; line-height: 1.2; overflow-wrap: anywhere; }
-        #lgPage .cp-hero-tags { grid-column: 1 / -1; gap: .4rem; }
-        #lgPage .cp-tag { max-width: 100%; padding: 4px 10px; font-size: .75rem; }
-        #lgPage .cp-kpis { margin: 0 .75rem .8rem; }
-        #lgPage .cp-kpi, #lgPage .cp-kpi:nth-child(n) { width: min(78%, 250px); }
-        #lgPage .cp-kpi-value { font-size: 1.3rem; }
-        #lgPage .cp-kpi-value.is-text { font-size: 1.05rem; }
+        #lgPage .cp-hero-logo { grid-row: 1 / span 2; width: 46px; height: 46px; border-radius: 12px; font-size: 1rem; }
+        #lgPage .cp-hero-meta { grid-column: 2; margin: 0; }
+        #lgPage .cp-hero-title { grid-column: 2; margin: 0; font-size: 1.1rem; overflow-wrap: anywhere; }
+        #lgPage .cp-hero-tags { grid-column: 1 / -1; }
+        #lgPage .cp-hero-address { grid-column: 1 / -1; max-width: none; margin: .5rem 0 0; text-align: left; }
+        #lgPage .cp-hero-address .lbl { justify-content: flex-start; }
+        #lgPage .cp-kpis { margin: 0 .75rem .7rem; }
+        #lgPage .cp-kpi, #lgPage .cp-kpi:nth-child(n) { width: min(78%, 220px); }
     }
 
     /* ── Cards (identical recipe to .cp-card) ───────────────────────────── */
@@ -149,8 +165,8 @@
         animation: lgRise .55s ease backwards; overflow: hidden;
     }
     #lgPage .cp-card:hover { box-shadow: var(--cp-shadow-hover) !important; border-color: var(--cp-line) !important; }
-    #lgPage .cp-card-body { padding: 1.3rem 1.45rem; }
-    #lgPage .cp-card-head { display: flex; align-items: baseline; justify-content: space-between; gap: .5rem; padding: 1.3rem 1.45rem .4rem; flex-wrap: wrap; }
+    #lgPage .cp-card-body { padding: .9rem 1.1rem; }
+    #lgPage .cp-card-head { display: flex; align-items: baseline; justify-content: space-between; gap: .5rem; padding: .9rem 1.1rem .3rem; flex-wrap: wrap; }
     #lgPage .cp-card h6, #lgPage .cp-card-head h6 { display: flex; align-items: center; gap: .65rem; margin: 0; font-size: .95rem; font-weight: 600 !important; letter-spacing: -.005em; color: var(--cp-ink); }
     #lgPage .cp-card h6 > i.bx, #lgPage .cp-card-head h6 > i.bx {
         width: 30px; height: 30px; margin: 0 !important; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
@@ -158,7 +174,9 @@
     }
     #lgPage .cp-sub { font-size: .72rem; color: var(--cp-faint); }
 
-    /* terms list (inside a cp-card) */
+    /* terms list (inside a cp-card) -- single column: this card now sits 1-of-4 across a row (2026-10-29),
+       so there isn't the spare width a 2-column split needs for its now-longer field list (registration
+       type, credit period, TDS/TCS, notes, last synced all moved in here from the header). */
     #lgPage .lg-terms > div { display: flex; justify-content: space-between; gap: .5rem; padding: .42rem 0; border-bottom: 1px dashed #eef2f6; }
     #lgPage .lg-terms > div:last-child { border-bottom: 0; }
     #lgPage .lg-t-lbl { font-size: .78rem; color: var(--cp-muted); }
@@ -270,7 +288,13 @@
 @endphp
 <div id="lgPage" class="layout-full-width">
   <div class="lg-inner">
+    {{-- "Back to Ledgers" only makes sense for full Tally Explorer access -- for anyone who reached this
+         page from their own Sales Report (customerIdForLinks set), that page is a different, admin-only
+         listing they may not even have access to, so no back link is shown here at all; their own browser
+         back takes them to the Sales Report they came from. --}}
+    @unless($customerIdForLinks)
     <a href="{{ route('tally-explorer.ledgers') }}" class="lg-back"><i class="bx bx-chevron-left"></i> Back to Ledgers</a>
+    @endunless
 
     {{-- ── Header banner, with the key figures in a glass strip (same recipe as the CRM Customer Profile) ── --}}
     <section class="cp-hero">
@@ -284,15 +308,30 @@
                         <span class="cp-pill {{ (float)$ledger->closing_balance < 0 ? 'cp-pill-warn' : '' }}">{{ $isCustomer && $isSupplier ? 'Customer & Supplier' : ($isCustomer ? 'Customer' : 'Supplier') }}</span>
                     @endif
                     <span class="cp-hero-since"><i class="bx bx-folder"></i>{{ $ledger->primary_group ?: 'Ledger' }}@if($ledger->ledger_group && $ledger->ledger_group !== $ledger->primary_group) &middot; {{ $ledger->ledger_group }}@endif</span>
+                    <span class="cp-hero-since"><i class="bx bx-buildings"></i>{{ $companyLabel }}</span>
                 </div>
-                <h1 class="cp-hero-title">{{ $ledger->name }}</h1>
+                {{-- Alias sits with the name itself, per explicit request (2026-10-29), rather than as its
+                     own field further down. --}}
+                <h1 class="cp-hero-title">{{ $ledger->name }}@if($ledger->alias ?? null)<span class="cp-hero-alias">({{ $ledger->alias }})</span>@endif</h1>
                 <div class="cp-hero-tags">
-                    @if($ledger->gstin)<span class="cp-tag"><i class="bx bx-id-card"></i><span>{{ $ledger->gstin }}</span></span>@endif
+                    @if($displayGstin)<span class="cp-tag" title="{{ $gstinFromInvoicesOnly ? 'Not set in Tally\'s ledger master — taken from invoices billed to this party' : '' }}"><i class="bx bx-id-card"></i><span>{{ $displayGstin }}</span>@if($gstinFromInvoicesOnly)<i class="bx bx-info-circle" style="opacity:.7;"></i>@endif<button type="button" class="lg-copy-btn" data-copy="{{ $displayGstin }}" title="Copy GSTIN"><i class="bx bx-copy"></i></button></span>@endif
                     @if($ledger->pan)<span class="cp-tag"><i class="bx bx-credit-card-front"></i><span>PAN {{ $ledger->pan }}</span></span>@endif
                     @if($ledger->contact_person)<span class="cp-tag"><i class="bx bx-user"></i><span>{{ $ledger->contact_person }}</span></span>@endif
+                    @if($ledger->email)<a class="cp-tag" href="mailto:{{ $ledger->email }}"><i class="bx bx-envelope"></i><span>{{ $ledger->email }}</span></a>@endif
                     @if($ledger->contact_mobile)<a class="cp-tag" href="tel:{{ $ledger->contact_mobile }}"><i class="bx bx-phone"></i><span>{{ $ledger->contact_mobile }}</span></a>@endif
                 </div>
             </div>
+            {{-- Address, with state/country/pincode folded in and a copy button -- the opposite corner from
+                 the name, per explicit request (2026-10-29). --}}
+            @if($ledger->address || $ledger->state || $ledger->country || $ledger->pincode)
+            @php
+                $__addrFull = trim(implode(', ', array_filter([$ledger->address, $ledger->state, $ledger->country, $ledger->pincode])));
+            @endphp
+            <div class="cp-hero-address">
+                <div class="lbl"><i class="bx bx-map"></i> Address</div>
+                <div class="val">{{ $__addrFull }}<button type="button" class="lg-copy-btn" data-copy="{{ $__addrFull }}" title="Copy address"><i class="bx bx-copy"></i></button></div>
+            </div>
+            @endif
         </div>
 
         <div class="cp-kpis" style="--lg-kpi-cols: {{ $__kpiCols }};">
@@ -348,6 +387,12 @@
             </div>
             @endunless
         </div>
+
+        @if($invoiceGstins->count() > 1)
+          <div class="cp-hero-warn"><i class="bx bx-error-circle"></i> Multiple GSTINs seen across invoices:
+            @foreach($invoiceGstins as $g){{ $g->gstin }} ({{ $g->invoice_count }} inv., last {{ \Illuminate\Support\Carbon::parse($g->last_seen)->format('d M Y') }}){{ !$loop->last ? ', ' : '' }}@endforeach
+          </div>
+        @endif
     </section>
 
     {{-- ── CRM linkage: this ledger's matching crm_client_mappings record, if any (same normalized-name
@@ -366,35 +411,10 @@
       <div class="lg-crm-unlinked"><i class="bx bx-unlink"></i> No matching CRM client record found for this ledger name &mdash; contacts, calls, tasks and notes live in the CRM module once one is mapped.</div>
     @endif
 
-    {{-- Full Tally master record -- every field synced for this ledger, not just the handful used above --}}
-    <div class="cp-card mb-4">
-      <div class="cp-card-head"><h6><i class="bx bx-id-card"></i> Ledger details</h6><span class="cp-sub">full Tally master record</span></div>
-      <div class="cp-card-body">
-        <div class="lg-fields">
-          @php
-            $__fields = [
-              'Name' => $ledger->name, 'Mailing name' => $ledger->mailing_name,
-              'Alias' => $ledger->alias ?? null, 'Company (Tally)' => $ledger->company,
-              'Primary group' => $ledger->primary_group, 'Ledger group' => $ledger->ledger_group,
-              'GSTIN' => $ledger->gstin, 'PAN' => $ledger->pan,
-              'Contact person' => $ledger->contact_person, 'Contact mobile' => $ledger->contact_mobile,
-              'Email' => $ledger->email, 'Address' => $ledger->address,
-              'State' => $ledger->state, 'Country' => $ledger->country, 'Pincode' => $ledger->pincode,
-              'Closing balance' => $ledger->closing_balance !== null ? $c($ledger->closing_balance) : null,
-              'Credit limit' => $ledger->credit_limit !== null ? $c($ledger->credit_limit) : null,
-              'Last synced from Tally' => $ledger->synced_at ? \Illuminate\Support\Carbon::parse($ledger->synced_at)->format('d M Y, h:i A') : null,
-            ];
-          @endphp
-          @foreach($__fields as $__lbl => $__val)
-            <div><div class="lg-field-lbl">{{ $__lbl }}</div><div class="lg-field-val {{ $__val ? '' : 'empty' }}">{{ $__val ?: 'Not set in Tally' }}</div></div>
-          @endforeach
-        </div>
-      </div>
-    </div>
-
-    {{-- Terms & credit detail --}}
+    {{-- Terms & credit | Monthly activity | Outstanding | Payment Receipts -- 1 row, 4 columns, per
+         explicit request (2026-10-29). --}}
     <div class="row g-4 mb-4">
-      <div class="col-12 col-lg-5">
+      <div class="col-12 col-md-6 col-xl-3">
         <div class="cp-card h-100"><div class="cp-card-body">
           <h6 class="mb-3"><i class="bx bx-receipt"></i> Terms &amp; credit</h6>
           <div class="lg-terms">
@@ -404,6 +424,14 @@
             <div><span class="lg-t-lbl">Payment terms (typical)</span><span class="lg-t-val">{{ $terms['credit_days_typical'] !== null ? $terms['credit_days_typical'].' days' : '—' }}@if($terms['credit_days_max'] !== null && $terms['credit_days_max'] !== $terms['credit_days_typical'])<span class="lg-t-sub"> (up to {{ $terms['credit_days_max'] }})</span>@endif</span></div>
             <div><span class="lg-t-lbl">Open bills</span><span class="lg-t-val">{{ number_format($kpi['bills_open']) }}</span></div>
             <div><span class="lg-t-lbl">Group</span><span class="lg-t-val sm">{{ $ledger->ledger_group ?: '—' }}</span></div>
+            {{-- Moved in from the header (2026-10-29): registration type, credit period, TDS/TCS, notes,
+                 last synced -- all account/terms detail, so this is where they belong. --}}
+            <div><span class="lg-t-lbl">Registration type</span><span class="lg-t-val sm">{{ $ledger->registration_type ?: 'Not set in Tally' }}</span></div>
+            <div><span class="lg-t-lbl">Credit period</span><span class="lg-t-val sm">{{ $ledger->credit_period ?: 'Not set in Tally' }}</span></div>
+            <div><span class="lg-t-lbl">TDS applicable</span><span class="lg-t-val sm">{{ isset($ledger->tds_applicable) && $ledger->tds_applicable !== null ? ((int) $ledger->tds_applicable ? 'Yes' : 'No') : '—' }}</span></div>
+            <div><span class="lg-t-lbl">TCS applicable</span><span class="lg-t-val sm">{{ isset($ledger->tcs_applicable) && $ledger->tcs_applicable !== null ? ((int) $ledger->tcs_applicable ? 'Yes' : 'No') : '—' }}</span></div>
+            @if($ledger->narration)<div><span class="lg-t-lbl">Notes</span><span class="lg-t-val sm">{{ $ledger->narration }}</span></div>@endif
+            @if($ledger->synced_at)<div><span class="lg-t-lbl">Last synced from Tally</span><span class="lg-t-val sm">{{ \Illuminate\Support\Carbon::parse($ledger->synced_at)->format('d M Y, h:i A') }}</span></div>@endif
           </div>
           @if($terms['utilisation'] !== null)
             <div class="mt-3"><div class="lg-util-bar"><span style="width:{{ min(100, $terms['utilisation']) }}%; background:{{ $terms['utilisation'] > 100 ? 'var(--cp-bad)' : ($terms['utilisation'] > 80 ? 'var(--cp-warn)' : 'var(--cp-brand)') }};"></span></div>
@@ -411,7 +439,7 @@
           @endif
         </div></div>
       </div>
-      <div class="col-12 col-lg-7">
+      <div class="col-12 col-md-6 col-xl-3">
         @if($trend->isNotEmpty())
         <div class="cp-card h-100">
           <div class="cp-card-head"><h6><i class="bx bx-bar-chart-alt-2"></i> Monthly activity</h6><span class="cp-sub">sales &amp; purchases by month</span></div>
@@ -419,6 +447,57 @@
         </div>
         @endif
       </div>
+
+      @if($outstanding->isNotEmpty())
+      <div class="col-12 col-md-6 col-xl-3">
+        <div class="cp-card h-100">
+          <div class="cp-card-head"><h6><i class="bx bx-time-five"></i> Outstanding ({{ $outstanding->count() }} bill{{ $outstanding->count() === 1 ? '' : 's' }})</h6>
+            <span class="cp-sub">
+              @foreach($ageing as $b => $amt)@if($amt != 0)<span class="lg-age">{{ $b }}d: {{ $c($amt) }}</span>@endif @endforeach
+            </span>
+          </div>
+          <div class="table-responsive" style="max-height:400px;overflow:auto;">
+            <table class="table table-sm align-middle mb-0">
+              <thead style="position:sticky;top:0;"><tr><th>Bill</th><th>Date</th><th class="lg-num">Age (d)</th><th class="lg-num">Amount (₹)</th><th></th></tr></thead>
+              <tbody>
+              @foreach($outstanding as $b)
+                @php $age = $b->bill_date ? (int) \Illuminate\Support\Carbon::parse($b->bill_date)->startOfDay()->diffInDays(now()->startOfDay()) : null; @endphp
+                <tr class="cp-inv-row" data-invoice="{{ $b->bill_ref }}" data-url="{{ $billUrl }}" tabindex="0" role="button" title="Open the items on this bill">
+                  <td class="fw-semibold">{{ $b->bill_ref ?: '—' }}</td>
+                  <td class="cp-sub">{{ $b->bill_date ? \Illuminate\Support\Carbon::parse($b->bill_date)->format('d M Y') : '—' }}</td>
+                  <td class="lg-num {{ $age !== null && $age > 90 ? 'text-danger fw-semibold' : '' }}">{{ $age ?? '—' }}</td>
+                  <td class="lg-num fw-semibold">{{ number_format((float)$b->amount, 0) }}</td>
+                  <td class="cp-xs-hide"><a href="{{ $pdfUrlBase }}{{ urlencode($b->bill_ref) }}" target="_blank" rel="noopener" title="Download PDF" onclick="event.stopPropagation()"><i class="bx bxs-file-pdf" style="font-size:1.1rem;color:#b42318;"></i></a></td>
+                </tr>
+              @endforeach
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      @endif
+
+      @if($allReceipts->isNotEmpty())
+      <div class="col-12 col-md-6 col-xl-3">
+        <div class="cp-card h-100">
+          <div class="cp-card-head"><h6><i class="bx bx-wallet"></i> Payment Receipts ({{ $allReceipts->count() }})</h6><span class="cp-sub">every payment received</span></div>
+          <div class="table-responsive" style="max-height:400px;overflow:auto;">
+            <table class="table table-sm align-middle mb-0">
+              <thead style="position:sticky;top:0;"><tr><th>Date</th><th>Receipt No</th><th class="lg-num">Amount (₹)</th></tr></thead>
+              <tbody>
+              @foreach($allReceipts as $r)
+                <tr>
+                  <td class="cp-sub">{{ $r->receipt_date ? \Illuminate\Support\Carbon::parse($r->receipt_date)->format('d M Y') : '—' }}</td>
+                  <td class="fw-semibold">{{ $r->receipt_no ?: '—' }}</td>
+                  <td class="lg-num fw-semibold">{{ number_format((float)$r->amount, 0) }}</td>
+                </tr>
+              @endforeach
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      @endif
     </div>
 
     @if($crmMapping)
@@ -498,28 +577,27 @@
     </div>
     @endif
 
+
+    {{-- Pending Sale Orders | All Invoices | Recent deliveries -- 1 row, 3 columns, per explicit request
+         (2026-10-29). Each still scrolls internally (vertically for the order/delivery lists, both ways
+         for the wide All Invoices table) so nothing is cut off by the narrower column. --}}
+    @if($pendingSaleOrders->isNotEmpty() || $allInvoices->isNotEmpty() || $deliveries->isNotEmpty())
     <div class="row g-4 mb-4">
-      {{-- Outstanding bills + ageing --}}
-      @if($outstanding->isNotEmpty())
-      <div class="col-12 col-xl-7">
+      @if($pendingSaleOrders->isNotEmpty())
+      <div class="col-12 col-xl-4">
         <div class="cp-card h-100">
-          <div class="cp-card-head"><h6><i class="bx bx-time-five"></i> Outstanding ({{ $outstanding->count() }} bill{{ $outstanding->count() === 1 ? '' : 's' }})</h6>
-            <span class="cp-sub">
-              @foreach($ageing as $b => $amt)@if($amt != 0)<span class="lg-age">{{ $b }}d: {{ $c($amt) }}</span>@endif @endforeach
-            </span>
-          </div>
-          <div class="table-responsive" style="max-height:360px;overflow:auto;">
+          <div class="cp-card-head"><h6><i class="bx bx-hourglass"></i> Pending Sale Orders ({{ $pendingSaleOrders->count() }})</h6><span class="cp-sub">not yet billed</span></div>
+          <div class="table-responsive" style="max-height:420px;overflow:auto;">
             <table class="table table-sm align-middle mb-0">
-              <thead style="position:sticky;top:0;"><tr><th>Bill</th><th>Date</th><th class="lg-num">Age (d)</th><th class="lg-num">Terms</th><th class="lg-num">Amount (₹)</th></tr></thead>
+              <thead style="position:sticky;top:0;"><tr><th>Date</th><th>Order No</th><th>Status</th><th class="lg-num">Qty</th><th class="lg-num">Amount (₹)</th></tr></thead>
               <tbody>
-              @foreach($outstanding as $b)
-                @php $age = $b->bill_date ? (int) \Illuminate\Support\Carbon::parse($b->bill_date)->startOfDay()->diffInDays(now()->startOfDay()) : null; @endphp
+              @foreach($pendingSaleOrders as $o)
                 <tr>
-                  <td class="fw-semibold">{{ $b->bill_ref ?: '—' }}</td>
-                  <td class="cp-sub">{{ $b->bill_date ? \Illuminate\Support\Carbon::parse($b->bill_date)->format('d M Y') : '—' }}</td>
-                  <td class="lg-num {{ $age !== null && $age > 90 ? 'text-danger fw-semibold' : '' }}">{{ $age ?? '—' }}</td>
-                  <td class="lg-num cp-sub">{{ $b->credit_days !== null ? $b->credit_days : '—' }}</td>
-                  <td class="lg-num fw-semibold">{{ number_format((float)$b->amount, 0) }}</td>
+                  <td class="cp-sub">{{ $o->order_date ? \Illuminate\Support\Carbon::parse($o->order_date)->format('d M Y') : '—' }}</td>
+                  <td class="fw-semibold">{{ $o->order_no ?: '—' }}</td>
+                  <td class="cp-sub">{{ $o->status ?: '—' }}</td>
+                  <td class="lg-num">{{ $o->quantity !== null ? number_format((float)$o->quantity, 2) : '—' }} <span class="cp-sub">{{ $o->unit }}</span></td>
+                  <td class="lg-num fw-semibold">{{ number_format((float)$o->amount, 0) }}</td>
                 </tr>
               @endforeach
               </tbody>
@@ -529,50 +607,145 @@
       </div>
       @endif
 
-      {{-- Recent activity feed --}}
-      <div class="col-12 {{ $outstanding->isNotEmpty() ? 'col-xl-5' : '' }}">
+      @if($allInvoices->isNotEmpty())
+      <div class="col-12 col-xl-4">
         <div class="cp-card h-100">
-          <div class="cp-card-head"><h6><i class="bx bx-history"></i> Recent activity</h6></div>
-          <div class="cp-card-body">
-            @forelse($feed as $f)
-              <div class="lg-feed">
-                <span class="lg-feed-dot {{ $f['dir'] }}"></span>
-                <div class="lg-feed-main">
-                  <div class="lg-feed-top"><span class="lg-feed-type">{{ $f['type'] }}</span> <span class="lg-feed-ref">{{ $f['ref'] }}</span></div>
-                  <div class="cp-sub">{{ $f['date'] ? \Illuminate\Support\Carbon::parse($f['date'])->format('d M Y') : '—' }}@if(!empty($f['note'])) · {{ \Illuminate\Support\Str::limit($f['note'], 24) }}@endif</div>
-                </div>
-                <div class="lg-feed-amt {{ $f['dir'] }}">{{ $f['dir'] === 'in' ? '+' : '−' }}{{ number_format($f['amount'], 0) }}</div>
-              </div>
-            @empty
-              <div class="text-center text-muted py-4">No transactions on record.</div>
-            @endforelse
+          <div class="cp-card-head"><h6><i class="bx bx-receipt"></i> All Invoices ({{ $allInvoices->count() }})</h6><span class="cp-sub">click a row for items &amp; GST, or the PDF icon for a quick-reference copy</span></div>
+          <div class="table-responsive" style="max-height:420px;overflow:auto;">
+            <table class="table table-sm align-middle mb-0">
+              <thead style="position:sticky;top:0;"><tr><th>Date</th><th>Invoice No</th><th>Unit</th><th>Items</th><th>GSTIN</th><th>Salesperson</th><th>LR No</th><th>Transporter</th><th>Destination</th><th>PO No</th><th class="lg-num">Taxable (₹)</th><th class="lg-num">GST (₹)</th><th class="lg-num">Amount (₹)</th><th></th></tr></thead>
+              <tbody>
+              @foreach($allInvoices as $inv)
+                @php
+                  $__invExtra = $inv->extra ? json_decode($inv->extra, true) : [];
+                  $__items = $itemsByInvoice[$inv->invoice_no] ?? [];
+                  $__itemsText = implode(', ', $__items);
+                @endphp
+                <tr class="cp-inv-row" data-invoice="{{ $inv->invoice_no }}" data-url="{{ $billUrl }}" tabindex="0" role="button" title="Open the items on this invoice">
+                  <td class="cp-sub">{{ $inv->invoice_date ? \Illuminate\Support\Carbon::parse($inv->invoice_date)->format('d M Y') : '—' }}</td>
+                  <td class="fw-semibold">{{ $inv->invoice_no ?: '—' }}</td>
+                  <td class="cp-sub">{{ $inv->series ?: '—' }}</td>
+                  <td class="cp-sub" title="{{ $__itemsText }}">{{ \Illuminate\Support\Str::limit($__itemsText, 40) ?: '—' }}</td>
+                  <td class="cp-sub">{{ $__invExtra['party_gstin'] ?? '—' }}</td>
+                  <td class="cp-sub">{{ $inv->salesperson ?: '—' }}</td>
+                  <td class="cp-sub">{{ $inv->lr_no ?: '—' }}</td>
+                  <td class="cp-sub">{{ \Illuminate\Support\Str::limit($inv->transporter, 18) ?: '—' }}</td>
+                  <td class="cp-sub">{{ \Illuminate\Support\Str::limit($inv->destination, 18) ?: '—' }}</td>
+                  <td class="cp-sub">{{ $inv->po_number ?: '—' }}</td>
+                  <td class="lg-num">{{ $inv->taxable_total !== null ? number_format((float)$inv->taxable_total, 0) : '—' }}</td>
+                  <td class="lg-num">{{ $inv->tax_total !== null ? number_format((float)$inv->tax_total, 0) : '—' }}</td>
+                  <td class="lg-num fw-semibold">{{ number_format((float)$inv->amount, 0) }}</td>
+                  <td class="cp-xs-hide"><a href="{{ $pdfUrlBase }}{{ urlencode($inv->invoice_no) }}" target="_blank" rel="noopener" title="Download PDF" onclick="event.stopPropagation()"><i class="bx bxs-file-pdf" style="font-size:1.1rem;color:#b42318;"></i></a></td>
+                </tr>
+              @endforeach
+              </tbody>
+            </table>
           </div>
         </div>
       </div>
-    </div>
+      @endif
 
-    {{-- Delivery activity --}}
-    @if($deliveries->isNotEmpty())
-    <div class="cp-card mb-4">
-      <div class="cp-card-head"><h6><i class="bx bx-package"></i> Recent deliveries</h6><span class="cp-sub">how goods shipped</span></div>
-      <div class="table-responsive">
-        <table class="table table-sm align-middle mb-0">
-          <thead><tr><th>Date</th><th>Delivery No</th><th>Item</th><th class="lg-num">Qty</th><th>Transporter</th><th>Vehicle</th><th>Consignee</th></tr></thead>
-          <tbody>
-          @foreach($deliveries as $d)
-            <tr>
-              <td class="cp-sub">{{ $d->delivery_date ? \Illuminate\Support\Carbon::parse($d->delivery_date)->format('d M Y') : '—' }}</td>
-              <td class="fw-semibold">{{ $d->delivery_no }}</td>
-              <td>{{ \Illuminate\Support\Str::limit($d->item_name, 30) ?: '—' }}</td>
-              <td class="lg-num">{{ $d->quantity !== null ? number_format((float)$d->quantity, 2) : '—' }} <span class="cp-sub">{{ $d->unit }}</span></td>
-              <td class="cp-sub">{{ $d->transporter_name ?: '—' }}</td>
-              <td class="cp-sub">{{ $d->vehicle_number ?: '—' }}</td>
-              <td class="cp-sub">{{ \Illuminate\Support\Str::limit($d->consignee_name, 20) ?: '—' }}</td>
-            </tr>
-          @endforeach
-          </tbody>
-        </table>
+      @if($deliveries->isNotEmpty())
+      <div class="col-12 col-xl-4">
+        <div class="cp-card h-100">
+          <div class="cp-card-head"><h6><i class="bx bx-package"></i> Recent deliveries</h6><span class="cp-sub">how goods shipped &middot; click a row for transporter &amp; dispatch details</span></div>
+          <div class="table-responsive" style="max-height:420px;overflow:auto;">
+            <table class="table table-sm align-middle mb-0">
+              <thead style="position:sticky;top:0;"><tr><th>Date</th><th>Delivery No</th><th>Item</th><th class="lg-num">Qty</th><th>Transporter</th><th>Vehicle</th><th>Consignee</th></tr></thead>
+              <tbody>
+              @foreach($deliveries as $d)
+                <tr class="cp-inv-row" data-delivery="{{ $d->delivery_no }}" data-url="{{ $deliveryUrlBase }}" tabindex="0" role="button" title="Open transporter &amp; dispatch details">
+                  <td class="cp-sub">{{ $d->delivery_date ? \Illuminate\Support\Carbon::parse($d->delivery_date)->format('d M Y') : '—' }}</td>
+                  <td class="fw-semibold">{{ $d->delivery_no }}</td>
+                  <td>{{ \Illuminate\Support\Str::limit($d->item_name, 30) ?: '—' }}</td>
+                  <td class="lg-num">{{ $d->quantity !== null ? number_format((float)$d->quantity, 2) : '—' }} <span class="cp-sub">{{ $d->unit }}</span></td>
+                  <td class="cp-sub">{{ $d->transporter_name ?: '—' }}</td>
+                  <td class="cp-sub">{{ $d->vehicle_number ?: '—' }}</td>
+                  <td class="cp-sub">{{ \Illuminate\Support\Str::limit($d->consignee_name, 20) ?: '—' }}</td>
+                </tr>
+              @endforeach
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
+      @endif
+    </div>
+    @endif
+
+    {{-- Pending Purchase Orders | All Purchases | All Payments -- supplier-side extras, same 3-column
+         recipe, shown only when this ledger actually has any of them. --}}
+    @if($pendingPurchaseOrders->isNotEmpty() || $allPurchases->isNotEmpty() || $allPayments->isNotEmpty())
+    <div class="row g-4 mb-4">
+      @if($pendingPurchaseOrders->isNotEmpty())
+      <div class="col-12 col-xl-4">
+        <div class="cp-card h-100">
+          <div class="cp-card-head"><h6><i class="bx bx-hourglass"></i> Pending Purchase Orders ({{ $pendingPurchaseOrders->count() }})</h6><span class="cp-sub">not yet received</span></div>
+          <div class="table-responsive" style="max-height:420px;overflow:auto;">
+            <table class="table table-sm align-middle mb-0">
+              <thead style="position:sticky;top:0;"><tr><th>Date</th><th>Order No</th><th>Item</th><th class="lg-num">Qty</th><th class="lg-num">Amount (₹)</th></tr></thead>
+              <tbody>
+              @foreach($pendingPurchaseOrders as $o)
+                <tr>
+                  <td class="cp-sub">{{ $o->order_date ? \Illuminate\Support\Carbon::parse($o->order_date)->format('d M Y') : '—' }}</td>
+                  <td class="fw-semibold">{{ $o->order_no ?: '—' }}</td>
+                  <td class="cp-sub">{{ \Illuminate\Support\Str::limit($o->item_name, 30) ?: '—' }}</td>
+                  <td class="lg-num">{{ $o->quantity !== null ? number_format((float)$o->quantity, 2) : '—' }} <span class="cp-sub">{{ $o->unit }}</span></td>
+                  <td class="lg-num fw-semibold">{{ number_format((float)$o->amount, 0) }}</td>
+                </tr>
+              @endforeach
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      @endif
+
+      @if($allPurchases->isNotEmpty())
+      <div class="col-12 col-xl-4">
+        <div class="cp-card h-100">
+          <div class="cp-card-head"><h6><i class="bx bx-cart"></i> All Purchases ({{ $allPurchases->count() }})</h6><span class="cp-sub">every purchase bill on record</span></div>
+          <div class="table-responsive" style="max-height:420px;overflow:auto;">
+            <table class="table table-sm align-middle mb-0">
+              <thead style="position:sticky;top:0;"><tr><th>Date</th><th>Purchase No</th><th>Series</th><th class="lg-num">Amount (₹)</th></tr></thead>
+              <tbody>
+              @foreach($allPurchases as $p)
+                <tr>
+                  <td class="cp-sub">{{ $p->purchase_date ? \Illuminate\Support\Carbon::parse($p->purchase_date)->format('d M Y') : '—' }}</td>
+                  <td class="fw-semibold">{{ $p->purchase_no ?: '—' }}</td>
+                  <td class="cp-sub">{{ $p->series ?: '—' }}</td>
+                  <td class="lg-num fw-semibold">{{ number_format((float)$p->amount, 0) }}</td>
+                </tr>
+              @endforeach
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      @endif
+
+      @if($allPayments->isNotEmpty())
+      <div class="col-12 col-xl-4">
+        <div class="cp-card h-100">
+          <div class="cp-card-head"><h6><i class="bx bx-wallet"></i> All Payments ({{ $allPayments->count() }})</h6><span class="cp-sub">every payment made to this ledger</span></div>
+          <div class="table-responsive" style="max-height:420px;overflow:auto;">
+            <table class="table table-sm align-middle mb-0">
+              <thead style="position:sticky;top:0;"><tr><th>Date</th><th>Payment No</th><th>Bank/Cash</th><th class="lg-num">Amount (₹)</th></tr></thead>
+              <tbody>
+              @foreach($allPayments as $p)
+                <tr>
+                  <td class="cp-sub">{{ $p->payment_date ? \Illuminate\Support\Carbon::parse($p->payment_date)->format('d M Y') : '—' }}</td>
+                  <td class="fw-semibold">{{ $p->payment_no ?: '—' }}</td>
+                  <td class="cp-sub">{{ $p->bank_ledger ?: '—' }}</td>
+                  <td class="lg-num fw-semibold">{{ number_format((float)$p->amount, 0) }}</td>
+                </tr>
+              @endforeach
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      @endif
     </div>
     @endif
 
@@ -580,7 +753,121 @@
 </div>
 
 <script>
+  // Enables the item price-analysis modal inside the invoice-items modal below -- see
+  // invoice-modal.blade.php's own comment for why this is a feature flag rather than always-on.
+  window.ITEM_MODAL_URL = @json($itemUrlBase);
+</script>
+@include('tenant.sales-sources.partials.invoice-modal')
+
+{{-- Delivery-detail modal: every field Tally carries for one Delivery Note (transporter, vehicle, mode,
+     document no/date, distance, consignee) plus its item lines -- same per-row click pattern as the
+     invoice modal above, but specific to this page (no other page shows deliveries), so it's self-contained
+     here rather than added to the shared invoice-modal.blade.php partial. Reuses that partial's own
+     .inv-facts/.inv-table/.inv-wrap/.inv-note classes (bare, not scoped to #invModal), already loaded on
+     this page by the @include above. --}}
+<div class="modal fade inv-modal" id="deliveryModal" tabindex="-1" aria-labelledby="deliveryModalTitle" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div style="min-width:0;">
+          <h6 class="modal-title" id="deliveryModalTitle">Delivery</h6>
+          <div class="inv-sub" id="deliveryModalSub"></div>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body" id="deliveryModalBody"></div>
+    </div>
+  </div>
+</div>
+<script>
+(function () {
+  const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const fmtDate = (s) => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s || ''); return m ? (+m[3]) + ' ' + MONTHS[+m[2] - 1] + ' ' + m[1] : ''; };
+  const qty = (v) => v == null ? '—' : Number(v).toLocaleString('en-IN', { maximumFractionDigits: 3 });
+
+  function renderDelivery(d) {
+    document.getElementById('deliveryModalTitle').textContent = 'Delivery ' + d.delivery_no;
+    document.getElementById('deliveryModalSub').textContent = fmtDate(d.delivery_date);
+
+    const facts = [
+      ['Delivery date', fmtDate(d.delivery_date)], ['Order No', d.order_no],
+      ['Transporter', d.transporter_name], ['Vehicle number', d.vehicle_number], ['Transport mode', d.transport_mode],
+      ['Document No', d.document_number], ['Document date', fmtDate(d.document_date)],
+      ['Distance (km)', d.distance_km], ['Consignee', d.consignee_name], ['Consignee GSTIN', d.consignee_gstin],
+    ].filter((f) => f[1]);
+    let h = '<div class="inv-facts">' + facts.map((f) => '<div class="inv-fact"><div class="k">' + esc(f[0]) + '</div><div class="v">' + esc(f[1]) + '</div></div>').join('') + '</div>';
+
+    if (d.consignee_address) {
+      h += '<div class="inv-note"><i class="bx bx-map"></i><div><strong>Consignee address:</strong> ' + esc(d.consignee_address) + '</div></div>';
+    }
+
+    if ((d.lines || []).length) {
+      h += '<div class="inv-wrap mt-3"><table class="inv-table"><thead><tr><th>#</th><th>Item</th><th class="num">Qty</th></tr></thead><tbody>'
+        + d.lines.map((l, i) => '<tr><td data-label="#">' + (i + 1) + '</td><td class="prod" data-label="Item">' + esc(l.item) + '</td><td class="num" data-label="Qty">' + qty(l.qty) + (l.unit ? ' ' + esc(l.unit) : '') + '</td></tr>').join('')
+        + '</tbody></table></div>';
+    } else {
+      h += '<div class="inv-note"><i class="bx bx-info-circle"></i><div>No item lines recorded for this delivery.</div></div>';
+    }
+
+    document.getElementById('deliveryModalBody').innerHTML = h;
+  }
+
+  async function openDelivery(url, no) {
+    const el = document.getElementById('deliveryModal'), body = document.getElementById('deliveryModalBody');
+    document.getElementById('deliveryModalTitle').textContent = 'Delivery ' + no;
+    document.getElementById('deliveryModalSub').textContent = '';
+    body.innerHTML = '<div class="text-center text-muted py-5"><div class="spinner-border spinner-border-sm me-2" role="status"></div>Loading…</div>';
+    window.bootstrap.Modal.getOrCreateInstance(el).show();
+    try {
+      const r = await fetch(url + encodeURIComponent(no), { headers: { 'Accept': 'application/json' }, credentials: 'same-origin' });
+      if (!r.ok) throw new Error(r.status);
+      renderDelivery(await r.json());
+    } catch (e) {
+      body.innerHTML = '<div class="inv-note warn"><i class="bx bx-error-circle"></i><div>Could not load this delivery\'s details. Please try again.</div></div>';
+    }
+  }
+
+  document.addEventListener('click', function (e) {
+    const row = e.target.closest('[data-delivery]');
+    if (row && row.dataset.url && !e.target.closest('a, button')) openDelivery(row.dataset.url, row.dataset.delivery);
+  });
+})();
+</script>
+
+<script>
   window.LG_TREND = @json($trend->values());
+</script>
+<script>
+(function () {
+  // Copy-to-clipboard for GSTIN / address -- explicit request (2026-10-29): "so anyone can copy easily".
+  document.addEventListener('click', function (e) {
+    const btn = e.target.closest('.lg-copy-btn');
+    if (!btn) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const text = btn.dataset.copy || '';
+    const done = function () {
+      const icon = btn.querySelector('i');
+      const original = icon.className;
+      btn.classList.add('copied');
+      icon.className = 'bx bx-check';
+      setTimeout(function () { btn.classList.remove('copied'); icon.className = original; }, 1200);
+    };
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text).then(done).catch(function () { fallbackCopy(text, done); });
+    } else {
+      fallbackCopy(text, done);
+    }
+  });
+  function fallbackCopy(text, done) {
+    const ta = document.createElement('textarea');
+    ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.focus(); ta.select();
+    try { document.execCommand('copy'); done(); } catch (e) {}
+    document.body.removeChild(ta);
+  }
+})();
 </script>
 <script>
 (function () {

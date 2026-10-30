@@ -575,6 +575,20 @@
                                                   title="{{ $tallyBadge[1] }} — once mapped, this customer's sales auto-update from Tally">
                                                 T
                                             </span>
+                                            @if($tallyLocked)
+                                                {{-- Opens this customer's full Tally ledger (sales/purchases/payments/outstanding) --
+                                                     see TallyExplorerController::ledgerShow(). Per explicit request (2026-10-29).
+                                                     Deliberately the sales-visits.* route (sales.guard), not tally-explorer.ledgers.show
+                                                     (admin.guard) -- that one would 302 any non-admin sales-floor user before the
+                                                     controller's own, actually-relevant ownership check ever got to run. Access there
+                                                     is scoped server-side to the viewer's own customers (admin/mukul see any), so this
+                                                     link is safe to show to everyone once mapped. --}}
+                                                <a href="{{ route('sales-visits.pipeline.customer.tally-ledger', ['customer' => $row->customer->id]) }}"
+                                                   target="_blank" rel="noopener" class="flex-shrink-0" title="Open this customer's Tally ledger"
+                                                   style="line-height:1;">
+                                                    <i class="bx bx-link-external" style="font-size:0.75rem;"></i>
+                                                </a>
+                                            @endif
                                         @endif
                                         <input type="text" class="excel-input row-field fw-semibold flex-grow-1" data-field="party_name"
                                                value="{{ $row->party_name }}" style="font-size:0.72rem; min-width:0;"

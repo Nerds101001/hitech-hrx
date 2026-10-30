@@ -1032,6 +1032,14 @@ class UserDashboardController extends Controller
                     $dayData['status'] = 'Holiday Worked (HP)';
                     $presentDays++;
                     break;
+                case 'sp_half':
+                    $dayData['status'] = 'Weekly Off Worked (SP - Half Day)';
+                    $presentDays += 0.5;
+                    break;
+                case 'hp_half':
+                    $dayData['status'] = 'Holiday Worked (HP - Half Day)';
+                    $presentDays += 0.5;
+                    break;
                 case 'weekly_off':
                     $dayData['status'] = 'Weekly Off';
                     break;
@@ -1239,6 +1247,16 @@ class UserDashboardController extends Controller
                     $dayData['status'] = 'HP';
                     $dayData['icon'] = 'bx-check-circle';
                     $dayData['class'] = 'bg-success text-white border-0';
+                    break;
+                case 'sp_half':
+                    $dayData['status'] = 'SP (Half)';
+                    $dayData['icon'] = 'bx-check-circle';
+                    $dayData['class'] = 'bg-success bg-opacity-50 text-white border-0';
+                    break;
+                case 'hp_half':
+                    $dayData['status'] = 'HP (Half)';
+                    $dayData['icon'] = 'bx-check-circle';
+                    $dayData['class'] = 'bg-success bg-opacity-50 text-white border-0';
                     break;
                 case 'weekly_off':
                     $dayData['status'] = 'Weekly Off';

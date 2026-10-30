@@ -115,16 +115,27 @@ window.CustomerTallyMapping = (function () {
         swalErr('Tally has no sales figure for ' + p.month_label + ' for this customer.');
         return;
       }
+      // Multi-row: each row gets its OWN attributed figure (by brand), never the same company-wide
+      // total repeated on every row -- a row with after == null couldn't be matched to a brand and
+      // won't change. Single row: the whole figure, unambiguous either way.
       var rowsHtml = p.rows.map(function (r) {
-        var changed = Number(r.current).toFixed(2) !== Number(p.tally_amount).toFixed(2);
+        var after = r.after;
+        var changed = after != null && Number(r.current).toFixed(2) !== Number(after).toFixed(2);
+        var afterCell = after != null
+          ? '&#8377;' + Number(after).toLocaleString('en-IN') + 'L'
+          : '<span class="text-muted">— not matched to a brand, unchanged</span>';
         return '<tr' + (changed ? ' style="color:#b91c1c;font-weight:600;"' : '') + '>'
-          + '<td class="text-start">' + esc(r.party_name) + (r.salesperson ? ' <span class="text-muted small">(' + esc(r.salesperson) + ')</span>' : '') + '</td>'
+          + '<td class="text-start">' + esc(r.party_name) + (r.product ? ' <span class="text-muted small">[' + esc(r.product) + ']</span>' : '') + (r.salesperson ? ' <span class="text-muted small">(' + esc(r.salesperson) + ')</span>' : '') + '</td>'
           + '<td>&#8377;' + Number(r.current).toLocaleString('en-IN') + 'L</td>'
           + '<td>&rarr;</td>'
-          + '<td>&#8377;' + Number(p.tally_amount).toLocaleString('en-IN') + 'L</td>'
+          + '<td>' + afterCell + '</td>'
           + '</tr>';
       }).join('');
-      var html = '<div class="text-start small mb-2">' + p.month_label + ' — Tally says &#8377;' + Number(p.tally_amount).toLocaleString('en-IN') + 'L</div>'
+      var note = p.multi_row
+        ? '<div class="text-start small mb-2">' + p.month_label + ' — Tally says &#8377;' + Number(p.tally_amount).toLocaleString('en-IN') + 'L company-wide, attributed below by brand.'
+          + (p.unattributed > 0.005 ? ' &#8377;' + Number(p.unattributed).toLocaleString('en-IN') + 'L could not be matched to any row\'s brand and is left out.' : '') + '</div>'
+        : '<div class="text-start small mb-2">' + p.month_label + ' — Tally says &#8377;' + Number(p.tally_amount).toLocaleString('en-IN') + 'L</div>';
+      var html = note
         + '<table class="table table-sm"><thead><tr><th class="text-start">Row</th><th>Current</th><th></th><th>After sync</th></tr></thead><tbody>' + rowsHtml + '</tbody></table>';
 
       if (!window.Swal) {

@@ -253,12 +253,96 @@ class TallyExplorerController extends Controller
      * the payment terms it actually runs on (credit period observed on its bills), its sales & purchase history,
      * money received & paid, bill-wise outstanding with ageing, and recent delivery activity.
      */
+    /** ai@rustx.com/mukul@rustx.com reach any ledger; everyone else only one of THEIR OWN customers (see ledgerShow()). */
+    private const LEDGER_FULL_ACCESS_EMAILS = ['ai@rustx.com', 'mukul@rustx.com'];
+
+    /**
+     * Resolve + authorize the ledger a request names, shared by ledgerShow() and invoicePdf() so the
+     * per-customer ownership rule (SalesScope, same as the mapping popup) can never drift between the two
+     * entry points. Aborts (404/403) rather than returning a failure state.
+     */
+    private function isFullLedgerAccess(Request $request): bool
+    {
+        $user = $request->user();
+        return $user && ($user->hasRole(['admin', 'Admin', 'super_admin', 'hr', 'HR'])
+            || in_array(strtolower((string) $user->email), array_map('strtolower', self::LEDGER_FULL_ACCESS_EMAILS), true));
+    }
+
+    private function resolveLedgerForRequest(Request $request): object
+    {
+        $user = $request->user();
+        $fullAccess = $this->isFullLedgerAccess($request);
+
+        $name = (string) $request->get('name', '');
+        $customerId = $request->get('customer_id') ?? $request->route('customer');
+
+        if ($fullAccess && $name !== '') {
+            // Full Tally Explorer access (unchanged): any ledger by its exact Tally name.
+            $ledger = DB::table('tally_ledgers')->where('name', $name)->first();
+        } else {
+            // Reached from the Sales Report grid's customer-name link (everyone else, and admin
+            // too when that's how they got here) -- resolve via the mapped Customer, not a raw
+            // ledger name, so ownership can actually be checked against it below.
+            abort_unless($customerId, 404);
+            $customer = \App\Models\Customer::find($customerId);
+            abort_unless($customer && $customer->tally_matched_name, 404);
+
+            if (!$fullAccess) {
+                // Same ownership rule CustomerTallyMappingController::scopedCustomerQuery() already
+                // enforces for the mapping popup -- a non-admin only reaches a ledger that is one of
+                // THEIR OWN customers on the Sales Report grid. Per explicit request (2026-10-29):
+                // Geet Kaur (and anyone else) should only be able to drill into her own customers.
+                $ids = \App\Support\SalesScope::allowedUserIds($user);
+                if ($ids !== null) {
+                    $owns = DB::table('sales_pipelines')
+                        ->where('customer_id', $customer->id)
+                        ->whereNull('deleted_at')
+                        ->where(function ($q) use ($ids) {
+                            $q->whereIn('salesperson_id', $ids)
+                                ->orWhereIn('ccare_id', $ids)
+                                ->orWhereIn('new_biz_id', $ids)
+                                ->orWhereIn('new_biz_2_id', $ids)
+                                ->orWhereIn('former_new_biz_id', $ids)
+                                ->orWhereExists(function ($s) use ($ids) {
+                                    $s->selectRaw('1')->from('sales_pipeline_extra_reps as er')
+                                        ->whereColumn('er.sales_pipeline_id', 'sales_pipelines.id')
+                                        ->whereIn('er.user_id', $ids);
+                                });
+                        })
+                        ->exists();
+                    abort_unless($owns, 403);
+                }
+            }
+
+            $ledger = DB::table('tally_ledgers')->where('normalized_name', $customer->tally_matched_name)->first();
+        }
+        abort_unless($ledger, 404);
+
+        return $ledger;
+    }
+
     public function ledgerShow(Request $request): View
     {
-        $name = (string) $request->get('name', '');
-        $ledger = DB::table('tally_ledgers')->where('name', $name)->first();
-        abort_unless($ledger, 404);
+        $ledger = $this->resolveLedgerForRequest($request);
         $norm = $ledger->normalized_name;
+
+        // Same two entry points this whole page supports (a route {customer} id, or ?name= for full
+        // Tally Explorer access) carried through to the invoice-items modal and its PDF link, so either
+        // path re-authorizes through resolveLedgerForRequest() exactly the way this page itself just did.
+        $customerIdForLinks = $request->route('customer') ?? $request->get('customer_id');
+        [$billRouteName, $pdfRouteName] = $customerIdForLinks
+            ? ['sales-visits.pipeline.customer.tally-ledger.invoice', 'sales-visits.pipeline.customer.tally-ledger.invoice.pdf']
+            : ['tally-explorer.ledgers.invoice', 'tally-explorer.ledgers.invoice.pdf'];
+        $linkParams = $customerIdForLinks ? ['customer' => $customerIdForLinks] : ['name' => $ledger->name];
+        // {customer} is consumed as a path segment (no query string yet, so start one with '?'); 'name'
+        // has no route placeholder on the Tally Explorer path, so Laravel already appends it as '?name=...'.
+        $sep = $customerIdForLinks ? '?' : '&';
+        $billUrl = route($billRouteName, $linkParams) . $sep . 'invoice_no=';
+        $pdfUrlBase = route($pdfRouteName, $linkParams) . $sep . 'invoice_no=';
+        $itemRouteName = $customerIdForLinks ? 'sales-visits.pipeline.customer.tally-ledger.item' : 'tally-explorer.ledgers.item';
+        $itemUrlBase = route($itemRouteName, $linkParams) . $sep . 'item=';
+        $deliveryRouteName = $customerIdForLinks ? 'sales-visits.pipeline.customer.tally-ledger.delivery' : 'tally-explorer.ledgers.delivery';
+        $deliveryUrlBase = route($deliveryRouteName, $linkParams) . $sep . 'delivery_no=';
 
         $sales = fn () => DB::table('tally_invoices')->where('normalized_name', $norm);
         $purch = fn () => DB::table('tally_purchases')->where('normalized_name', $norm);
@@ -307,28 +391,63 @@ class TallyExplorerController extends Controller
             'purchases' => (float) (optional($purchaseTrend->firstWhere('ym', $m))->amt ?? 0),
         ]);
 
-        // Recent activity feed: invoices, purchases, receipts, payments merged.
-        $feed = collect();
+        // Full, uncapped lists -- superseded the old 20-row merged "Recent activity" feed (removed
+        // 2026-10-29 along with its dedicated layout slot): these are every row Tally has for this ledger,
+        // shown in full in their own cards further down the page, each
+        // in its own scrollable table below, so nothing is hidden behind a cap.
+        $allInvoices = $norm ? $sales()->orderByDesc('invoice_date')
+            ->get(['invoice_no', 'invoice_date', 'series', 'salesperson', 'amount', 'taxable_total', 'tax_total', 'lr_no', 'transporter', 'destination', 'po_number', 'extra']) : collect();
+
+        // Item names per invoice, for the All Invoices table -- grouped in PHP from one bulk query (an
+        // invoice can have several lines) rather than a GROUP_CONCAT, so a very long item list can still be
+        // truncated for display without truncating the underlying data. Sourced from tally_sale_lines: the
+        // live gateway push (hrx:tally-push) writes this for every invoice line it sees, not just the
+        // roughly-quarter-of-invoices the old file-based SaleReportCRM import covered, so this is
+        // effectively complete for anything pushed since that pipeline went live.
+        $itemsByInvoice = [];
         if ($norm) {
-            foreach ($sales()->orderByDesc('invoice_date')->limit(12)->get(['invoice_no', 'invoice_date', 'amount']) as $r) {
-                $feed->push(['date' => $r->invoice_date, 'type' => 'Sale', 'ref' => $r->invoice_no, 'amount' => (float) $r->amount, 'dir' => 'in']);
-            }
-            foreach ($purch()->orderByDesc('purchase_date')->limit(12)->get(['purchase_no', 'purchase_date', 'amount']) as $r) {
-                $feed->push(['date' => $r->purchase_date, 'type' => 'Purchase', 'ref' => $r->purchase_no, 'amount' => (float) $r->amount, 'dir' => 'out']);
-            }
-            foreach ($rcpt()->orderByDesc('receipt_date')->limit(12)->get(['receipt_no', 'receipt_date', 'amount', 'bank_ledger']) as $r) {
-                $feed->push(['date' => $r->receipt_date, 'type' => 'Receipt', 'ref' => $r->receipt_no, 'amount' => (float) $r->amount, 'dir' => 'in', 'note' => $r->bank_ledger]);
-            }
-            foreach ($paid()->orderByDesc('payment_date')->limit(12)->get(['payment_no', 'payment_date', 'amount', 'bank_ledger']) as $r) {
-                $feed->push(['date' => $r->payment_date, 'type' => 'Payment', 'ref' => $r->payment_no, 'amount' => (float) $r->amount, 'dir' => 'out', 'note' => $r->bank_ledger]);
+            foreach (DB::table('tally_sale_lines')->where('normalized_name', $norm)->get(['invoice_no', 'item_name']) as $line) {
+                $itemsByInvoice[$line->invoice_no][] = $line->item_name;
             }
         }
-        $feed = $feed->sortByDesc('date')->take(20)->values();
+        $allPurchases = $norm ? $purch()->orderByDesc('purchase_date')
+            ->get(['purchase_no', 'purchase_date', 'series', 'amount']) : collect();
+        $allReceipts = $norm ? $rcpt()->orderByDesc('receipt_date')
+            ->get(['receipt_no', 'receipt_date', 'voucher_type', 'bank_ledger', 'reference', 'amount']) : collect();
+        $allPayments = $norm ? $paid()->orderByDesc('payment_date')
+            ->get(['payment_no', 'payment_date', 'voucher_type', 'bank_ledger', 'reference', 'amount']) : collect();
 
-        // Delivery activity (how goods actually ship to them) -- the practical "delivery terms".
+        // Pending (open, not yet billed/received) sale orders for a customer, purchase orders for a
+        // supplier -- PartyWiseSaleOrder.txt's own 'status' column, not derived.
+        $pendingSaleOrders = $norm ? DB::table('tally_sale_orders')->where('normalized_name', $norm)
+            ->orderByDesc('order_date')->get(['order_no', 'order_date', 'status', 'quantity', 'unit', 'amount']) : collect();
+        $pendingPurchaseOrders = $norm ? DB::table('tally_purchase_orders')->where('normalized_name', $norm)
+            ->orderByDesc('order_date')->get(['order_no', 'order_date', 'item_name', 'quantity', 'unit', 'amount']) : collect();
+
+        // GSTIN "at any cost": the ledger master's own field is sometimes blank even when every invoice
+        // billed to this party carries its GSTIN (captured straight off the voucher, PARTYGSTIN, at the
+        // time of billing - see TallyGateway::parseVouchers()/TallyPushCommand). Fall back to whatever
+        // GSTIN the invoices themselves show when the master has none, and surface every distinct value
+        // seen (a mismatch between them is itself worth knowing, not something to silently pick one of).
+        $invoiceGstins = $norm ? DB::table('tally_invoices')
+            ->where('normalized_name', $norm)
+            ->whereNotNull('extra')
+            ->selectRaw("JSON_UNQUOTE(JSON_EXTRACT(extra, '$.party_gstin')) as gstin, MAX(invoice_date) as last_seen, COUNT(*) as invoice_count")
+            ->groupBy('gstin')
+            ->havingRaw("gstin IS NOT NULL AND gstin <> ''")
+            ->orderByDesc('last_seen')
+            ->get() : collect();
+        $displayGstin = $ledger->gstin ?: optional($invoiceGstins->first())->gstin;
+        $gstinFromInvoicesOnly = !$ledger->gstin && $displayGstin;
+
+        // Delivery / transport activity (how goods actually ship to them) -- full list, not capped, per
+        // explicit request (2026-10-29): transport details for every dispatch on this same page. No
+        // expected/target dispatch date exists anywhere in Tally for this company (confirmed directly on
+        // both Sales Order and Delivery Note vouchers when this table was first built) -- delivery_date is
+        // always the ACTUAL dispatch date, never an ETA.
         $deliveries = $norm ? DB::table('tally_deliveries')->where('normalized_name', $norm)
-            ->orderByDesc('delivery_date')->limit(10)
-            ->get(['delivery_date', 'delivery_no', 'item_name', 'quantity', 'unit', 'transporter_name', 'vehicle_number', 'consignee_name']) : collect();
+            ->orderByDesc('delivery_date')
+            ->get(['delivery_date', 'delivery_no', 'order_no', 'item_name', 'quantity', 'unit', 'transporter_name', 'vehicle_number', 'transport_mode', 'document_number', 'consignee_name']) : collect();
 
         // This ledger's matching CRM client record, if one exists -- same normalized-name equality
         // CrmCustomerResolver uses to connect a CrmClientMapping to Tally data (see its keysFor()),
@@ -351,10 +470,159 @@ class TallyExplorerController extends Controller
             }
         }
 
+        // Which Tally company this ledger lives in (Hi Tech vs Keep It Fresh) -- the human label from
+        // config/services.php tally.companies, falling back to the raw stored code if it's ever not one
+        // of the configured ones.
+        $companyLabel = config("services.tally.companies.{$ledger->company}.label") ?: $ledger->company;
+
         return view('tenant.tally-explorer.ledger-detail', compact(
-            'ledger', 'kpi', 'terms', 'ageing', 'trend', 'outstanding', 'feed', 'deliveries', 'isCustomer', 'isSupplier',
-            'crmMapping', 'crmContacts', 'crmActivities', 'crmFollowUps', 'crmTeam'
+            'ledger', 'kpi', 'terms', 'ageing', 'trend', 'outstanding', 'deliveries', 'isCustomer', 'isSupplier',
+            'crmMapping', 'crmContacts', 'crmActivities', 'crmFollowUps', 'crmTeam', 'companyLabel',
+            'allInvoices', 'allPurchases', 'allReceipts', 'allPayments', 'itemsByInvoice', 'billUrl', 'pdfUrlBase',
+            'customerIdForLinks', 'itemUrlBase', 'deliveryUrlBase',
+            'pendingSaleOrders', 'pendingPurchaseOrders', 'displayGstin', 'gstinFromInvoicesOnly', 'invoiceGstins'
         ) + ['pageConfigs' => ['contentLayout' => 'wide']]);
+    }
+
+    /**
+     * JSON for the invoice-items modal (resources/views/tenant/sales-sources/partials/invoice-modal.blade.php
+     * -- the same modal the CRM Customer Profile and Sales Sources pages already use), scoped to THIS
+     * ledger the same way CustomerProfileController::invoice() scopes it to a CRM mapping: reuses
+     * resolveLedgerForRequest()'s ownership check, then refuses an invoice_no that doesn't actually belong
+     * to this ledger's normalized_name, so a customer-scoped viewer can never pull up an invoice outside
+     * what they're allowed to see just by guessing a number. The payload shape itself
+     * (TallyAnalytics::bill()) is shared verbatim with those admin-only pages -- same item lines, GST,
+     * reconciliation note and outstanding status.
+     */
+    public function invoiceDetail(Request $request): \Illuminate\Http\JsonResponse
+    {
+        $ledger = $this->resolveLedgerForRequest($request);
+        $norm = $ledger->normalized_name;
+
+        $no = trim((string) $request->query('invoice_no'));
+        abort_unless($no !== '' && $norm && DB::table('tally_invoices')->where('invoice_no', $no)->where('normalized_name', $norm)->exists(), 404);
+
+        $bill = (new \App\Services\TallyAnalytics(\App\Services\TallyAnalytics::filters([])))->bill($no);
+        abort_if($bill === null, 404);
+
+        return response()->json($bill)->header('Cache-Control', 'private, max-age=60');
+    }
+
+    /**
+     * JSON for the item price-analysis modal (clicking an item inside the invoice-items modal) -- the
+     * same data the Sales Sources > Analytics "Bill-wise" page's own item drill-down uses
+     * (TallyAnalytics::item()), company-wide pricing stats and history, BUT with the cross-customer parts
+     * removed for anyone who isn't full-access: 'customers' (who else buys it) and 'recent' (their recent
+     * purchases) name OTHER customers, which is outside a per-customer-scoped viewer's ownership rights --
+     * the same boundary resolveLedgerForRequest() already enforces for the ledger page itself. 'recent' is
+     * filtered down to this ledger's OWN purchases of the item rather than dropped outright, so the price
+     * history a salesperson actually needs (what has WE been charged) still shows. The aggregate KPIs
+     * (avg/min/max rate, totals) are never customer-identifying, so those are untouched either way.
+     */
+    public function itemDetail(Request $request): \Illuminate\Http\JsonResponse
+    {
+        $ledger = $this->resolveLedgerForRequest($request);
+        $norm = $ledger->normalized_name;
+
+        $name = (string) $request->query('item');
+        abort_if($name === '', 404);
+        $unit = (string) $request->query('unit', '');
+        $scope = $request->query('scope') === 'all' ? 'all' : 'period';
+
+        $data = (new \App\Services\TallyAnalytics(\App\Services\TallyAnalytics::filters($request->query())))->item($name, $unit, $scope);
+
+        if (!$this->isFullLedgerAccess($request)) {
+            $data['customers'] = [];
+            $data['recent'] = collect($data['recent'] ?? [])
+                ->filter(fn ($r) => $norm && NameMatcher::normalize((string) ($r['party'] ?? '')) === $norm)
+                ->values()->all();
+            $data['restricted'] = true;
+        }
+
+        return response()->json($data)->header('Cache-Control', 'private, max-age=60');
+    }
+
+    /**
+     * JSON for the delivery-detail modal (clicking a row in "Recent deliveries") -- every field Tally
+     * carries for that Delivery Note: transporter name, vehicle number, transport mode, document no/date,
+     * distance, the consignee (who goods were actually sent to, which can differ from the billed party),
+     * and every item line on it (a Delivery Note is one row per SKU, same shape as an invoice). Scoped to
+     * this ledger's own normalized_name via resolveLedgerForRequest(), the same ownership rule as
+     * invoiceDetail()/itemDetail().
+     */
+    public function deliveryDetail(Request $request): \Illuminate\Http\JsonResponse
+    {
+        $ledger = $this->resolveLedgerForRequest($request);
+        $norm = $ledger->normalized_name;
+
+        $no = trim((string) $request->query('delivery_no'));
+        abort_if($no === '', 404);
+
+        $rows = DB::table('tally_deliveries')->where('delivery_no', $no)->where('normalized_name', $norm)
+            ->orderBy('id')->get();
+        abort_if($rows->isEmpty(), 404);
+
+        $first = $rows->first();
+
+        return response()->json([
+            'delivery_no' => $first->delivery_no,
+            'delivery_date' => $first->delivery_date,
+            'order_no' => $first->order_no,
+            'transporter_name' => $first->transporter_name,
+            'vehicle_number' => $first->vehicle_number,
+            'transport_mode' => $first->transport_mode,
+            'document_number' => $first->document_number,
+            'document_date' => $first->document_date,
+            'distance_km' => $first->distance_km !== null ? (float) $first->distance_km : null,
+            'consignee_name' => $first->consignee_name,
+            'consignee_address' => $first->consignee_address,
+            'consignee_gstin' => $first->consignee_gstin,
+            'lines' => $rows->map(fn ($r) => [
+                'item' => $r->item_name,
+                'qty' => $r->quantity !== null ? (float) $r->quantity : null,
+                'unit' => $r->unit,
+            ])->values(),
+        ])->header('Cache-Control', 'private, max-age=60');
+    }
+
+    /**
+     * A quick-reference "Tax Invoice" PDF for one invoice of this ledger -- built entirely from our own
+     * synced data (tally_invoices + tally_sale_lines' item/HSN/GST breakdown), NOT a replica of Tally's own
+     * statutory print (which also carries our bank details, signatory and legal boilerplate that live only
+     * inside Tally itself). Useful for a quick look or to forward without opening Tally; the authoritative
+     * document for filing/dispute purposes is still Tally's own print.
+     *
+     * Reuses ledgerShow()'s own ownership check via resolveLedgerForRequest() so this can never be used to
+     * read an invoice belonging to a customer outside the requester's own scope.
+     */
+    public function invoicePdf(Request $request)
+    {
+        $ledger = $this->resolveLedgerForRequest($request);
+        $norm = $ledger->normalized_name;
+
+        $invoiceNo = trim((string) $request->query('invoice_no'));
+        abort_if($invoiceNo === '', 404);
+
+        $invoice = DB::table('tally_invoices')->where('normalized_name', $norm)->where('invoice_no', $invoiceNo)->first();
+        abort_unless($invoice, 404);
+
+        $lines = DB::table('tally_sale_lines')->where('invoice_no', $invoiceNo)
+            ->orderBy('id')
+            ->get(['item_name', 'hsn', 'gst_rate', 'quantity', 'unit', 'rate', 'taxable_amount', 'tax_amount']);
+
+        $extra = $invoice->extra ? json_decode($invoice->extra, true) : [];
+        $settings = \App\Models\Settings::first();
+
+        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('tenant.tally-explorer.invoice-pdf', [
+            'invoice' => $invoice,
+            'ledger' => $ledger,
+            'lines' => $lines,
+            'partyGstin' => $extra['party_gstin'] ?? $ledger->gstin,
+            'placeOfSupply' => $extra['place_of_supply'] ?? $ledger->state,
+            'settings' => $settings,
+        ]);
+
+        return $pdf->stream('invoice-' . str_replace(['/', '\\'], '-', $invoiceNo) . '.pdf');
     }
 
     public function ledgers(Request $request): View

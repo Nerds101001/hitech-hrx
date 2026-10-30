@@ -86,10 +86,20 @@ class AttendanceDayStatusTest extends TestCase
     {
         $user = $this->makeUser();
         $date = Carbon::parse('2026-06-14'); // Sunday
-        $att = $this->attendance($user, '2026-06-14', '09:00:00', '14:00:00'); // 5h
+        $att = $this->attendance($user, '2026-06-14', '09:00:00', '17:00:00'); // 8h, clears the 470-min full bar
 
         $r = AttendanceDayStatus::resolve($user, $date, $att, null, null);
         $this->assertEquals('sp', $r['code']);
+    }
+
+    public function test_worked_sunday_half_credit_bar_is_sp_half(): void
+    {
+        $user = $this->makeUser();
+        $date = Carbon::parse('2026-06-14'); // Sunday
+        $att = $this->attendance($user, '2026-06-14', '09:00:00', '13:30:00'); // 4h30m, half but not full
+
+        $r = AttendanceDayStatus::resolve($user, $date, $att, null, null);
+        $this->assertEquals('sp_half', $r['code']);
     }
 
     public function test_worked_sunday_below_credit_bar_is_weekly_off(): void
@@ -108,7 +118,7 @@ class AttendanceDayStatusTest extends TestCase
         $user = $this->makeUser();
         $user->update(['leave_policy_profile_id' => $profile->id]);
         $date = Carbon::parse('2026-06-13'); // 2nd Saturday
-        $att = $this->attendance($user, '2026-06-13', '09:00:00', '14:00:00');
+        $att = $this->attendance($user, '2026-06-13', '09:00:00', '17:00:00'); // 8h, clears the 470-min full bar
 
         $r = AttendanceDayStatus::resolve($user, $date, $att, null, null);
         $this->assertEquals('sp', $r['code']);
@@ -119,10 +129,21 @@ class AttendanceDayStatusTest extends TestCase
         $user = $this->makeUser();
         $holiday = $this->fullHoliday('2026-06-15');
         $date = Carbon::parse('2026-06-15');
-        $att = $this->attendance($user, '2026-06-15', '09:00:00', '14:00:00');
+        $att = $this->attendance($user, '2026-06-15', '09:00:00', '17:00:00'); // 8h, clears the 470-min full bar
 
         $r = AttendanceDayStatus::resolve($user, $date, $att, null, $holiday);
         $this->assertEquals('hp', $r['code']);
+    }
+
+    public function test_worked_full_holiday_half_credit_bar_is_hp_half(): void
+    {
+        $user = $this->makeUser();
+        $holiday = $this->fullHoliday('2026-06-15');
+        $date = Carbon::parse('2026-06-15');
+        $att = $this->attendance($user, '2026-06-15', '09:00:00', '13:30:00'); // 4h30m, half but not full
+
+        $r = AttendanceDayStatus::resolve($user, $date, $att, null, $holiday);
+        $this->assertEquals('hp_half', $r['code']);
     }
 
     public function test_unworked_full_holiday_with_attendance_row_is_holiday(): void
@@ -375,7 +396,7 @@ class AttendanceDayStatusTest extends TestCase
         $att = Attendance::create([
             'user_id' => $user->id,
             'check_in_time' => '2026-06-14 09:00:00',
-            'check_out_time' => '2026-06-14 14:00:00', // 5h, clears the 240-min SP bar
+            'check_out_time' => '2026-06-14 17:00:00', // 8h, clears the 470-min full SP bar
             'status' => 'Present',
             'admin_reason' => 'HR corrected punch',
         ])->fresh(['leaveRequest.leaveType']);

@@ -228,9 +228,13 @@ class SalesPipelineController extends Controller
 
     /**
      * The real product brands and the spellings they appear under in the
-     * free-text `product` column, used by the Brand filter.
+     * free-text `product` column, used by the Brand filter. Public so
+     * CustomerTallyMappingController::fillCurrentMonth() can reuse the exact
+     * same alias matching to attribute a multi-brand customer's Tally sales
+     * back to the right Sales Report row, instead of inventing a second
+     * mapping (2026-10-29).
      */
-    private const BRANDS = [
+    public const BRANDS = [
         'Rust-X'     => ['rust-x', 'rustx', 'rust x'],
         'Dr. Bio'    => ['dr.bio', 'dr. bio', 'dr bio', 'drbio'],
         'Fillezy'    => ['fillezy', 'filezy'],
@@ -242,6 +246,24 @@ class SalesPipelineController extends Controller
         // rows that still carry product='HITECH' keep their value and remain
         // visible; they simply no longer offer it as a standard choice.
     ];
+
+    /**
+     * Which brand (a BRANDS key) a free-text string names, by the same substring-alias rule the
+     * Brand filter and brandCounts() already use -- or null if it names none of them. Shared single
+     * source of truth so a brand match means the same thing everywhere it's checked.
+     */
+    public static function brandForProductText(?string $text): ?string
+    {
+        $l = strtolower((string) $text);
+        foreach (self::BRANDS as $brand => $aliases) {
+            foreach ($aliases as $alias) {
+                if (str_contains($l, $alias)) {
+                    return $brand;
+                }
+            }
+        }
+        return null;
+    }
 
     public function index(Request $request)
     {

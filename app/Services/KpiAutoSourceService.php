@@ -264,6 +264,10 @@ class KpiAutoSourceService
                 $attended += 1.0;
                 continue;
             }
+            if (in_array($code, ['sp_half', 'hp_half'], true)) {
+                $attended += 0.5;
+                continue;
+            }
 
             $working += 1.0;
 
