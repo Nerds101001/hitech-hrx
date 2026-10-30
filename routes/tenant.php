@@ -1245,7 +1245,8 @@ Route::middleware([
                 Route::post('mark-learn-completed', [DigitalLibraryController::class, 'markLearnCompleted'])->name('markLearnCompleted');
                 Route::post('score-presenter', [DigitalLibraryController::class, 'scorePresenter'])->name('scorePresenter');
                 Route::delete('delete-product', [DigitalLibraryController::class, 'deleteProduct'])->name('delete-product');
-                
+                Route::patch('{id}/update-summary', [DigitalLibraryController::class, 'updateVideoSummary'])->name('updateVideoSummary');
+
                 // Taxonomy Management
                 Route::post('taxonomy/add', [DigitalLibraryController::class, 'addTaxonomy'])->name('taxonomy.add');
                 Route::post('taxonomy/update/{id}', [DigitalLibraryController::class, 'updateTaxonomy'])->name('taxonomy.update');

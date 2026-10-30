@@ -102,6 +102,22 @@ class DigitalLibraryController extends Controller
         ));
     }
 
+    public function updateVideoSummary(Request $request, $id)
+    {
+        $file = LibraryFile::findOrFail($id);
+
+        if (!$file->youtube_url) {
+            return response()->json(['error' => 'Only linked-video entries can be updated via this route.'], 422);
+        }
+
+        $request->validate(['summary' => 'required|string|max:5000']);
+
+        $file->summary = trim($request->summary);
+        $file->save();
+
+        return response()->json(['message' => 'Summary updated successfully.']);
+    }
+
     public function addTaxonomy(Request $request)
     {
         $request->validate([
@@ -277,7 +293,10 @@ class DigitalLibraryController extends Controller
                     && $request->sub_category === \App\Console\Commands\MigrateLearnToVideoCommand::LEARN_CATEGORY) {
                     $productName = 'Learn @ HiTech Session';
                 }
-                $summary = "Digital Video Asset: " . $youtubeUrl;
+                // Use the authored summary when provided; fall back to the URL-based placeholder.
+                $summary = $request->filled('summary')
+                    ? trim($request->summary)
+                    : "Digital Video Asset: " . $youtubeUrl;
             } elseif ($file) {
                 // R2 Storage
                 $filename = time() . '_' . $file->getClientOriginalName();
