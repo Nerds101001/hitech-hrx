@@ -145,6 +145,10 @@
                                 <label class="form-label fw-bold small text-uppercase">Video URL (YouTube/Drive)</label>
                                 <input type="url" name="youtube_url" class="form-control border-0 bg-light" placeholder="https://youtube.com/... or https://drive.google.com/..." style="border-radius: 12px; height: 45px;">
                             </div>
+                            <div class="mb-3">
+                                <label class="form-label fw-bold small text-uppercase">Summary <span class="text-muted fw-normal">(optional)</span></label>
+                                <textarea name="summary" class="form-control border-0 bg-light" rows="3" placeholder="Brief description of what this video covers..." style="border-radius: 12px; resize: vertical;"></textarea>
+                            </div>
                             {{-- Presenter/date only mean something for a Learn @ Hi Tech session —
                                  shown and required only when that category is picked above. --}}
                             <div class="row g-2 mb-3" id="ytLearnFields">
@@ -279,6 +283,30 @@
                 <div class="ratio ratio-16x9">
                     <iframe class="w-100 h-100 border-0" id="videoPlayerIframe" allowfullscreen></iframe>
                 </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Video Summary Modal -->
+<div class="modal fade" id="editVideoSummaryModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg" style="border-radius: 20px; overflow: hidden;">
+            <div class="modal-header border-0 bg-dark py-4 px-4">
+                <h5 class="modal-title fw-bold text-white mb-0" id="editVideoSummaryTitle">Edit Summary</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4 bg-white">
+                <input type="hidden" id="editSummaryFileId">
+                <div class="mb-3">
+                    <label class="form-label fw-bold small text-uppercase">Summary</label>
+                    <textarea id="editSummaryText" class="form-control border-light bg-light py-3 px-3 shadow-none" rows="5" placeholder="Describe what this video covers..." style="border-radius: 12px; resize: vertical;"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer border-0">
+                <button type="button" class="btn btn-primary w-100 rounded-pill py-3 fw-bold shadow-lg" onclick="submitEditVideoSummary()" style="background: linear-gradient(135deg, var(--hitech-primary), #006666); border: none;">
+                    <i class="bx bx-save me-2"></i> Save Summary
+                </button>
             </div>
         </div>
     </div>
@@ -630,6 +658,44 @@ function openVideoSummaryModal(title, summary) {
     new bootstrap.Modal(document.getElementById('videoSummaryModal')).show();
 }
 
+function openEditVideoSummaryModal(fileId, title, currentSummary) {
+    document.getElementById('editSummaryFileId').value = fileId;
+    document.getElementById('editVideoSummaryTitle').innerText = 'Edit Summary: ' + title;
+    document.getElementById('editSummaryText').value = currentSummary || '';
+    new bootstrap.Modal(document.getElementById('editVideoSummaryModal')).show();
+}
+
+async function submitEditVideoSummary() {
+    const fileId = document.getElementById('editSummaryFileId').value;
+    const summary = document.getElementById('editSummaryText').value.trim();
+    if (!summary) { alert('Summary cannot be blank.'); return; }
+
+    const btn = document.querySelector('#editVideoSummaryModal .modal-footer button');
+    const originalHtml = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="bx bx-loader-alt spin me-2"></i> Saving...';
+
+    try {
+        const resp = await fetch(`/digital-library/${fileId}/update-summary`, {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '{{ csrf_token() }}',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: JSON.stringify({ summary })
+        });
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data.error || 'Update failed');
+        bootstrap.Modal.getInstance(document.getElementById('editVideoSummaryModal')).hide();
+        location.reload();
+    } catch (err) {
+        alert(err.message);
+        btn.disabled = false;
+        btn.innerHTML = originalHtml;
+    }
+}
+
 function openAssignCompletionModal(fileId, title) {
     document.getElementById('assignFileId').value = fileId;
     document.getElementById('assignCompletionTitle').innerText = 'Assign Completion: ' + title;
@@ -757,8 +823,12 @@ document.getElementById('singleUploadForm').addEventListener('submit', async fun
     e.preventDefault();
 
     const formData = new FormData(this);
-    const activeTab = document.querySelector('.nav-link.active').getAttribute('href');
-    const isYoutube = activeTab === '#youtubeTab';
+    // Check the tab PANE's .active class, not the nav-link — the sidebar category
+    // link also carries .nav-link.active and appears first in the DOM when the Video
+    // library page is open, so querySelector('.nav-link.active') would return it
+    // instead of the modal's own tab, causing youtube submissions to be treated as
+    // file uploads and fail server validation.
+    const isYoutube = document.getElementById('youtubeTab')?.classList.contains('active') ?? false;
 
     if (isYoutube) {
         // The video-link tab's category select is named sub_category_yt so it

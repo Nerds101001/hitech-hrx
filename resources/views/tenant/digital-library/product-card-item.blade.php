@@ -142,6 +142,11 @@
                 <a href="javascript:void(0)" onclick="openMoveModal('{{ addslashes($productName) }}', '{{ $brand }}', '{{ $category }}')" class="text-muted" title="Manage Archive">
                     <i class="bx bx-cog fs-5"></i>
                 </a>
+                @if($tier === 'video' && $file->youtube_url && auth()->user()->hasRole(['admin', 'Admin', 'super_admin', 'hr']))
+                <a href="javascript:void(0)" onclick="openEditVideoSummaryModal('{{ $file->id }}', '{{ addslashes($productName) }}', '{{ addslashes(trim(str_replace('**', '', $file->summary ?? ''))) }}')" class="text-primary ms-2" title="Edit Summary">
+                    <i class="bx bx-edit fs-5"></i>
+                </a>
+                @endif
                 @if(auth()->user()->hasRole(['admin', 'Admin', 'super_admin']))
                 <a href="javascript:void(0)" onclick="deleteDocument('{{ addslashes($productName) }}')" class="text-danger ms-2" title="Delete Document">
                     <i class="bx bx-trash fs-5"></i>

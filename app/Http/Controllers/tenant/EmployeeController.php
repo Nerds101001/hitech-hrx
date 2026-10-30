@@ -52,6 +52,7 @@ use App\Notifications\Onboarding\OnboardingInvite;
 use App\Notifications\Onboarding\OnboardingStatusChanged;
 use App\Services\LeaveAccrualService;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Str;
 use OwenIt\Auditing\Models\Audit;
 
 
@@ -1630,19 +1631,11 @@ class EmployeeController extends Controller
     try {
       $user = User::findOrFail($request->id);
       
-      // Formula: Ucfirst(Name[:4]) + @ + Phone[-4]
-      $firstName = trim($user->first_name) ?: 'User';
-      $firstNamePart = explode(' ', $firstName)[0];
-      $phone = $user->phone ?: ($user->official_phone ?: '12345678');
-      $lastFour = substr((string)$phone, -4);
-      if (!$user->phone && !$user->official_phone) {
-          $lastFour = '1234';
-      }
-      $newPassword = ucfirst(strtolower(substr($firstNamePart, 0, 4))) . '@' . $lastFour;
+      $newPassword = Str::random(12);
 
       $user->password = bcrypt($newPassword);
       $user->save();
-      return Success::response(['message' => "Password reset successfully. New Password: $newPassword", 'password' => $newPassword]);
+      return Success::response(['message' => "Password reset successfully.", 'password' => $newPassword]);
     } catch (\Exception $e) {
       return Error::response($e->getMessage());
     }
@@ -1839,14 +1832,10 @@ class EmployeeController extends Controller
       $user->dob = $request->input('dob');
       $user->address = $request->input('address');
 
+      $defaultPassword = null;
       if ($request->has('useDefaultPassword') && $request->input('useDefaultPassword') == 'on') {
-        // Dynamic Default Password Rule: Ucfirst(Name[:4]) + Phone[-4]
-        $firstName = $request->input('firstName') ?: 'User';
-        $firstNamePart = explode(' ', trim($firstName))[0];
-        $phone = $request->input('phone') ?: '1234';
-        $lastFour = substr((string)$phone, -4);
-        $newPassword = ucfirst(strtolower(substr($firstNamePart, 0, 4))) . '@' . $lastFour;
-        $user->password = bcrypt($newPassword);
+        $defaultPassword = Str::random(12);
+        $user->password = bcrypt($defaultPassword);
       } else {
         $user->password = bcrypt($request->input('password'));
       }
@@ -1933,7 +1922,11 @@ class EmployeeController extends Controller
       }
 
 
-      return redirect()->route('employees.index')->with('success', 'Employee created successfully');
+      $successMsg = 'Employee created successfully.';
+      if ($defaultPassword) {
+          $successMsg .= " Default password: {$defaultPassword}";
+      }
+      return redirect()->route('employees.index')->with('success', $successMsg);
     } catch (\Exception $e) {
       Log::error('EmployeeController@store: ' . $e->getMessage());
       return redirect()->back()->with('error', 'Failed to create employee');
