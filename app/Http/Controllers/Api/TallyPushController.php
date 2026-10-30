@@ -347,6 +347,28 @@ class TallyPushController extends Controller
             if (array_intersect(['invoices', 'invoice_lines', 'sale_lines'], array_keys($counts))) {
                 TallyTotals::stamp();
             }
+
+            // Keep the Sales Report current automatically: when this push carries at least one invoice
+            // dated in the CURRENT calendar month, re-run the same "Sync current month" logic the
+            // Tally-mapping badge's button runs, but for every VERIFIED customer at once -- so a human
+            // never has to re-click it per customer just because today's invoices came in. Historical
+            // backfill pushes (a past month's --from/--to) skip this entirely, since there's nothing
+            // for them to update here. Best-effort: a failure here never turns an already-committed
+            // sync into an error response, same as the TallyTotals::stamp() guard just above.
+            $monthKey = now()->format('Y-m');
+            $pushedCurrentMonth = collect($data['invoices'] ?? [])
+                ->contains(fn ($r) => str_starts_with((string) ($r['invoice_date'] ?? ''), $monthKey));
+            if ($pushedCurrentMonth) {
+                try {
+                    $syncTotals = (new \App\Http\Controllers\tenant\CustomerTallyMappingController())->syncAllVerifiedCurrentMonth();
+                    Log::info('[tally_push] auto-synced verified customers\' current-month figures', ['run_id' => $run] + $syncTotals);
+                } catch (\Throwable $e) {
+                    Log::error('[tally_push] auto-sync-verified-customers failed (the push itself still succeeded)', [
+                        'run_id' => $run, 'message' => $e->getMessage(),
+                    ]);
+                }
+            }
+
             DB::table('tally_push_runs')->where('id', $run)->update([
                 'status' => 'ok', 'counts' => json_encode($counts), 'finished_at' => now(), 'updated_at' => now(),
             ]);
@@ -846,6 +868,11 @@ class TallyPushController extends Controller
             'closing_balance' => $num($r['closing_balance'] ?? null),
             'credit_limit' => $num($r['credit_limit'] ?? null),
             'gstin' => $str($r['gstin'] ?? null, 20),
+            'registration_type' => $str($r['registration_type'] ?? null, 40),
+            'credit_period' => $str($r['credit_period'] ?? null, 40),
+            'narration' => is_scalar($r['narration'] ?? null) ? trim((string) $r['narration']) : null,
+            'tds_applicable' => is_null($r['tds_applicable'] ?? null) ? null : (bool) $r['tds_applicable'],
+            'tcs_applicable' => is_null($r['tcs_applicable'] ?? null) ? null : (bool) $r['tcs_applicable'],
             'pan' => $str($r['pan'] ?? null, 20),
             'contact_person' => $str($r['contact_person'] ?? null, 255),
             'contact_mobile' => $str($r['contact_mobile'] ?? null, 255),

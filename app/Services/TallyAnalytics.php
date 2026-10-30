@@ -683,6 +683,11 @@ class TallyAnalytics
             : $qty->map(fn($l) => ['item' => $l->item_name, 'family' => $l->product_group, 'hsn' => null, 'gst' => null, 'qty' => $l->quantity === null ? null : (float) $l->quantity, 'unit' => $l->unit, 'rate' => null, 'rate_unit' => null, 'taxable' => null, 'tax' => null])->all();
 
         $first = $sale->first();
+        // "Despatch Details" -- this company's own custom panel on the invoice itself (bilty no, despatch
+        // from/date, delivery date, terms, POD, transporter mobile), captured into tally_invoices.extra by
+        // the gateway push -- see TallyGateway::parseVouchers()'s own doc comment for where each of these
+        // actually lives in Tally (two of the UDF tag names are misleading company-side renames).
+        $extra = $inv->extra ? json_decode($inv->extra, true) : [];
         return [
             'invoice' => [
                 'invoice_no' => $inv->invoice_no, 'series' => $inv->series, 'date' => $inv->invoice_date, 'amount' => self::f($inv->amount),
@@ -690,6 +695,14 @@ class TallyAnalytics
                 'lr_no' => $inv->lr_no, 'transporter' => $inv->transporter, 'transporter_phone' => $inv->transporter_phone, 'plant' => $inv->destination,
                 'city' => $first?->city, 'due_date' => $first?->due_date, 'credit_terms' => $first?->credit_terms,
                 'branch_transfer' => (bool) $inv->is_branch_transfer,
+                'bilty_no' => $extra['bilty_no'] ?? null,
+                'transporter_name' => $extra['transporter_name'] ?? null,
+                'transporter_mobile' => $extra['transporter_mobile'] ?? null,
+                'despatch_from' => $extra['despatch_from'] ?? null,
+                'despatch_date' => $extra['despatch_date'] ?? null,
+                'delivery_date' => $extra['delivery_date'] ?? null,
+                'despatch_terms' => $extra['terms'] ?? null,
+                'pod' => array_key_exists('pod', $extra) ? $extra['pod'] : null,
             ],
             'lines' => $lines,
             'has_value_detail' => $sale->isNotEmpty(),

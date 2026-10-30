@@ -7,6 +7,11 @@
 @endsection
 
 @section('content')
+@php
+  // Shared across this whole view: ai@rustx.com sees everything in Tally Explorer; mukul@rustx.com
+  // sees Trend only (routes/tenant.php enforces this -- this is just what the UI shows/hides to match).
+  $txViewerEmail = mb_strtolower((string) auth()->user()?->email);
+@endphp
 <div id="txPage" class="layout-full-width">
   <div class="tx-inner">
 
@@ -18,7 +23,7 @@
           <h1 class="tx-hero-title">Tally Explorer</h1>
           <p class="tx-hero-sub">Everything synced from Tally — purchases, purchase orders, payments, the stock-item master and the full ledger master — each one searchable, with a drill-down to every field. Read-only.</p>
         </div>
-        @if(app()->environment('local'))
+        @if(app()->environment('local') && $txViewerEmail === 'ai@rustx.com')
           <button type="button" class="btn btn-sm btn-light tx-quicksync-btn" data-bs-toggle="modal" data-bs-target="#txQuickSyncModal">
             <i class="bx bx-sync me-1"></i>Quick Sync
           </button>
@@ -40,18 +45,16 @@
     @endif
 
     @php
-      // Trend and everything else are gated to two different named accounts (see routes/tenant.php) --
-      // show each viewer only the tabs their account can actually open, so neither sees a dead link.
-      $txViewerEmail = mb_strtolower((string) auth()->user()?->email);
-      $txTabs = $txViewerEmail === 'mukul@rustx.com'
-        ? ['trend' => ['tally-explorer.trend', 'bx-trending-up', 'Trend']]
-        : [
-            'purchases'       => ['tally-explorer.purchases',       'bx-cart-download', 'Purchases'],
-            'purchase-orders' => ['tally-explorer.purchase-orders', 'bx-receipt',       'Purchase Orders'],
-            'payments'        => ['tally-explorer.payments',        'bx-money-withdraw','Payments'],
-            'stock'           => ['tally-explorer.stock',           'bx-box',           'Stock Items'],
-            'ledgers'         => ['tally-explorer.ledgers',         'bx-book-content',  'Ledgers (master)'],
-          ];
+      $txRestTabs = [
+        'purchases'       => ['tally-explorer.purchases',       'bx-cart-download', 'Purchases'],
+        'purchase-orders' => ['tally-explorer.purchase-orders', 'bx-receipt',       'Purchase Orders'],
+        'payments'        => ['tally-explorer.payments',        'bx-money-withdraw','Payments'],
+        'stock'           => ['tally-explorer.stock',           'bx-box',           'Stock Items'],
+        'ledgers'         => ['tally-explorer.ledgers',         'bx-book-content',  'Ledgers (master)'],
+      ];
+      $txTabs = $txViewerEmail === 'ai@rustx.com'
+        ? ['trend' => ['tally-explorer.trend', 'bx-trending-up', 'Trend']] + $txRestTabs
+        : ['trend' => ['tally-explorer.trend', 'bx-trending-up', 'Trend']];
     @endphp
     <ul class="nav tx-tabs" role="tablist">
       @foreach($txTabs as $key => [$route, $icon, $label])
@@ -68,7 +71,7 @@
   </div>
 </div>
 
-@if(app()->environment('local'))
+@if(app()->environment('local') && $txViewerEmail === 'ai@rustx.com')
 <div class="modal fade" id="txQuickSyncModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content">

@@ -381,12 +381,14 @@ Route::middleware([
     // Tally Explorer -- browse the raw Tally data synced into HRX (purchases,
     // purchase orders, payments, the stock-item master, the full ledger master).
     // Deliberately restricted to two named accounts, not a role -- replaces the former
-    // admin/HR/accounts-wide gate entirely. Trend (the Sales reconciliation view built/verified
-    // across this whole Tally accuracy effort) goes to mukul@rustx.com only; everything else in
-    // Tally Explorer (the read-only Purchases/Purchase Orders/Payments/Stock/Ledgers browsers, plus
-    // the local-only Quick Sync trigger) goes to ai@rustx.com only.
+    // admin/HR/accounts-wide gate entirely. ai@rustx.com sees everything in Tally Explorer;
+    // mukul@rustx.com sees Trend only; nobody else sees any of it.
     $tx = \App\Http\Controllers\tenant\TallyExplorerController::class;
-    Route::middleware(['auth', 'tally.viewer', \App\Http\Middleware\RelaxSalesSourcesSqlMode::class, 'restrict.email:mukul@rustx.com'])->prefix('tally-explorer')->name('tally-explorer.')->group(function () use ($tx) {
+    // Deliberately NOT 'tally.viewer' here -- that older gate is a single shared TALLY_VIEWER_EMAILS whitelist
+    // covering Sales Sources/Customer Profile too (see RestrictTallyAccess's docblock), and adding Mukul to it
+    // would grant him those other Tally-derived pages as well, not just Trend. restrict.email below is the
+    // precise gate that was actually asked for.
+    Route::middleware(['auth', \App\Http\Middleware\RelaxSalesSourcesSqlMode::class, 'restrict.email:ai@rustx.com,mukul@rustx.com'])->prefix('tally-explorer')->name('tally-explorer.')->group(function () use ($tx) {
       Route::get('', [$tx, 'index'])->name('index');
       Route::get('trend', [$tx, 'trend'])->name('trend');
       Route::get('trend/export', [$tx, 'trendExport'])->name('trend.export');
@@ -394,7 +396,7 @@ Route::middleware([
       Route::get('trend/cell', [$tx, 'trendCellDetail'])->name('trend.cell');
       Route::get('trend/cell/export', [$tx, 'trendCellExport'])->name('trend.cell.export');
     });
-    Route::middleware(['auth', 'tally.viewer', \App\Http\Middleware\RelaxSalesSourcesSqlMode::class, 'restrict.email:ai@rustx.com'])->prefix('tally-explorer')->name('tally-explorer.')->group(function () use ($tx) {
+    Route::middleware(['auth', \App\Http\Middleware\RelaxSalesSourcesSqlMode::class, 'restrict.email:ai@rustx.com'])->prefix('tally-explorer')->name('tally-explorer.')->group(function () use ($tx) {
       Route::get('purchases', [$tx, 'purchases'])->name('purchases');
       Route::get('purchases/detail', [$tx, 'purchaseDetail'])->name('purchases.detail');
       Route::get('purchases/show', [$tx, 'purchaseShow'])->name('purchases.show');
@@ -403,8 +405,21 @@ Route::middleware([
       Route::get('payments', [$tx, 'payments'])->name('payments');
       Route::get('stock', [$tx, 'stock'])->name('stock');
       Route::get('ledgers', [$tx, 'ledgers'])->name('ledgers');
-      Route::get('ledgers/show', [$tx, 'ledgerShow'])->name('ledgers.show');
       Route::post('quick-sync', [$tx, 'quickSync'])->name('quick-sync');
+    });
+    // ledgers/show alone is reachable by any authenticated user, NOT just the two named accounts above --
+    // per explicit request (2026-10-29) so the Sales Report grid can link a mapped customer's name straight
+    // to its Tally ledger detail. ai@rustx.com/mukul@rustx.com still see ANY ledger (full Tally Explorer
+    // access, unchanged); everyone else only reaches a ledger that is actually one of THEIR OWN customers
+    // on the Sales Report grid -- enforced inside TallyExplorerController::ledgerShow() via the same
+    // SalesScope ownership check the grid itself and CustomerTallyMappingController already use, not by
+    // this route's middleware (which can't see "whose customer is this" without a DB lookup).
+    Route::middleware(['auth', \App\Http\Middleware\RelaxSalesSourcesSqlMode::class])->prefix('tally-explorer')->name('tally-explorer.')->group(function () use ($tx) {
+      Route::get('ledgers/show', [$tx, 'ledgerShow'])->name('ledgers.show');
+      Route::get('ledgers/invoice', [$tx, 'invoiceDetail'])->name('ledgers.invoice');
+      Route::get('ledgers/invoice/pdf', [$tx, 'invoicePdf'])->name('ledgers.invoice.pdf');
+      Route::get('ledgers/item', [$tx, 'itemDetail'])->name('ledgers.item');
+      Route::get('ledgers/delivery', [$tx, 'deliveryDetail'])->name('ledgers.delivery');
     });
 
     // Sales Sources -- the manual Sales Report, Setu and the Tally daily
@@ -1065,6 +1080,36 @@ Route::middleware([
             Route::post('/sales-report/customers/bulk-confirm-tally', [\App\Http\Controllers\tenant\CustomerTallyMappingController::class, 'bulkConfirmSuggested'])->name('pipeline.customers.bulk-confirm-tally');
             Route::get('/sales-report/customer/{customer}/tally-sync-current-month-preview', [\App\Http\Controllers\tenant\CustomerTallyMappingController::class, 'syncCurrentMonthPreview'])->name('pipeline.customer.tally-sync-current-month-preview');
             Route::post('/sales-report/customer/{customer}/tally-sync-current-month', [\App\Http\Controllers\tenant\CustomerTallyMappingController::class, 'syncCurrentMonth'])->name('pipeline.customer.tally-sync-current-month');
+
+            // Opens a mapped customer's Tally ledger detail from the Sales Report grid. Deliberately
+            // registered HERE, under sales.guard (same gate as the tally-preview/map-tally routes just
+            // above -- the ones every sales-floor user, not only admin, already reaches), rather than
+            // inside the Tally Explorer section's own routes -- that whole section sits inside the
+            // site-wide admin.guard group (role/permission gate unrelated to Tally: admin|hr|accounts|
+            // manager|shifts.manage|...), so nesting it there would have silently 302'd anyone without
+            // one of THOSE roles to /user/dashboard before TallyExplorerController::ledgerShow() ever
+            // got to run its own, actually-relevant ownership check. Found via a failed 2026-10-29
+            // production verification (Geet Kaur got redirected) before this shipped. ai@rustx.com/
+            // mukul@rustx.com still reach Tally Explorer's OWN ledgers/show (admin-guarded, any ledger
+            // by name) unaffected by this; this route is the one the Sales Report link actually uses.
+            Route::get('/sales-report/customer/{customer}/tally-ledger', [\App\Http\Controllers\tenant\TallyExplorerController::class, 'ledgerShow'])
+                ->middleware(\App\Http\Middleware\RelaxSalesSourcesSqlMode::class)
+                ->name('pipeline.customer.tally-ledger');
+            // Same reasoning as the ledger-detail route just above: registered here, not inside the
+            // admin-guarded Tally Explorer section, so every sales-floor user who can open their own
+            // customer's ledger page can also open the invoice-items modal and PDF on it.
+            Route::get('/sales-report/customer/{customer}/tally-ledger/invoice', [\App\Http\Controllers\tenant\TallyExplorerController::class, 'invoiceDetail'])
+                ->middleware(\App\Http\Middleware\RelaxSalesSourcesSqlMode::class)
+                ->name('pipeline.customer.tally-ledger.invoice');
+            Route::get('/sales-report/customer/{customer}/tally-ledger/invoice/pdf', [\App\Http\Controllers\tenant\TallyExplorerController::class, 'invoicePdf'])
+                ->middleware(\App\Http\Middleware\RelaxSalesSourcesSqlMode::class)
+                ->name('pipeline.customer.tally-ledger.invoice.pdf');
+            Route::get('/sales-report/customer/{customer}/tally-ledger/item', [\App\Http\Controllers\tenant\TallyExplorerController::class, 'itemDetail'])
+                ->middleware(\App\Http\Middleware\RelaxSalesSourcesSqlMode::class)
+                ->name('pipeline.customer.tally-ledger.item');
+            Route::get('/sales-report/customer/{customer}/tally-ledger/delivery', [\App\Http\Controllers\tenant\TallyExplorerController::class, 'deliveryDetail'])
+                ->middleware(\App\Http\Middleware\RelaxSalesSourcesSqlMode::class)
+                ->name('pipeline.customer.tally-ledger.delivery');
 
             Route::get('/sales-report/import', [\App\Http\Controllers\tenant\PipelineImportController::class, 'showImport'])->name('pipeline.import');
             Route::post('/sales-report/import/preview', [\App\Http\Controllers\tenant\PipelineImportController::class, 'previewImport'])->name('pipeline.import.preview');

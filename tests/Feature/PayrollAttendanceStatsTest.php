@@ -80,7 +80,7 @@ class PayrollAttendanceStatsTest extends TestCase
         Attendance::create([
             'user_id' => $user->id,
             'check_in_time' => '2026-06-13 09:00:00',
-            'check_out_time' => '2026-06-13 13:00:00', // 240 min: clears the SP bar, well under the old flat 465
+            'check_out_time' => '2026-06-13 17:00:00', // 480 min: clears the full 470-min SP bar
             'status' => 'Present',
         ]);
 
@@ -88,6 +88,25 @@ class PayrollAttendanceStatsTest extends TestCase
 
         $this->assertEquals(1.0, $stats['worked_days'], 'a credited SP day must count as a full worked day');
         $this->assertEquals(0.0, $stats['absents'], 'a credited SP day must never dock any pay');
+    }
+
+    public function test_a_half_worked_off_saturday_earns_half_credit_not_a_half_day_docking(): void
+    {
+        $profile = LeavePolicyProfile::create(['name' => 'QA Sat Off ' . uniqid(), 'saturday_off_config' => ['2', '4'], 'status' => 'active']);
+        $user = $this->makeUser();
+        $user->update(['leave_policy_profile_id' => $profile->id]);
+
+        Attendance::create([
+            'user_id' => $user->id,
+            'check_in_time' => '2026-06-13 09:00:00',
+            'check_out_time' => '2026-06-13 13:00:00', // 240 min: clears only the half SP bar
+            'status' => 'Present',
+        ]);
+
+        $stats = $this->stats($user, '2026-06-13', '2026-06-13');
+
+        $this->assertEquals(0.5, $stats['worked_days'], 'a half-credited SP day counts as half a worked day');
+        $this->assertEquals(0.0, $stats['absents'], 'an off-day half credit must never dock any pay');
     }
 
     public function test_an_uncorrected_miss_punch_counts_as_absent_not_present(): void
@@ -235,7 +254,7 @@ class PayrollAttendanceStatsTest extends TestCase
         Attendance::create([
             'user_id' => $user->id,
             'check_in_time' => '2026-06-14 09:00:00', // Sunday
-            'check_out_time' => '2026-06-14 14:00:00', // 300 min, clears the SP bar
+            'check_out_time' => '2026-06-14 17:00:00', // 480 min, clears the full SP bar
             'status' => 'Absent',
         ]);
 

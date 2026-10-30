@@ -228,9 +228,13 @@ class SalesPipelineController extends Controller
 
     /**
      * The real product brands and the spellings they appear under in the
-     * free-text `product` column, used by the Brand filter.
+     * free-text `product` column, used by the Brand filter. Public so
+     * CustomerTallyMappingController::fillCurrentMonth() can reuse the exact
+     * same alias matching to attribute a multi-brand customer's Tally sales
+     * back to the right Sales Report row, instead of inventing a second
+     * mapping (2026-10-29).
      */
-    private const BRANDS = [
+    public const BRANDS = [
         'Rust-X'     => ['rust-x', 'rustx', 'rust x'],
         'Dr. Bio'    => ['dr.bio', 'dr. bio', 'dr bio', 'drbio'],
         'Fillezy'    => ['fillezy', 'filezy'],
@@ -242,6 +246,24 @@ class SalesPipelineController extends Controller
         // rows that still carry product='HITECH' keep their value and remain
         // visible; they simply no longer offer it as a standard choice.
     ];
+
+    /**
+     * Which brand (a BRANDS key) a free-text string names, by the same substring-alias rule the
+     * Brand filter and brandCounts() already use -- or null if it names none of them. Shared single
+     * source of truth so a brand match means the same thing everywhere it's checked.
+     */
+    public static function brandForProductText(?string $text): ?string
+    {
+        $l = strtolower((string) $text);
+        foreach (self::BRANDS as $brand => $aliases) {
+            foreach ($aliases as $alias) {
+                if (str_contains($l, $alias)) {
+                    return $brand;
+                }
+            }
+        }
+        return null;
+    }
 
     public function index(Request $request)
     {
@@ -439,6 +461,20 @@ class SalesPipelineController extends Controller
             $query->whereNull('new_biz_id')->whereNotNull('ccare_id');
         } elseif ($fCat === 'None') {
             $query->whereNull('new_biz_id')->whereNull('ccare_id');
+        }
+
+        // Tally mapping filter — "Mapped" = this row's customer is confirmed
+        // against Tally; "Not Mapped" is everything else (no Customer record
+        // yet, or one still suggested/similar/unmatched), matching the grid's
+        // own green/blue/red "T" badge logic.
+        $fTally = trim((string) $request->input('tally', ''));
+        if ($fTally === 'mapped') {
+            $query->whereHas('customer', fn ($q) => $q->where('tally_match_status', \App\Models\Customer::STATUS_VERIFIED));
+        } elseif ($fTally === 'not_mapped') {
+            $query->where(function ($q) {
+                $q->whereDoesntHave('customer')
+                  ->orWhereHas('customer', fn ($q2) => $q2->where('tally_match_status', '!=', \App\Models\Customer::STATUS_VERIFIED));
+            });
         }
 
         // ── Aggregates over the FULL filtered set (before pagination) so the
@@ -831,47 +867,120 @@ class SalesPipelineController extends Controller
             // for someone tagged on it twice.
             $targetHolderIds = $allTargets->pluck('salesperson_id')->unique()->all();
             $actualByKey = [];
-            foreach ($targetHolderIds as $spId) {
+
+            // Batched: this used to run the full OR/EXISTS scope query below
+            // once PER target holder (100+ near-identical full-table scans on
+            // every Sales Report load, over half the page's DB time). Now it
+            // runs once for every target holder combined, and which holder(s)
+            // each returned row counts for is resolved in memory below --
+            // same result, one query instead of 100+.
+            $heldBeforeByUser = [];
+            if ($targetHolderIds && \App\Models\SalesPipelineHandover::hasAny()) {
+                $heldBeforeByUser = \Illuminate\Support\Facades\DB::table('sales_pipeline_handovers')
+                    ->whereNull('reverted_at')
+                    ->whereIn('from_user_id', $targetHolderIds)
+                    ->select('sales_pipeline_id', 'from_user_id')
+                    ->get()
+                    ->groupBy('from_user_id')
+                    ->map(fn ($rows) => $rows->pluck('sales_pipeline_id')->unique()->all())
+                    ->all();
+            }
+            $allHeldBeforeIds = collect($heldBeforeByUser)->flatten()->unique()->values()->all();
+
+            if ($targetHolderIds) {
                 // Named distinctly from the page's own $pipelines (the main
                 // customer table's paginator, set far above in this same
                 // method) -- PHP has no block scope, so reusing that name
                 // here silently overwrote the paginator with this plain
                 // Collection, and every visit to this page fatal-errored the
                 // instant the view called $pipelines->firstItem().
-                $achieverPipelines = SalesPipeline::with(['months' => function ($q) use ($achieveMonthKeys) {
-                        $q->whereIn('month_year', $achieveMonthKeys);
-                    }])
+                $achieverPipelinesAll = SalesPipeline::with([
+                        'months' => function ($q) use ($achieveMonthKeys) {
+                            $q->whereIn('month_year', $achieveMonthKeys);
+                        },
+                        // Unfiltered (not the type-scoped extraReps() relation) --
+                        // the per-row OR/EXISTS below never filtered by type either.
+                        'allExtraReps',
+                    ])
                     ->where('is_locked', true)
                     ->whereNull('deleted_at')
-                    ->where(function ($q) use ($spId) {
-                        $q->where('salesperson_id', $spId)
-                          ->orWhere('ccare_id', $spId)
-                          ->orWhere('new_biz_id', $spId)
-                          ->orWhere('new_biz_2_id', $spId)
-                          ->orWhereExists(function ($s) use ($spId) {
+                    ->where(function ($q) use ($targetHolderIds, $allHeldBeforeIds) {
+                        $q->whereIn('salesperson_id', $targetHolderIds)
+                          ->orWhereIn('ccare_id', $targetHolderIds)
+                          ->orWhereIn('new_biz_id', $targetHolderIds)
+                          ->orWhereIn('new_biz_2_id', $targetHolderIds)
+                          ->orWhereExists(function ($s) use ($targetHolderIds) {
                               $s->selectRaw('1')->from('sales_pipeline_extra_reps as er')
                                 ->whereColumn('er.sales_pipeline_id', 'sales_pipelines.id')
-                                ->where('er.user_id', $spId);
-                          })
-                          // Customers held before a leaver handover still count for the earlier months.
-                          ->orWhereIn('id', \App\Models\SalesPipelineHandover::pipelineIdsHeldBefore([(int) $spId])->all());
+                                ->whereIn('er.user_id', $targetHolderIds);
+                          });
+                        // Customers held before a leaver handover still count for the earlier months.
+                        if ($allHeldBeforeIds) {
+                            $q->orWhereIn('id', $allHeldBeforeIds);
+                        }
                     })
                     ->get();
-                foreach ($achieveMonthKeys as $mk) {
-                    $actual = 0.0;
-                    $pending = 0.0;
-                    $forecast = 0.0;
-                    foreach ($achieverPipelines as $p) {
-                        $m = $p->months->firstWhere('month_year', $mk);
-                        if ($m && $p->heldInMonth((int) $spId, $mk)) {
-                            $actual   += (float) $m->sale_amount;
-                            $pending  += (float) $m->pending_amount;
-                            // Same population as Actual and Pending above, so the
-                            // three columns describe one set of customers.
-                            $forecast += (float) $m->forecast_amount;
+
+                // Warm SalesPipelineHandover's internal per-pipeline event cache
+                // for every pipeline in one batched query. heldInMonth() below
+                // (called once per target holder x month x pipeline) queries
+                // a single pipeline's events on its own the first time it sees
+                // that id uncached -- on production, where real handover history
+                // exists, that was thousands of one-row queries.
+                \App\Models\SalesPipelineHandover::eventsFor($achieverPipelinesAll->pluck('id')->all());
+
+                // Single pass bucketing each pipeline to the target holder(s) it
+                // matches, instead of scanning the whole batched collection once
+                // PER target holder (that was O(holders x pipelines) in PHP --
+                // for an unrestricted admin, $achieverPipelinesAll can be most of
+                // the table, so 103 holders x thousands of rows added up to the
+                // same wall-clock cost the DB-side N+1 fix was meant to remove).
+                $targetHolderSet = array_flip($targetHolderIds);
+                $heldBeforeByPipeline = [];
+                foreach ($heldBeforeByUser as $uid => $pids) {
+                    foreach ($pids as $pid) {
+                        $heldBeforeByPipeline[$pid][] = (int) $uid;
+                    }
+                }
+                $pipelinesBySpId = [];
+                foreach ($achieverPipelinesAll as $p) {
+                    $matched = [];
+                    foreach ([$p->salesperson_id, $p->ccare_id, $p->new_biz_id, $p->new_biz_2_id] as $uid) {
+                        if ($uid !== null && isset($targetHolderSet[(int) $uid])) {
+                            $matched[(int) $uid] = true;
                         }
                     }
-                    $actualByKey[$mk . '|' . $spId] = (object) ['actual' => $actual, 'pending' => $pending, 'forecast' => $forecast];
+                    foreach ($p->allExtraReps as $er) {
+                        if (isset($targetHolderSet[(int) $er->user_id])) {
+                            $matched[(int) $er->user_id] = true;
+                        }
+                    }
+                    foreach ($heldBeforeByPipeline[$p->id] ?? [] as $uid) {
+                        $matched[$uid] = true;
+                    }
+                    foreach (array_keys($matched) as $uid) {
+                        $pipelinesBySpId[$uid][] = $p;
+                    }
+                }
+
+                foreach ($targetHolderIds as $spId) {
+                    $achieverPipelines = $pipelinesBySpId[$spId] ?? [];
+                    foreach ($achieveMonthKeys as $mk) {
+                        $actual = 0.0;
+                        $pending = 0.0;
+                        $forecast = 0.0;
+                        foreach ($achieverPipelines as $p) {
+                            $m = $p->months->firstWhere('month_year', $mk);
+                            if ($m && $p->heldInMonth((int) $spId, $mk)) {
+                                $actual   += (float) $m->sale_amount;
+                                $pending  += (float) $m->pending_amount;
+                                // Same population as Actual and Pending above, so the
+                                // three columns describe one set of customers.
+                                $forecast += (float) $m->forecast_amount;
+                            }
+                        }
+                        $actualByKey[$mk . '|' . $spId] = (object) ['actual' => $actual, 'pending' => $pending, 'forecast' => $forecast];
+                    }
                 }
             }
             $nameMap = User::whereIn('id', $targetHolderIds)
@@ -1016,7 +1125,7 @@ class SalesPipelineController extends Controller
         $ccareOnly   = $ccareUsers->whereNotIn('id', $bothUsers->pluck('id'))->values();
         $newBizOnly  = $newBizUsers->whereNotIn('id', $bothUsers->pluck('id'))->values();
 
-        return view('tenant.sales-pipeline.index', compact('bothUsers', 'ccareOnly', 'newBizOnly', 'canDeleteCustomer', 'canEditBook', 'canEditOwnRow', 'isAdminOrHr', 'pipelines', 'months', 'selectedFy', 'defaultFy', 'assignedUsers', 'salespersons', 'newBizUsers', 'isCcare', 'isNewBiz', 'totals', 'salespersonTargets', 'monthlyActuals', 'monthlyForecast', 'monthlyPending', 'monthlyTargets', 'currentMonthKey', 'totalNewClients', 'totalPendingCurrentMonth', 'totalPotential', 'annualMap', 'annualGrand', 'salespersonFilterUsers', 'ccareFilterUsers', 'newBizFilterUsers', 'spFilterCounts', 'ccareFilterCounts', 'nbFilterCounts', 'spNoneCount', 'ccareNoneCount', 'nbNoneCount', 'brandCounts', 'fBrand', 'kbByName', 'fParty', 'fType', 'fSp', 'fCcare', 'fNb', 'fBoth', 'bothFilterUsers', 'bothFilterCounts', 'targetAchievers', 'targetAchieversByMonth', 'achieveMonthKeys', 'kAchieved', 'bAchieved', 'skAchieved', 'isManager', 'teamView', 'hasTeam', 'teamMembers', 'ccareUsers', 'syncTargetId', 'syncTargetLabel', 'syncMapped', 'isUnrestricted', 'selectedPersonId', 'selectedPersonHasTeam', 'showTeamActive', 'monthCategory', 'creditPeople'));
+        return view('tenant.sales-pipeline.index', compact('bothUsers', 'ccareOnly', 'newBizOnly', 'canDeleteCustomer', 'canEditBook', 'canEditOwnRow', 'isAdminOrHr', 'pipelines', 'months', 'selectedFy', 'defaultFy', 'assignedUsers', 'salespersons', 'newBizUsers', 'isCcare', 'isNewBiz', 'totals', 'salespersonTargets', 'monthlyActuals', 'monthlyForecast', 'monthlyPending', 'monthlyTargets', 'currentMonthKey', 'totalNewClients', 'totalPendingCurrentMonth', 'totalPotential', 'annualMap', 'annualGrand', 'salespersonFilterUsers', 'ccareFilterUsers', 'newBizFilterUsers', 'spFilterCounts', 'ccareFilterCounts', 'nbFilterCounts', 'spNoneCount', 'ccareNoneCount', 'nbNoneCount', 'brandCounts', 'fBrand', 'kbByName', 'fParty', 'fType', 'fSp', 'fCcare', 'fNb', 'fBoth', 'fTally', 'bothFilterUsers', 'bothFilterCounts', 'targetAchievers', 'targetAchieversByMonth', 'achieveMonthKeys', 'kAchieved', 'bAchieved', 'skAchieved', 'isManager', 'teamView', 'hasTeam', 'teamMembers', 'ccareUsers', 'syncTargetId', 'syncTargetLabel', 'syncMapped', 'isUnrestricted', 'selectedPersonId', 'selectedPersonHasTeam', 'showTeamActive', 'monthCategory', 'creditPeople'));
     }
 
     public function actualPipelineIndex(Request $request)
@@ -1809,34 +1918,62 @@ class SalesPipelineController extends Controller
         // salesperson cc_salesperson_map ever mapped them to.
         $targetHolderIds = $targets->pluck('salesperson_id')->unique()->all();
         $actuals = [];
-        foreach ($targetHolderIds as $spId) {
-            $pipelines = SalesPipeline::with(['months' => function ($q) use ($month) {
+
+        // Batched (same fix as index()): one query for every target holder
+        // combined instead of one full OR/EXISTS scan per holder.
+        if ($targetHolderIds) {
+            $pipelinesAll = SalesPipeline::with(['months' => function ($q) use ($month) {
                     $q->where('month_year', $month);
-                }])
+                }, 'allExtraReps'])
                 ->where('is_locked', true)
                 ->whereNull('deleted_at')
-                ->where(function ($q) use ($spId) {
-                    $q->where('salesperson_id', $spId)
-                      ->orWhere('ccare_id', $spId)
-                      ->orWhere('new_biz_id', $spId)
-                      ->orWhere('new_biz_2_id', $spId)
-                      ->orWhereExists(function ($s) use ($spId) {
+                ->where(function ($q) use ($targetHolderIds) {
+                    $q->whereIn('salesperson_id', $targetHolderIds)
+                      ->orWhereIn('ccare_id', $targetHolderIds)
+                      ->orWhereIn('new_biz_id', $targetHolderIds)
+                      ->orWhereIn('new_biz_2_id', $targetHolderIds)
+                      ->orWhereExists(function ($s) use ($targetHolderIds) {
                           $s->selectRaw('1')->from('sales_pipeline_extra_reps as er')
                             ->whereColumn('er.sales_pipeline_id', 'sales_pipelines.id')
-                            ->where('er.user_id', $spId);
+                            ->whereIn('er.user_id', $targetHolderIds);
                       });
                 })
                 ->get();
-            $actual = 0.0;
-            $pending = 0.0;
-            foreach ($pipelines as $p) {
-                $m = $p->months->first();
-                if ($m) {
-                    $actual  += (float) $m->sale_amount;
-                    $pending += (float) $m->pending_amount;
+
+            // Single pass bucketing (see index() for why: O(holders x rows)
+            // from scanning the whole batch once per holder, done once instead).
+            $targetHolderSet = array_flip($targetHolderIds);
+            $pipelinesBySpId = [];
+            foreach ($pipelinesAll as $p) {
+                $matched = [];
+                foreach ([$p->salesperson_id, $p->ccare_id, $p->new_biz_id, $p->new_biz_2_id] as $uid) {
+                    if ($uid !== null && isset($targetHolderSet[(int) $uid])) {
+                        $matched[(int) $uid] = true;
+                    }
+                }
+                foreach ($p->allExtraReps as $er) {
+                    if (isset($targetHolderSet[(int) $er->user_id])) {
+                        $matched[(int) $er->user_id] = true;
+                    }
+                }
+                foreach (array_keys($matched) as $uid) {
+                    $pipelinesBySpId[$uid][] = $p;
                 }
             }
-            $actuals[$spId] = (object) ['actual' => $actual, 'pending' => $pending];
+
+            foreach ($targetHolderIds as $spId) {
+                $pipelines = $pipelinesBySpId[$spId] ?? [];
+                $actual = 0.0;
+                $pending = 0.0;
+                foreach ($pipelines as $p) {
+                    $m = $p->months->first();
+                    if ($m) {
+                        $actual  += (float) $m->sale_amount;
+                        $pending += (float) $m->pending_amount;
+                    }
+                }
+                $actuals[$spId] = (object) ['actual' => $actual, 'pending' => $pending];
+            }
         }
 
         $names = User::whereIn('id', $targetHolderIds)
@@ -2485,6 +2622,16 @@ class SalesPipelineController extends Controller
         if (array_key_exists('party_name', $data) && trim((string) $data['party_name']) === '') {
             $message = 'Party name cannot be blank.';
             if ($wantsJson) return response()->json(['success' => false, 'message' => $message], 422);
+            return redirect()->back()->with('error', $message);
+        }
+
+        // Server-side backstop for the grid's readonly state (index.blade.php) -- a verified Tally match
+        // renamed this row to Tally's own spelling; a direct POST bypassing the disabled input must not be
+        // able to un-sync it. Per explicit request (2026-10-28).
+        if (array_key_exists('party_name', $data) && optional($pipeline->customer)->tally_match_status === \App\Models\Customer::STATUS_VERIFIED
+            && $data['party_name'] !== $pipeline->party_name) {
+            $message = 'This customer\'s name is locked — verified against Tally.';
+            if ($wantsJson) return response()->json(['success' => false, 'message' => $message], 403);
             return redirect()->back()->with('error', $message);
         }
 

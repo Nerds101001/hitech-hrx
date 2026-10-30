@@ -8,7 +8,9 @@ use App\Support\ProductGroup;
 use App\Support\TallyFileReader;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 
 /**
@@ -89,13 +91,21 @@ class TallyPushCommand extends Command
 
     public function handle(): int
     {
-        [$start, $end] = $this->resolveRange();
+        $companyCode = (string) $this->option('company');
+        // Auto mode = the scheduled task's own call, with no explicit day/range -- the only mode that is
+        // allowed to consult/advance tally_push_state and send failure emails. A manual --date/--from/--to
+        // run (backfill-tally.ps1, testing, a one-off re-run) never touches that state or sends mail: it is
+        // deliberate and already being watched by whoever typed it.
+        $isAuto = !$this->option('date') && !$this->option('from') && !$this->option('to');
+
+        [$start, $end] = $this->resolveRange($companyCode, $isAuto);
         if ($start === null) {
             return self::FAILURE;
         }
 
         $targetUrl = (string) ($this->option('target-url') ?: config('tally_push.outbound.target_url'));
         $dry = (bool) $this->option('dry-run');
+        $isAuto = $isAuto && !$dry; // a dry run never advances or fails the tracked state -- it pushes nothing
         if (!$dry && $targetUrl === '') {
             $this->error('TALLY_PUSH_TARGET_URL is not set (config/tally_push.php outbound.target_url). Nothing to push to.');
             return self::FAILURE;
@@ -105,7 +115,6 @@ class TallyPushCommand extends Command
             return self::FAILURE;
         }
 
-        $companyCode = (string) $this->option('company');
         $companyName = self::resolveCompanyName($companyCode, $this->option('gateway-company'));
         if ($companyName === null) {
             $this->error("Unknown --company \"{$companyCode}\": not in config/services.php tally.companies and no --gateway-company override given.");
@@ -121,6 +130,9 @@ class TallyPushCommand extends Command
             $gateway->assertCompany();
         } catch (\Throwable $e) {
             $this->error($e->getMessage());
+            if ($isAuto) {
+                $this->recordAutoFailure($companyCode, $e->getMessage());
+            }
             return self::FAILURE;
         }
         $this->line("Gateway: {$gateway->baseUrl()}   company: {$gateway->expectedCompany()} [{$companyCode}]" . ($dry ? '   (dry run: nothing pushed)' : "   target: {$targetUrl}"));
@@ -130,12 +142,17 @@ class TallyPushCommand extends Command
             'purchases' => 0, 'purchase_lines' => 0, 'purchase_orders' => 0, 'payments' => 0, 'credit_debit_note_lines' => 0,
         ];
         $daysDone = 0;
+        $lastCompletedDay = null;
         for ($day = $start->copy(); $day->lte($end); $day = $day->copy()->addDay()) {
             $t = microtime(true);
             try {
                 $vouchers = $gateway->dayBook($day);
             } catch (\Throwable $e) {
                 $this->error("{$day->format('Y-m-d')}: FAILED -- {$e->getMessage()} -- stopping here.");
+                if ($isAuto) {
+                    $this->recordAutoSuccessThrough($companyCode, $lastCompletedDay);
+                    $this->recordAutoFailure($companyCode, "{$day->format('Y-m-d')}: {$e->getMessage()}");
+                }
                 return self::FAILURE;
             }
             $secs = microtime(true) - $t;
@@ -157,6 +174,10 @@ class TallyPushCommand extends Command
                 [$ok, $message] = $this->push($targetUrl, $payload);
                 if (!$ok) {
                     $this->error("{$day->format('Y-m-d')}: push failed -- {$message} -- stopping here. Earlier days already pushed are unaffected.");
+                    if ($isAuto) {
+                        $this->recordAutoSuccessThrough($companyCode, $lastCompletedDay);
+                        $this->recordAutoFailure($companyCode, "{$day->format('Y-m-d')}: push failed -- {$message}");
+                    }
                     return self::FAILURE;
                 }
                 foreach ($counts as $k => $n) {
@@ -167,6 +188,7 @@ class TallyPushCommand extends Command
                     $counts['purchases'], $counts['purchase_lines'], $counts['purchase_orders'], $counts['payments'], $message));
             }
 
+            $lastCompletedDay = $day->copy();
             $daysDone++;
 
             if ($secs > 45 && $day->lt($end)) {
@@ -176,6 +198,14 @@ class TallyPushCommand extends Command
             if ($day->lt($end)) {
                 usleep(400_000);
             }
+        }
+
+        if ($isAuto) {
+            // Every day up to $lastCompletedDay genuinely finished (pushed, or confirmed nothing to push) --
+            // record it so the NEXT scheduled run resumes after it instead of re-trying or, worse, silently
+            // never going further back than "today" the way the old unconditional Carbon::today() did.
+            $this->recordAutoSuccessThrough($companyCode, $lastCompletedDay);
+            $this->clearAutoFailure($companyCode);
         }
 
         $this->newLine();
@@ -193,25 +223,137 @@ class TallyPushCommand extends Command
         return self::SUCCESS;
     }
 
-    /** @return array{0: ?Carbon, 1: ?Carbon} */
-    private function resolveRange(): array
+    /**
+     * In AUTO mode (the scheduled task's own call, no --date/--from/--to), this no longer just means "today":
+     * it starts the day after tally_push_state.last_success_date for this company, so a gap left by a day
+     * that failed cleanly (company not loaded, Tally unreachable, ...) gets picked up automatically by the
+     * next run instead of staying a silent hole until someone notices and runs a manual backfill. $end is
+     * always today regardless -- today's own vouchers keep arriving all day, so every run re-pulls it, same
+     * as before. A gap wider than MAX_DAYS is capped to the most recent MAX_DAYS days; the state this run
+     * records still only advances to wherever it actually got to, so a very old gap closes incrementally,
+     * one scheduled run at a time, rather than needing one run to do it all.
+     *
+     * @return array{0: ?Carbon, 1: ?Carbon}
+     */
+    private function resolveRange(string $companyCode, bool $isAuto): array
     {
         if ($this->option('from')) {
             $start = Carbon::createFromFormat('!Y-m-d', $this->option('from'));
             $end = Carbon::createFromFormat('!Y-m-d', $this->option('to') ?: $this->option('from'));
+        } elseif ($this->option('date')) {
+            $start = $end = Carbon::createFromFormat('!Y-m-d', $this->option('date'));
         } else {
-            $d = $this->option('date') ? Carbon::createFromFormat('!Y-m-d', $this->option('date')) : Carbon::today();
-            $start = $end = $d;
+            $today = Carbon::today();
+            $lastSuccess = $isAuto
+                ? DB::table('tally_push_state')->where('company', $companyCode)->value('last_success_date')
+                : null;
+            $start = $lastSuccess ? Carbon::parse($lastSuccess)->addDay() : $today->copy();
+            if ($start->gt($today)) {
+                $start = $today->copy();
+            }
+            $end = $today;
         }
         if (!$start || !$end || $end->lt($start)) {
             $this->error('--date, or --from/--to, must be valid dates (YYYY-MM-DD) with --to on or after --from.');
             return [null, null];
         }
         if ($start->diffInDays($end) + 1 > self::MAX_DAYS) {
-            $this->error('Refusing more than ' . self::MAX_DAYS . ' days in one run: it makes one request per day.');
-            return [null, null];
+            $start = $end->copy()->subDays(self::MAX_DAYS - 1);
         }
         return [$start, $end];
+    }
+
+    /** Advances (never rewinds) tally_push_state.last_success_date for this company and clears any failure streak. */
+    private function recordAutoSuccessThrough(string $companyCode, ?Carbon $day): void
+    {
+        if ($day === null) {
+            return;
+        }
+        $now = now();
+        $dayStr = $day->format('Y-m-d');
+        DB::table('tally_push_state')->upsert([
+            'company' => $companyCode,
+            'last_success_date' => $dayStr,
+            'last_attempt_at' => $now,
+            'last_success_at' => $now,
+            'consecutive_failures' => 0,
+            'last_failure_message' => null,
+            'updated_at' => $now,
+            'created_at' => $now,
+        ], ['company'], [
+            // last_success_date only ever moves forward: a later partial run (e.g. the 45s bail-out) must
+            // never un-advance what an earlier, fuller run already recorded for today.
+            'last_success_date' => DB::raw("CASE WHEN last_success_date IS NULL OR last_success_date < '{$dayStr}' THEN '{$dayStr}' ELSE last_success_date END"),
+            'last_attempt_at' => $now,
+            'last_success_at' => $now,
+            'consecutive_failures' => 0,
+            'last_failure_message' => null,
+            'updated_at' => $now,
+        ]);
+    }
+
+    private function clearAutoFailure(string $companyCode): void
+    {
+        DB::table('tally_push_state')->where('company', $companyCode)->update([
+            'consecutive_failures' => 0, 'last_failure_message' => null, 'updated_at' => now(),
+        ]);
+    }
+
+    /**
+     * Records the failure and, unless we already emailed about this exact streak within the last 24h,
+     * sends ai@rustx.com a notice -- same "gmail" transport and the-driver-must-actually-be-configured check
+     * deployment/office-pc/notify-tally.php already uses, just invoked in-process instead of shelling out.
+     */
+    private function recordAutoFailure(string $companyCode, string $message): void
+    {
+        $now = now();
+        $row = DB::table('tally_push_state')->where('company', $companyCode)->first();
+        $consecutive = ((int) ($row->consecutive_failures ?? 0)) + 1;
+        $lastNotified = $row->last_notified_at ?? null;
+        $shouldNotify = $lastNotified === null || Carbon::parse($lastNotified)->lt($now->copy()->subHours(24));
+
+        DB::table('tally_push_state')->upsert([
+            'company' => $companyCode,
+            'last_attempt_at' => $now,
+            'consecutive_failures' => $consecutive,
+            'last_failure_message' => $message,
+            'last_notified_at' => $shouldNotify ? $now : $lastNotified,
+            'updated_at' => $now,
+            'created_at' => $now,
+        ], ['company'], ['last_attempt_at', 'consecutive_failures', 'last_failure_message', 'last_notified_at', 'updated_at']);
+
+        if ($shouldNotify) {
+            $this->sendFailureEmail($companyCode, $message, $consecutive);
+        }
+    }
+
+    private function sendFailureEmail(string $companyCode, string $message, int $consecutiveFailures): void
+    {
+        $gmail = (string) env('MAIL_GMAIL_USERNAME') !== '' && (string) env('MAIL_GMAIL_PASSWORD') !== '';
+        $mailer = $gmail ? 'gmail' : (string) config('mail.default');
+        if (in_array($mailer, ['log', 'array'], true)) {
+            $this->warn("NOT emailing ai@rustx.com: mail driver is '{$mailer}' (no MAIL_GMAIL_USERNAME/PASSWORD set).");
+            return;
+        }
+
+        $subject = "HRX Tally sync failing for \"{$companyCode}\"";
+        $body = "hrx:tally-push --company={$companyCode} has failed " . ($consecutiveFailures > 1 ? "{$consecutiveFailures} runs in a row" : 'on its latest run') . ":\n\n"
+            . "{$message}\n\n"
+            . "This company's data will stay behind until the next scheduled run succeeds. If this is \"not loaded in Tally\","
+            . " open TallyPrime on this PC and load that company.\n\n"
+            . '-- Sent automatically by HRX on ' . gethostname() . ' at ' . now()->format('d M Y, h:i A') . ".\n";
+
+        try {
+            Mail::mailer($mailer)->raw($body, function ($m) use ($gmail, $subject) {
+                $m->to('ai@rustx.com')->subject($subject);
+                if ($gmail) {
+                    $m->from((string) env('MAIL_GMAIL_USERNAME'), 'HRX Tally sync');
+                }
+            });
+            $this->info('Failure notice emailed to ai@rustx.com.');
+        } catch (\Throwable $e) {
+            $this->warn('Could not email ai@rustx.com about this failure: ' . $e->getMessage());
+        }
     }
 
     /** @return array{invoices: array, invoice_lines: array, sale_lines: array, sale_orders: array, deliveries: array, receipts: array, purchases: array, purchase_lines: array, purchase_orders: array, payments: array, credit_debit_note_lines: array} */
@@ -409,7 +551,22 @@ class TallyPushCommand extends Command
                     // The sales order this invoice bills against, when Tally recorded one (REFERENCE field) --
                     // lets the Work Orders report compute an order-to-billing lead time without re-deriving it.
                     'order_no' => $v['order_no'] ?? null,
-                    'extra' => array_filter(['party_gstin' => $v['party_gstin'], 'place_of_supply' => $v['place_of_supply'], 'reference' => $v['reference']]),
+                    // Despatch Details (transporter, bilty no, despatch from/date, delivery date, terms,
+                    // POD) -- see TallyGateway::parseVouchers()'s own doc comment for where each of these
+                    // actually lives in Tally. Filtered on !== null specifically (not the default
+                    // array_filter, which would also drop 'pod' => false -- a real "POD: No" answer, not
+                    // an absent one).
+                    'extra' => array_filter([
+                        'party_gstin' => $v['party_gstin'], 'place_of_supply' => $v['place_of_supply'], 'reference' => $v['reference'],
+                        'transporter_name' => $v['transport']['name'] ?? null,
+                        'transporter_mobile' => $v['despatch']['transporter_mobile'] ?? null,
+                        'bilty_no' => $v['despatch']['bilty_no'] ?? null,
+                        'despatch_from' => $v['despatch']['despatch_from'] ?? null,
+                        'despatch_date' => $v['despatch']['despatch_date'] ?? null,
+                        'delivery_date' => $v['despatch']['delivery_date'] ?? null,
+                        'terms' => $v['despatch']['terms'] ?? null,
+                        'pod' => $v['despatch']['pod'] ?? null,
+                    ], fn ($val) => $val !== null),
                 ];
                 foreach ($v['lines'] as $line) {
                     $item = preg_replace('/\s+/', ' ', trim((string) $line['item']));

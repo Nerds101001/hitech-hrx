@@ -125,21 +125,35 @@ class Attendance extends Model implements AuditableContract
   }
 
   /**
-   * Off-day (Sunday/holiday/OFF-Saturday) comp-off credits standing for this
-   * person and day, from the balance's own audit trail: "Earned via … Working
-   * on d-m-Y" less "… Working Credit Reversed … on d-m-Y".
+   * Off-day (Sunday/holiday/OFF-Saturday) comp-off credit standing for this
+   * person and day, from the balance's own audit trail: sum of "Earned via
+   * … Working … on d-m-Y" amounts less "… Working Credit Reversed … on
+   * d-m-Y" amounts. The amount is the number in parentheses in the reason
+   * text (e.g. "Earned via Sunday Working (0.5) on 29-10-2026"); an entry
+   * written before half-day credit existed carries no parenthetical and
+   * always meant a full day, so it defaults to 1.0.
    */
-  public static function offDayCreditStanding(int $userId, int $leaveTypeId, $day): int
+  public static function offDayCreditStanding(int $userId, int $leaveTypeId, $day): float
   {
     $balanceId = \App\Models\LeaveBalance::where('user_id', $userId)->where('leave_type_id', $leaveTypeId)->value('id');
     if (!$balanceId) {
-      return 0;
+      return 0.0;
     }
     $on = ' on ' . \Carbon\Carbon::parse($day)->format('d-m-Y');
     $trail = \OwenIt\Auditing\Models\Audit::where('auditable_type', \App\Models\LeaveBalance::class)->where('auditable_id', $balanceId);
 
-    return (clone $trail)->where('user_agent', 'like', 'Earned via % Working' . $on)->count()
-      - (clone $trail)->where('user_agent', 'like', '% Working Credit Reversed%' . $on)->count();
+    $sum = function (\Illuminate\Support\Collection $rows): float {
+      $total = 0.0;
+      foreach ($rows as $text) {
+        $total += preg_match('/\(([\d.]+)\)/', (string) $text, $m) ? (float) $m[1] : 1.0;
+      }
+      return $total;
+    };
+
+    $earned = (clone $trail)->where('user_agent', 'like', 'Earned via % Working%' . $on)->pluck('user_agent');
+    $reversed = (clone $trail)->where('user_agent', 'like', '% Working Credit Reversed%' . $on)->pluck('user_agent');
+
+    return $sum($earned) - $sum($reversed);
   }
 
   protected static function booted()
@@ -176,21 +190,27 @@ class Attendance extends Model implements AuditableContract
           if (!$compOffType) return;
 
           $checkOut = $attendance->check_out_time;
-          $hasFourHours = false;
 
+          // Full day (OFFDAY_CREDIT_MINUTES, 7h50m) earns 1.0; at least half
+          // (OFFDAY_HALF_CREDIT_MINUTES, 4h) but short of a full day earns
+          // 0.5; below that, nothing. Working an off-day used to earn
+          // nothing at all unless it cleared the full bar - a partial shift
+          // there is now credited the same way a partial shift on an
+          // ordinary weekday earns a half day.
+          $newAmount = 0.0;
+          $newLabel = null;
           if ($checkOut) {
               $mins = \App\Services\AttendanceDayStatus::workedMinutes($checkIn, $checkOut);   // punches may be stored the other way round
-              // 3h55m, not a strict 4h: see AttendanceDayStatus::OFFDAY_CREDIT_MINUTES.
-              // (The flag keeps its old name; it now means "worked enough for the credit".)
               if ($mins >= \App\Services\AttendanceDayStatus::OFFDAY_CREDIT_MINUTES) {
-                  $hasFourHours = true;
+                  $newAmount = 1.0;
+                  $newLabel = 'Full';
+              } elseif ($mins >= \App\Services\AttendanceDayStatus::OFFDAY_HALF_CREDIT_MINUTES) {
+                  $newAmount = 0.5;
+                  $newLabel = 'Half';
               }
           }
 
           $dayName = $isSunday ? "Sunday" : ($isHoliday ? "Holiday" : "Saturday");
-          $reasonStr = $dayName . " Working Credit (Auto-credited)";
-          
-          // Check if either Sunday or Holiday credit has already been applied
           $hasStamp = $attendance->admin_reason && (
               str_contains($attendance->admin_reason, "Sunday Working Credit") ||
               str_contains($attendance->admin_reason, "Holiday Working Credit") ||
@@ -199,62 +219,53 @@ class Attendance extends Model implements AuditableContract
           // The stamp alone is not proof: CCare's register rewrites
           // admin_reason on every save, wiping it, and the next save credited
           // the day again (7 days across 6 people by 30 Sep 2026). The
-          // balance's own trail says whether a credit for the day stands.
-          $standing = self::offDayCreditStanding($user->id, $compOffType->id, $checkIn);
-          $hasAlreadyCredited = $hasStamp || $standing > 0;
+          // balance's own trail says what amount, if any, actually stands.
+          $priorAmount = self::offDayCreditStanding($user->id, $compOffType->id, $checkIn);
 
-          if ($hasFourHours && $standing > 0 && !$hasStamp) {
-              // Credited already, stamp wiped: put it back, credit nothing.
-              $attendance->withoutEvents(function () use ($attendance, $reasonStr) {
-                  $attendance->updateQuietly(['admin_reason' => $attendance->admin_reason ? $attendance->admin_reason . " | " . $reasonStr : $reasonStr]);
+          $setStamp = function (?string $label) use ($attendance, $dayName) {
+              $attendance->withoutEvents(function () use ($attendance, $dayName, $label) {
+                  $currentReason = (string) $attendance->admin_reason;
+                  $cleanReason = trim(preg_replace('/\s+/', ' ', str_replace(
+                      ["Sunday Working Credit (Full) (Auto-credited)", "Sunday Working Credit (Half) (Auto-credited)", "Sunday Working Credit (Auto-credited)",
+                       "Holiday Working Credit (Full) (Auto-credited)", "Holiday Working Credit (Half) (Auto-credited)", "Holiday Working Credit (Auto-credited)",
+                       "Saturday Working Credit (Full) (Auto-credited)", "Saturday Working Credit (Half) (Auto-credited)", "Saturday Working Credit (Auto-credited)",
+                       " | "],
+                      ["", "", "", "", "", "", "", "", "", " "],
+                      $currentReason
+                  )));
+                  $newReason = $label ? $dayName . " Working Credit (" . $label . ") (Auto-credited)" : null;
+                  $finalReason = $newReason ? ($cleanReason ? $cleanReason . " | " . $newReason : $newReason) : ($cleanReason ?: null);
+                  $attendance->updateQuietly(['admin_reason' => $finalReason]);
               });
+          };
+
+          if (abs($newAmount - $priorAmount) < 0.001) {
+              // Already correctly credited (or correctly nothing); only the
+              // cosmetic stamp might need restoring if CCare's register wiped it.
+              if ($newAmount > 0 && !$hasStamp) {
+                  $setStamp($newLabel);
+              }
+              return;
           }
 
-          if ($hasFourHours) {
-              if (!$hasAlreadyCredited) {
-                  // Credit 1.0 day to balance
-                  $balance = \App\Models\LeaveBalance::firstOrCreate(
-                      ['user_id' => $user->id, 'leave_type_id' => $compOffType->id],
-                      ['tenant_id' => $user->tenant_id ?? $attendance->tenant_id, 'balance' => 0, 'used' => 0, 'accrued_this_year' => 0]
-                  );
+          $balance = \App\Models\LeaveBalance::firstOrCreate(
+              ['user_id' => $user->id, 'leave_type_id' => $compOffType->id],
+              ['tenant_id' => $user->tenant_id ?? $attendance->tenant_id, 'balance' => 0, 'used' => 0, 'accrued_this_year' => 0]
+          );
 
-                  \App\Models\LeaveBalance::$auditReason = "Earned via " . $dayName . " Working on " . $checkIn->format('d-m-Y');
-                  $balance->increment('balance', 1);
-                  $balance->increment('accrued_this_year', 1);
-
-                  // Update attendance record without triggering events again
-                  $attendance->withoutEvents(function () use ($attendance, $reasonStr) {
-                      $currentReason = $attendance->admin_reason;
-                      $newReason = $currentReason ? $currentReason . " | " . $reasonStr : $reasonStr;
-                      $attendance->updateQuietly(['admin_reason' => $newReason]);
-                  });
-              }
+          if ($newAmount > $priorAmount) {
+              $diff = $newAmount - $priorAmount;
+              \App\Models\LeaveBalance::$auditReason = "Earned via " . $dayName . " Working (" . $diff . ") on " . $checkIn->format('d-m-Y');
+              $balance->increment('balance', $diff);
+              $balance->increment('accrued_this_year', $diff);
           } else {
-              if ($hasAlreadyCredited) {
-                  // Reverse/debit 1.0 day
-                  $balance = \App\Models\LeaveBalance::where('user_id', $user->id)
-                      ->where('leave_type_id', $compOffType->id)
-                      ->first();
-
-                  if ($balance) {
-                      \App\Models\LeaveBalance::$auditReason = $dayName . " Working Credit Reversed on " . $checkIn->format('d-m-Y');
-                      $balance->decrement('balance', 1);
-                      $balance->decrement('accrued_this_year', 1);
-                  }
-
-                  $attendance->withoutEvents(function () use ($attendance) {
-                      $currentReason = $attendance->admin_reason;
-                      // Remove both possible credit strings
-                      $cleanReason = str_replace(
-                          ["Sunday Working Credit (Auto-credited)", "Holiday Working Credit (Auto-credited)", "Saturday Working Credit (Auto-credited)", " | "],
-                          ["", "", "", " "],
-                          $currentReason
-                      );
-                      $cleanReason = trim(preg_replace('/\s+/', ' ', $cleanReason));
-                      $attendance->updateQuietly(['admin_reason' => $cleanReason ?: null]);
-                  });
-              }
+              $diff = $priorAmount - $newAmount;
+              \App\Models\LeaveBalance::$auditReason = $dayName . " Working Credit Reversed (" . $diff . ") on " . $checkIn->format('d-m-Y');
+              $balance->decrement('balance', $diff);
+              $balance->decrement('accrued_this_year', $diff);
           }
+
+          $setStamp($newLabel);
       });
 
       static::deleted(function ($attendance) {
@@ -289,21 +300,20 @@ class Attendance extends Model implements AuditableContract
           if (!$compOffType) return;
 
           $dayName = $isSunday ? "Sunday" : ($isHoliday ? "Holiday" : "Saturday");
-          $hasAlreadyCredited = ($attendance->admin_reason && (
-              str_contains($attendance->admin_reason, "Sunday Working Credit") ||
-              str_contains($attendance->admin_reason, "Holiday Working Credit") ||
-              str_contains($attendance->admin_reason, "Saturday Working Credit")
-          )) || self::offDayCreditStanding($user->id, $compOffType->id, $checkIn) > 0;   // stamp may have been wiped
+          // The balance's own trail is the authoritative amount standing for
+          // this day (0, 0.5 or 1.0) - the stamp text alone can't tell full
+          // from half apart reliably enough to reverse the right amount.
+          $standing = self::offDayCreditStanding($user->id, $compOffType->id, $checkIn);
 
-          if ($hasAlreadyCredited) {
+          if ($standing > 0) {
               $balance = \App\Models\LeaveBalance::where('user_id', $user->id)
                   ->where('leave_type_id', $compOffType->id)
                   ->first();
 
               if ($balance) {
-                  \App\Models\LeaveBalance::$auditReason = $dayName . " Working Credit Reversed (Attendance Deleted) on " . $checkIn->format('d-m-Y');
-                  $balance->decrement('balance', 1);
-                  $balance->decrement('accrued_this_year', 1);
+                  \App\Models\LeaveBalance::$auditReason = $dayName . " Working Credit Reversed (" . $standing . ") (Attendance Deleted) on " . $checkIn->format('d-m-Y');
+                  $balance->decrement('balance', $standing);
+                  $balance->decrement('accrued_this_year', $standing);
               }
           }
       });

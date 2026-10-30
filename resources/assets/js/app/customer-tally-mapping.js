@@ -50,8 +50,14 @@ window.CustomerTallyMapping = (function () {
     }
     var html = '';
     candidates.forEach(function (c) {
-      var action = c.is_current
-        ? '<span class="badge bg-label-success">Currently verified</span>'
+      // "Currently verified" only means what it says when the customer is actually
+      // locked (tally_match_status === verified) -- is_current alone just means this
+      // candidate equals the current suggestion, which may still be unconfirmed. That
+      // used to show the same green "Currently verified" label either way, and skipped
+      // the Confirm button for the top suggestion even when nothing had been verified
+      // yet (2026-10-28 fix).
+      var action = (c.is_current && locked)
+        ? '<span class="badge bg-label-success">Currently mapped</span>'
         : locked
           ? ''
           : '<button type="button" class="btn btn-sm btn-outline-primary js-ctm-confirm" data-tally-norm="' + esc(c.normalized_name) + '">'
@@ -64,7 +70,9 @@ window.CustomerTallyMapping = (function () {
   function open(customerId, customerName) {
     ctx.customerId = customerId;
     ctx.locked = false;
-    $('#ctmCustomerName').text(customerName || '');
+    // Shown so a reviewer can identify/reference this exact customer -- e.g. when told elsewhere
+    // "already mapped to Customer #1234", they can confirm whether that's the row in front of them.
+    $('#ctmCustomerName').text((customerName || '') + ' (#' + customerId + ')');
     $('#ctmSuggestedBlock').addClass('d-none');
     $('#ctmSuggestedCard').empty();
     $('#ctmSearchResults').empty();
@@ -80,7 +88,7 @@ window.CustomerTallyMapping = (function () {
       ctx.locked = !!cust.locked;
       var statusLabel = {
         none: 'Not Found in Tally', similar: 'Similar match found — review below',
-        suggested: 'Match Found — review and confirm below', verified: 'Verified',
+        suggested: 'Match Found — review and confirm below', verified: 'Mapped',
       }[cust.status] || cust.status;
       var line = statusLabel;
       if (cust.status === 'verified') {
@@ -93,7 +101,7 @@ window.CustomerTallyMapping = (function () {
       $('#ctmLockedNotice').toggleClass('d-none', !ctx.locked);
 
       $('#ctmSuggestedBlock').removeClass('d-none');
-      $('#ctmSuggestedTitle').text(cust.status === 'verified' ? 'Nearest matches — currently verified one is marked' : 'Nearest matches');
+      $('#ctmSuggestedTitle').text(cust.status === 'verified' ? 'Nearest matches — currently mapped one is marked' : 'Nearest matches');
       renderCandidates($('#ctmSuggestedCard'), d.data.candidates, 'Map Customer', ctx.locked);
     }).catch(function () { $('#ctmStatusLine').text('Could not reach the server.'); });
   }
@@ -107,16 +115,27 @@ window.CustomerTallyMapping = (function () {
         swalErr('Tally has no sales figure for ' + p.month_label + ' for this customer.');
         return;
       }
+      // Multi-row: each row gets its OWN attributed figure (by brand), never the same company-wide
+      // total repeated on every row -- a row with after == null couldn't be matched to a brand and
+      // won't change. Single row: the whole figure, unambiguous either way.
       var rowsHtml = p.rows.map(function (r) {
-        var changed = Number(r.current).toFixed(2) !== Number(p.tally_amount).toFixed(2);
+        var after = r.after;
+        var changed = after != null && Number(r.current).toFixed(2) !== Number(after).toFixed(2);
+        var afterCell = after != null
+          ? '&#8377;' + Number(after).toLocaleString('en-IN') + 'L'
+          : '<span class="text-muted">— not matched to a brand, unchanged</span>';
         return '<tr' + (changed ? ' style="color:#b91c1c;font-weight:600;"' : '') + '>'
-          + '<td class="text-start">' + esc(r.party_name) + (r.salesperson ? ' <span class="text-muted small">(' + esc(r.salesperson) + ')</span>' : '') + '</td>'
+          + '<td class="text-start">' + esc(r.party_name) + (r.product ? ' <span class="text-muted small">[' + esc(r.product) + ']</span>' : '') + (r.salesperson ? ' <span class="text-muted small">(' + esc(r.salesperson) + ')</span>' : '') + '</td>'
           + '<td>&#8377;' + Number(r.current).toLocaleString('en-IN') + 'L</td>'
           + '<td>&rarr;</td>'
-          + '<td>&#8377;' + Number(p.tally_amount).toLocaleString('en-IN') + 'L</td>'
+          + '<td>' + afterCell + '</td>'
           + '</tr>';
       }).join('');
-      var html = '<div class="text-start small mb-2">' + p.month_label + ' — Tally says &#8377;' + Number(p.tally_amount).toLocaleString('en-IN') + 'L</div>'
+      var note = p.multi_row
+        ? '<div class="text-start small mb-2">' + p.month_label + ' — Tally says &#8377;' + Number(p.tally_amount).toLocaleString('en-IN') + 'L company-wide, attributed below by brand.'
+          + (p.unattributed > 0.005 ? ' &#8377;' + Number(p.unattributed).toLocaleString('en-IN') + 'L could not be matched to any row\'s brand and is left out.' : '') + '</div>'
+        : '<div class="text-start small mb-2">' + p.month_label + ' — Tally says &#8377;' + Number(p.tally_amount).toLocaleString('en-IN') + 'L</div>';
+      var html = note
         + '<table class="table table-sm"><thead><tr><th class="text-start">Row</th><th>Current</th><th></th><th>After sync</th></tr></thead><tbody>' + rowsHtml + '</tbody></table>';
 
       if (!window.Swal) {
@@ -153,25 +172,27 @@ window.CustomerTallyMapping = (function () {
     if (!ctx.customerId) return;
     postJson(mapUrl(ctx.customerId), { tally_normalized_name: normalizedName }).then(function (d) {
       if (d.status !== 'success') { swalErr((d.data && d.data.message) || d.data || 'Could not save this mapping.'); return; }
-      swalOk(d.data.message || 'Verified.');
-      updateBadgeInGrid(ctx.customerId, 'verified');
+      swalOk(d.data.message || 'Mapped.');
+      updateBadgeInGrid(ctx.customerId);
       $('#customerTallyModal').modal('hide');
     }).catch(function () { swalErr('Could not reach the server.'); });
   }
 
-  function updateBadgeInGrid(customerId, status) {
+  // Keeps the compact "T" dot's existing shape (just the letter, see index.blade.php) -- used to re-add a
+  // full icon+text badge here, which only matched the grid's look until the next page load (2026-10-28 fix).
+  function updateBadgeInGrid(customerId) {
     var $badge = $('.js-tally-badge[data-customer-id="' + customerId + '"]');
     if (!$badge.length) return;
     $badge.removeClass('bg-label-danger bg-label-warning bg-label-info bg-label-success')
       .addClass('bg-label-success')
-      .html('<i class="bx bx-check-shield"></i> Verified');
+      .attr('title', 'Tally: Mapped — once mapped, this customer\'s sales auto-update from Tally');
   }
 
   function bulkConfirm() {
     if (!window.Swal) { if (!confirm('Confirm every exact Tally match now?')) return; return doBulkConfirm(); }
     Swal.fire({
       title: 'Confirm all exact matches?',
-      text: 'Every customer already flagged as an exact Tally match will be marked Verified.',
+      text: 'Every customer already flagged as an exact Tally match will be marked Mapped.',
       icon: 'question', showCancelButton: true, confirmButtonText: 'Yes, confirm all',
     }).then(function (r) { if (r.isConfirmed) doBulkConfirm(); });
   }
@@ -180,8 +201,8 @@ window.CustomerTallyMapping = (function () {
     postJson(bulkConfirmUrl(), {}).then(function (d) {
       if (d.status !== 'success') { swalErr((d.data && d.data.message) || 'Could not confirm.'); return; }
       swalOk(d.data.message);
-      $('.js-tally-badge.bg-label-warning').each(function () {
-        $(this).removeClass('bg-label-warning').addClass('bg-label-success').html('<i class="bx bx-check-shield"></i> Verified');
+      $('.js-tally-badge.bg-label-warning, .js-tally-badge.bg-label-info').each(function () {
+        updateBadgeInGrid($(this).data('customer-id'));
       });
     }).catch(function () { swalErr('Could not reach the server.'); });
   }

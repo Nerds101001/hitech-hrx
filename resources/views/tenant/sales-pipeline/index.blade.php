@@ -54,7 +54,7 @@
         <form action="{{ route('sales-visits.pipeline.index') }}" method="GET" class="mb-0">
             {{-- Changing the year kept only ?fy, so it also dropped the Team
                  context and every active filter. Carry them through. --}}
-            @foreach(['team','party','type','cat','sp','ccare','brand','nb','per','sort','dir'] as $keep)
+            @foreach(['team','party','type','cat','tally','sp','ccare','brand','nb','per','sort','dir'] as $keep)
                 @if(request()->filled($keep))
                     <input type="hidden" name="{{ $keep }}" value="{{ request($keep) }}">
                 @endif
@@ -262,6 +262,12 @@
                     <option value="New Biz" {{ request('cat') === 'New Biz' ? 'selected' : '' }}>New Biz</option>
                     <option value="CCare" {{ request('cat') === 'CCare' ? 'selected' : '' }}>CCare</option>
                     <option value="None" {{ request('cat') === 'None' ? 'selected' : '' }}>No Category</option>
+                </select>
+                <select class="form-select" name="tally" style="width:150px;" onchange="this.form.submit()"
+                        title="Whether this row's customer is confirmed against Tally">
+                    <option value="">Tally Mapped?</option>
+                    <option value="mapped" {{ ($fTally ?? '') === 'mapped' ? 'selected' : '' }}>Mapped</option>
+                    <option value="not_mapped" {{ ($fTally ?? '') === 'not_mapped' ? 'selected' : '' }}>Not Mapped</option>
                 </select>
                 {{-- Full directory filters for every role: rows stay scoped, so an
                      out-of-scope pick simply shows only what the user may see. --}}
@@ -540,39 +546,54 @@
                                 class="{{ $row->converted_from_newbiz ? 'converted-row' : '' }}">
 
                                 <td class="text-center col-sno">{{ $index + 1 }}</td>
-                                <td class="col-party text-dark p-0" title="{{ $row->party_name }}">
-                                    <input type="text" class="excel-input row-field fw-semibold" data-field="party_name"
-                                           value="{{ $row->party_name }}" style="font-size:0.72rem;">
-                                    @if($row->customer)
-                                        @php
-                                            $setuBadge = match($row->customer->setu_match_status) {
-                                                'verified' => ['bg-label-success', 'bx-check-shield', 'Verified'],
-                                                'suggested' => ['bg-label-warning', 'bx-search-alt', 'Match Found'],
-                                                'similar' => ['bg-label-info', 'bx-git-compare', 'Similar Match'],
-                                                default => ['bg-label-danger', 'bx-x-circle', 'Not Found'],
-                                            };
-                                        @endphp
-                                        <span class="badge {{ $setuBadge[0] }} js-setu-badge d-inline-flex align-items-center gap-1"
-                                              style="cursor:pointer; font-size:0.62rem; margin:0 0 2px 4px;"
-                                              data-customer-id="{{ $row->customer->id }}"
-                                              title="Click to verify against Setu">
-                                            <i class="bx {{ $setuBadge[1] }}"></i> {{ $setuBadge[2] }}
-                                        </span>
-                                        @php
-                                            $tallyBadge = match($row->customer->tally_match_status) {
-                                                'verified' => ['bg-label-success', 'bx-check-shield', 'Tally: Verified'],
-                                                'suggested' => ['bg-label-warning', 'bx-search-alt', 'Tally: Match Found'],
-                                                'similar' => ['bg-label-info', 'bx-git-compare', 'Tally: Similar Match'],
-                                                default => ['bg-label-danger', 'bx-x-circle', 'Tally: Not Found'],
-                                            };
-                                        @endphp
-                                        <span class="badge {{ $tallyBadge[0] }} js-tally-badge d-inline-flex align-items-center gap-1"
-                                              style="cursor:pointer; font-size:0.62rem; margin:0 0 2px 4px;"
-                                              data-customer-id="{{ $row->customer->id }}"
-                                              title="Click to verify against Tally — once mapped, this customer's sales auto-update from Tally">
-                                            <i class="bx {{ $tallyBadge[1] }}"></i> {{ $tallyBadge[2] }}
-                                        </span>
-                                    @endif
+                                @php
+                                    // Locked once Tally has verified this customer's name -- the row was
+                                    // just renamed to Tally's own spelling (CustomerTallyMappingController::
+                                    // mapTally()) and editing it back out of sync would defeat the point of
+                                    // verifying it in the first place. Per explicit request (2026-10-28).
+                                    $tallyLocked = optional($row->customer)->tally_match_status === \App\Models\Customer::STATUS_VERIFIED;
+                                @endphp
+                                <td class="col-party text-dark p-0" title="{{ $row->party_name }}{{ $tallyLocked ? ' (locked -- Tally mapped)' : '' }}">
+                                    <div class="d-flex align-items-center gap-1">
+                                        @if($row->customer)
+                                            @php
+                                                // A compact "T" dot, placed BEFORE the name (not below it) -- per explicit
+                                                // request (2026-10-28) the badge used to sit on its own line under the
+                                                // input, which read as "below the name" rather than attached to it.
+                                                // Three states, not four: 'suggested' and 'similar' are both still just
+                                                // "a candidate exists, go confirm it" from a glance-at-the-grid point of
+                                                // view -- collapsed to one blue "matching" state.
+                                                $tallyBadge = match($row->customer->tally_match_status) {
+                                                    'verified' => ['bg-label-success', 'Tally: Mapped'],
+                                                    'suggested', 'similar' => ['bg-label-info', 'Tally: Matching — click to confirm'],
+                                                    default => ['bg-label-danger', 'Tally: No Match — click to search'],
+                                                };
+                                            @endphp
+                                            <span class="badge {{ $tallyBadge[0] }} js-tally-badge d-inline-flex align-items-center justify-content-center flex-shrink-0"
+                                                  style="cursor:pointer; font-size:0.6rem; font-weight:700; width:16px; height:16px; padding:0; border-radius:50%; line-height:1;"
+                                                  data-customer-id="{{ $row->customer->id }}"
+                                                  title="{{ $tallyBadge[1] }} — once mapped, this customer's sales auto-update from Tally">
+                                                T
+                                            </span>
+                                            @if($tallyLocked)
+                                                {{-- Opens this customer's full Tally ledger (sales/purchases/payments/outstanding) --
+                                                     see TallyExplorerController::ledgerShow(). Per explicit request (2026-10-29).
+                                                     Deliberately the sales-visits.* route (sales.guard), not tally-explorer.ledgers.show
+                                                     (admin.guard) -- that one would 302 any non-admin sales-floor user before the
+                                                     controller's own, actually-relevant ownership check ever got to run. Access there
+                                                     is scoped server-side to the viewer's own customers (admin/mukul see any), so this
+                                                     link is safe to show to everyone once mapped. --}}
+                                                <a href="{{ route('sales-visits.pipeline.customer.tally-ledger', ['customer' => $row->customer->id]) }}"
+                                                   target="_blank" rel="noopener" class="flex-shrink-0" title="Open this customer's Tally ledger"
+                                                   style="line-height:1;">
+                                                    <i class="bx bx-link-external" style="font-size:0.75rem;"></i>
+                                                </a>
+                                            @endif
+                                        @endif
+                                        <input type="text" class="excel-input row-field fw-semibold flex-grow-1" data-field="party_name"
+                                               value="{{ $row->party_name }}" style="font-size:0.72rem; min-width:0;"
+                                               @if($tallyLocked) readonly title="Locked — name mapped against Tally" @endif>
+                                    </div>
                                 </td>
 
                                 <td class="col-status p-0 align-middle">

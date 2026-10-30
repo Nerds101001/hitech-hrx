@@ -372,6 +372,13 @@ class PayrollService
                     // either way, so this only affects worked-days reporting.
                     $workedDays += 1.0;
                     break;
+                case 'sp_half':
+                case 'hp_half':
+                    // A worked day off that only cleared the half-day bar -
+                    // half credited, same as the half-day comp-off it earns.
+                    // Still not part of expectedWorkingDays, so no absents.
+                    $workedDays += 0.5;
+                    break;
                 case 'present':
                 case 'short-leave-present':
                 case 'checked_out': // manual admin_reason passthrough, preserving the old fallback for this one raw status

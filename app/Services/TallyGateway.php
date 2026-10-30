@@ -372,7 +372,7 @@ class TallyGateway
         return '<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>HRXLedgers</ID></HEADER><BODY><DESC>'
             . '<STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>' . $name . '</SVCURRENTCOMPANY></STATICVARIABLES>'
             . '<TDL><TDLMESSAGE><COLLECTION NAME="HRXLedgers" ISMODIFY="No"><TYPE>Ledger</TYPE>'
-            . '<FETCH>Name, Parent, CreditLimit, PartyGSTIN, IncomeTaxNumber, LedgerContact, LedgerMobile, MailingName, ClosingBalance, LedStateName, CountryName, PinCode, Email, Address</FETCH></COLLECTION></TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>';
+            . '<FETCH>Name, Parent, CreditLimit, PartyGSTIN, GSTRegistrationType, LEDGSTREGDETAILS.LIST, BillCreditPeriod, Narration, ISTDSApplicable, ISTCSApplicable, IncomeTaxNumber, LedgerContact, LedgerMobile, MailingName, ClosingBalance, LedStateName, CountryName, PinCode, Email, Address</FETCH></COLLECTION></TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>';
     }
 
     public static function stockItemsRequest(string $company): string
@@ -528,7 +528,10 @@ class TallyGateway
     /**
      * @return array<int, array<string, mixed>> one entry per ledger:
      *   name, group, credit_limit (the amount a person reads, sign-flipped from Tally's debit convention --
-     *   see heldValue()), gstin, pan, contact_person, contact_mobile, mailing_name
+     *   see heldValue()), gstin (the most recent one on file, from LEDGSTREGDETAILS.LIST's effective-dated
+     *   history when present, else the flat PARTYGSTIN field), registration_type ("Regular"/"Composition"/
+     *   "Unregistered"/...), credit_period (e.g. "60 Days", the ledger's own default bill credit period),
+     *   pan, contact_person, contact_mobile, mailing_name
      */
     public static function parseLedgers(string $xml): array
     {
@@ -540,10 +543,42 @@ class TallyGateway
             if ($name === '') {
                 continue;
             }
+
+            // The flat PARTYGSTIN/GSTREGISTRATIONTYPE fields only ever hold the ledger's GST status AS OF
+            // ITS CREATION (or opening-balance date) — Tally tracks every later change in a separate,
+            // effective-dated LEDGSTREGDETAILS.LIST instead of updating the flat fields. A party that went
+            // Unregistered -> Regular with a GSTIN assigned after the ledger was first created (the common
+            // case: most parties were set up years before GST registration status was certain) shows a
+            // blank flat PARTYGSTIN even though its CURRENT registration is right there in the history list
+            // — found 2026-10-29 auditing KIF: 413 of 645 customers looked GSTIN-less this way, most of them
+            // real, active, invoiced parties. The entry with the latest APPLICABLEFROM date is the current
+            // one; prefer whichever of ITS gstin/type is set, falling back to the flat fields only when the
+            // history list has none at all (a ledger whose registration never changed after creation).
+            $latestOverall = null;    // latest entry regardless of content -- the current registration TYPE
+            $latestWithGstin = null;  // latest entry that actually carries a GSTIN -- most parties' GSTIN only
+                                       // ever gets added once and never removed, so this is also effectively
+                                       // "the" GSTIN even on a party later marked composition/unregistered again
+            foreach ($l->xpath('.//LEDGSTREGDETAILS.LIST') ?: [] as $hist) {
+                $from = $s($hist->APPLICABLEFROM);
+                $entry = ['from' => $from, 'gstin' => $na($s($hist->GSTIN)), 'type' => $na($s($hist->GSTREGISTRATIONTYPE))];
+                if ($latestOverall === null || $from > $latestOverall['from']) {
+                    $latestOverall = $entry;
+                }
+                if ($entry['gstin'] !== null && ($latestWithGstin === null || $from > $latestWithGstin['from'])) {
+                    $latestWithGstin = $entry;
+                }
+            }
+
             $out[] = [
                 'name' => $name, 'group' => $na($s($l->PARENT)),
                 'credit_limit' => self::heldValue($s($l->CREDITLIMIT)),
-                'gstin' => $na($s($l->PARTYGSTIN)), 'pan' => $na($s($l->INCOMETAXNUMBER)),
+                'gstin' => $latestWithGstin['gstin'] ?? $na($s($l->PARTYGSTIN)), 'pan' => $na($s($l->INCOMETAXNUMBER)),
+                'registration_type' => $latestOverall['type'] ?? $na($s($l->GSTREGISTRATIONTYPE)), 'credit_period' => $na($s($l->BILLCREDITPERIOD)),
+                'narration' => $na($s($l->NARRATION)),
+                // Logical fields: Tally omits the tag entirely for a ledger where this was never set one way
+                // or the other (rather than writing an explicit "No"), so absence must stay NULL, not false.
+                'tds_applicable' => $l->ISTDSAPPLICABLE->count() ? strcasecmp($s($l->ISTDSAPPLICABLE), 'Yes') === 0 : null,
+                'tcs_applicable' => $l->ISTCSAPPLICABLE->count() ? strcasecmp($s($l->ISTCSAPPLICABLE), 'Yes') === 0 : null,
                 'contact_person' => $na($s($l->LEDGERCONTACT)), 'contact_mobile' => $na($s($l->LEDGERMOBILE)),
                 'mailing_name' => $na($s($l->MAILINGNAME)),
                 // Sign-flipped the same way credit_limit/stock value are: a debit balance (a debtor owing us) reads positive.
@@ -814,6 +849,38 @@ class TallyGateway
             $remarkValues = self::udfListValues($v, 'VCHREMRK');
             $remarks = $remarkValues === [] ? null : end($remarkValues);
 
+            // "Despatch Details" -- this company's own custom report/panel over the SALES INVOICE itself
+            // (not the Delivery Note -- confirmed live, 2026-10-30, by cross-checking two real invoices'
+            // raw values against that exact report: GHATGE PATIL INDUSTRIES LTD RMG2627-4758 and SANSERA
+            // ENGINEERING LIMITED M992627-3119). Found only after TRANSPORTDETAILS.LIST/standard transport
+            // fields turned up 0% filled across all 30k+ synced Delivery Notes -- this company doesn't use
+            // Tally's native transport sub-form at all, it uses this custom UDF panel on invoices instead.
+            // Two of the UDF tag's own internal names are misleading (a company-side renaming artefact,
+            // same pattern as PACKCASES/VCHREMRK elsewhere in this file): EIBILTY ("EIBilty") is actually
+            // the Despatch Date (TYPE=Date, matched exactly against the report's own "Despatch Date"
+            // column on both cross-check vouchers), and CHEMICAL ("Chemical`MOP`") is actually Terms (its
+            // value is plainly a credit-terms string, e.g. "30 Days credit"). The Bilty No itself is a
+            // genuine STANDARD Tally field, BASICSHIPDOCUMENTNO, not a UDF at all.
+            $biltyNo = $notApplicable($s($v->BASICSHIPDOCUMENTNO));
+            $deliveryDateRaw = $s($v->INVDELIVERYDATE);
+            $deliveryDate = preg_match('/^(\d{4})(\d{2})(\d{2})$/', $deliveryDateRaw, $ddm) ? "{$ddm[1]}-{$ddm[2]}-{$ddm[3]}" : null;
+            $despatchFromValues = self::udfListValues($v, 'DESPATCHFROM');
+            $despatchFrom = $despatchFromValues === [] ? null : end($despatchFromValues);
+            $despatchDateValues = self::udfListValues($v, 'EIBILTY');
+            $despatchDateRaw = $despatchDateValues === [] ? '' : end($despatchDateValues);
+            $despatchDate = preg_match('/^(\d{4})(\d{2})(\d{2})$/', $despatchDateRaw, $sdm) ? "{$sdm[1]}-{$sdm[2]}-{$sdm[3]}" : null;
+            $termsValues = self::udfListValues($v, 'CHEMICAL');
+            $despatchTerms = $termsValues === [] ? null : end($termsValues);
+            $transporterMobValues = self::udfListValues($v, 'TRANSPORTERMOB');
+            $transporterMobile = $transporterMobValues === [] ? null : end($transporterMobValues);
+            $podValues = self::udfListValues($v, 'EIPODS');
+            $podRaw = $podValues === [] ? null : end($podValues);
+            $pod = $podRaw === null || $podRaw === '' ? null : strcasecmp($podRaw, 'Yes') === 0;
+            $despatch = ($biltyNo || $deliveryDate || $despatchFrom || $despatchDate || $despatchTerms || $transporterMobile || $pod !== null) ? [
+                'bilty_no' => $biltyNo, 'delivery_date' => $deliveryDate, 'despatch_from' => $despatchFrom,
+                'despatch_date' => $despatchDate, 'terms' => $despatchTerms, 'transporter_mobile' => $transporterMobile, 'pod' => $pod,
+            ] : null;
+
             $lines = [];
             foreach (['ALLINVENTORYENTRIES.LIST', 'INVENTORYENTRIES.LIST'] as $tag) {
                 foreach ($v->{$tag} as $l) {
@@ -855,8 +922,15 @@ class TallyGateway
                 }
             }
 
+            // TRANSPORTDETAILS.LIST is NOT a direct child of VOUCHER -- confirmed live, 2026-10-30, against a
+            // raw captured Day Book dump: it sits nested two levels down, inside EWAYBILLDETAILS.LIST (Tally's
+            // GST e-way-bill block). A bare $v->{'TRANSPORTDETAILS.LIST'} (direct-child) access therefore always
+            // read null even when the XML plainly had TRANSPORTERNAME/DISTANCE filled in -- the earlier
+            // conclusion that this sub-form was "0% filled across 30k+ Delivery Notes" was an artefact of this
+            // lookup bug, not a genuine data gap. xpath at any depth, same fix pattern as CONSIGNEEADDRESS.LIST
+            // and ORDERNO elsewhere in this file.
             $transport = null;
-            foreach ($v->{'TRANSPORTDETAILS.LIST'} as $t) {
+            foreach ($v->xpath('.//TRANSPORTDETAILS.LIST') ?: [] as $t) {
                 $name = $notApplicable($s($t->TRANSPORTERNAME));
                 $vehicle = $notApplicable($s($t->VEHICLENUMBER));
                 $mode = $notApplicable($s($t->TRANSPORTMODE));
@@ -903,7 +977,7 @@ class TallyGateway
                 'reference' => $s($v->REFERENCE) ?: null, 'cancelled' => strcasecmp($s($v->ISCANCELLED), 'Yes') === 0 || strcasecmp($s($v->ISDELETED), 'Yes') === 0,
                 'total' => $total, 'lines' => $lines, 'ledgers' => $ledgers,
                 'order_no' => $voucherOrderNo, 'transport' => $transport, 'consignee' => $consignee,
-                'financial_approval' => $financialApproval, 'remarks' => $remarks,
+                'financial_approval' => $financialApproval, 'remarks' => $remarks, 'despatch' => $despatch,
             ];
         }
         return $out;

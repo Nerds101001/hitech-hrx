@@ -43,13 +43,23 @@ use Carbon\Carbon;
 class AttendanceDayStatus
 {
     /**
-     * Minutes of real work on a Sunday, an OFF Saturday or a full holiday that
-     * earn the SP/HP credit (and the 1-day ALP comp-off the Attendance model
-     * grants for it). 3h55m: relaxed from a strict 4h at HR's request, so a
-     * punch a few minutes short of four hours still counts. Only these off-day
-     * credits use it; an ordinary weekday's half-day bar is CREDIT_MINUTES.
+     * Minutes of real work on a Sunday, an OFF Saturday or a full holiday
+     * that earn the full SP/HP credit (and the 1.0-day ALP comp-off the
+     * Attendance model grants for it): a full working day, 7h50m - the same
+     * bar as any other full day, not the old relaxed 3h55m. Below this but
+     * at or above OFFDAY_HALF_CREDIT_MINUTES earns the half-day SP/HP credit
+     * instead (0.5 day comp-off) - working an off-day used to earn nothing at
+     * all unless it cleared the full bar; a partial shift there is now
+     * recognised the same way a partial shift on an ordinary weekday is.
      */
-    public const OFFDAY_CREDIT_MINUTES = 235;
+    public const OFFDAY_CREDIT_MINUTES = 470;
+
+    /**
+     * Minutes of real work on a Sunday, an OFF Saturday or a full holiday
+     * that earn the half SP/HP credit (0.5 day comp-off) - the same bar as
+     * an ordinary weekday's half day, CREDIT_MINUTES.
+     */
+    public const OFFDAY_HALF_CREDIT_MINUTES = 240;
 
     /** Minutes of real work that make an ordinary weekday a half day. */
     public const CREDIT_MINUTES = 240;
@@ -112,7 +122,7 @@ class AttendanceDayStatus
      * never counted at all, because its raw status never said 'present'.
      */
     public const PRESENT_LIKE_CODES = [
-        'present', 'short-leave-present', 'sp', 'hp',
+        'present', 'short-leave-present', 'sp', 'hp', 'sp_half', 'hp_half',
         'half-day-paid', 'half-day', 'work_from_home', 'wfh', 'late',
     ];
 
@@ -309,9 +319,11 @@ class AttendanceDayStatus
 
         if ($attendance) {
             if ($isSunday || $isOffSaturday) {
-                $result['code'] = $workMins >= self::OFFDAY_CREDIT_MINUTES ? 'sp' : 'weekly_off';
+                $result['code'] = $workMins >= self::OFFDAY_CREDIT_MINUTES ? 'sp'
+                    : ($workMins >= self::OFFDAY_HALF_CREDIT_MINUTES ? 'sp_half' : 'weekly_off');
             } elseif ($isFullHoliday) {
-                $result['code'] = $workMins >= self::OFFDAY_CREDIT_MINUTES ? 'hp' : 'holiday';
+                $result['code'] = $workMins >= self::OFFDAY_CREDIT_MINUTES ? 'hp'
+                    : ($workMins >= self::OFFDAY_HALF_CREDIT_MINUTES ? 'hp_half' : 'holiday');
             } elseif (empty($attendance->admin_reason)) {
                 if ($bothHalvesCode && $workMins < $reqMins) {
                     $result['code'] = $bothHalvesCode;

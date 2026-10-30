@@ -110,10 +110,18 @@ class TaskSchedule extends Model implements AuditableContract
   }
 
   /**
-   * Sunday or a company holiday — no task ever fires on either, whatever
-   * the schedule's own frequency says. Shared by TaskScheduleService (the
-   * actual fire/skip decision) and nextOccurrence() below (so a dashboard
-   * preview never shows a date that was never actually going to fire).
+   * Sunday or a company-wide FULL-DAY holiday — no task ever fires on
+   * either, whatever the schedule's own frequency says. Shared by
+   * TaskScheduleService (the actual fire/skip decision) and
+   * nextOccurrence() below (so a dashboard preview never shows a date that
+   * was never actually going to fire).
+   *
+   * Deliberately excludes half-day/hours-off concessions (holiday_type !=
+   * 'full') and anything site- or gender-scoped (site_id / applies_to_gender
+   * not null): those are still a working day for most of the company, so
+   * they must not blank out every recurring task for everyone. A half-day
+   * Karwachauth for female staff at a handful of sites once silently
+   * skipped all 96 active schedules company-wide this way.
    */
   public static function isNonWorkingDay(\Carbon\Carbon $day): bool
   {
@@ -123,7 +131,15 @@ class TaskSchedule extends Model implements AuditableContract
     // look-back asks about the same few dates for every schedule.
     return $day->isSunday()
       || \Illuminate\Support\Facades\Cache::store('array')->rememberForever('task-holiday:' . $key,
-        fn () => \App\Models\Holiday::where('date', $key)->where('status', 1)->exists());
+        fn () => \App\Models\Holiday::where('date', $key)
+          ->where('status', 1)
+          ->where('holiday_type', 'full')
+          ->whereNull('site_id')
+          ->whereNull('department_id')
+          ->where(function ($q) {
+              $q->whereNull('applies_to_gender')->orWhere('applies_to_gender', 'all');
+          })
+          ->exists());
   }
 
   /**
