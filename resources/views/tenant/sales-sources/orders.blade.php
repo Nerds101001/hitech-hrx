@@ -32,11 +32,11 @@
   <div class="table-responsive">
     <table class="table table-sm table-hover ss-table mb-0">
       <thead class="table-light">
-        <tr><th>Order date</th><th>Order no.</th><th style="min-width:260px;">Party</th><th>Status</th><th class="ss-num">Qty</th><th class="ss-num">Amount (₹)</th><th style="min-width:170px;">Dispatch</th></tr>
+        <tr><th>Order date</th><th>Order no.</th><th style="min-width:260px;">Party</th><th>Status</th><th class="ss-num">Qty</th><th class="ss-num">Amount (₹)</th><th style="min-width:170px;">Dispatch</th><th style="min-width:160px;">Invoice(s)</th></tr>
       </thead>
       <tbody>
         @forelse($orders as $o)
-          @php $d = $dispatch[$o->order_no] ?? null; @endphp
+          @php $d = $dispatch[$o->order_no] ?? null; $invs = $invoicesByOrder[$o->order_no] ?? null; @endphp
           <tr>
             <td class="text-nowrap">{{ $o->order_date?->format('d M Y') }}</td>
             <td class="text-nowrap fw-semibold">{{ $o->order_no }}</td>
@@ -66,9 +66,18 @@
                 @endif
               @endif
             </td>
+            <td>
+              @if(!$invs || $invs->isEmpty())
+                <span class="ss-flag">Not billed yet</span>
+              @else
+                @foreach($invs as $inv)
+                  <div class="text-nowrap"><span class="fw-semibold">{{ $inv->invoice_no }}</span> &middot; {{ \Carbon\Carbon::parse($inv->invoice_date)->format('d M Y') }} &middot; ₹{{ $inr($inv->amount) }}</div>
+                @endforeach
+              @endif
+            </td>
           </tr>
         @empty
-          <tr><td colspan="7" class="text-center text-muted py-5">No sale orders match these filters.</td></tr>
+          <tr><td colspan="8" class="text-center text-muted py-5">No sale orders match these filters.</td></tr>
         @endforelse
       </tbody>
     </table>
