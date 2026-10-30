@@ -419,21 +419,39 @@ class AuthController extends Controller
       // 1. Profile pictures are visible to all authenticated employees (we bypass DB query to save connections)
       $isProfilePicture = str_contains($path, \App\Constants\Constants::BaseFolderEmployeeProfile);
       
-      // SECURITY (M-3): onboarding images used to be served like public profile
-      // pictures (no auth at all), exposing personal onboarding documents to the
-      // anonymous internet. Keep them viewable in-app but require the caller to be
-      // authenticated. (Ownership is still not enforced for these images so display
-      // does not break where the file isn't tracked in the request tables.)
+      // SECURITY: onboarding documents (Aadhaar, PAN, passport, visa scans) are
+      // personal PII. Require auth AND ownership (or admin/HR role).
+      // Path format: uploads/onboardingDocuments/{user_id}/filename.ext
       $isOnboardingImage = false;
       if (!$isProfilePicture && str_contains($path, \App\Constants\Constants::BaseFolderOnboardingDocuments)) {
           $extension = pathinfo($path, PATHINFO_EXTENSION);
-          if (in_array(strtolower($extension), ['jpg', 'jpeg', 'png', 'gif', 'webp'])) {
+          if (in_array(strtolower($extension), ['jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf'])) {
               $isOnboardingImage = true;
           }
       }
 
-      if ($isOnboardingImage && !Auth::check()) {
-          abort(403, 'Unauthorized access to secure document.');
+      if ($isOnboardingImage) {
+          if (!Auth::check()) {
+              abort(403, 'Unauthorized access to secure document.');
+          }
+          $user = Auth::user();
+          $isAdminOrHR = $user->hasRole(['admin', 'hr']);
+          if (!$isAdminOrHR) {
+              // Extract owner user_id from path: uploads/onboardingDocuments/{uid}/…
+              $segments   = explode('/', $path);
+              $baseIdx    = array_search('onboardingDocuments', $segments);
+              $ownerId    = ($baseIdx !== false && isset($segments[$baseIdx + 1]))
+                  ? (int) $segments[$baseIdx + 1]
+                  : 0;
+              if ($ownerId === 0 || $user->id !== $ownerId) {
+                  Log::warning('Secure Document: onboarding IDOR blocked', [
+                      'accessor' => $user->id,
+                      'owner'    => $ownerId,
+                      'path'     => $path,
+                  ]);
+                  abort(403, 'You do not have permission to view this document.');
+              }
+          }
       }
 
       // If it is NOT a profile picture or an onboarding image, boot the auth
