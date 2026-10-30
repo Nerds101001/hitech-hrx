@@ -351,7 +351,20 @@ class SalesSourcesController extends Controller
             }
         }
 
-        return view('tenant.sales-sources.orders', $this->shared('orders') + compact('orders', 'totals', 'statuses', 'q', 'status', 'dispatch'));
+        // Which sales invoice(s) were actually billed against this order -- the Pending Sale Orders grid
+        // otherwise shows ordered/dispatched quantities but never says whether (or how) it was ever billed.
+        // Matched the same way the Delivery Note's own order_no is (tally_invoices.order_no, set from the
+        // invoice voucher's own REFERENCE field) -- not every invoice carries one (depends on whether the
+        // voucher in Tally actually references the order), so an order can legitimately show none yet.
+        $invoicesByOrder = [];
+        if ($orderNos->isNotEmpty()) {
+            $invoicesByOrder = DB::table('tally_invoices')->whereIn('order_no', $orderNos)
+                ->orderBy('invoice_date')
+                ->get(['order_no', 'invoice_no', 'invoice_date', 'amount'])
+                ->groupBy('order_no');
+        }
+
+        return view('tenant.sales-sources.orders', $this->shared('orders') + compact('orders', 'totals', 'statuses', 'q', 'status', 'dispatch', 'invoicesByOrder'));
     }
 
     /** Every Delivery Note raised against one order, for the drill-down modal on the Orders page. */
