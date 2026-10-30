@@ -44,8 +44,9 @@ Route::middleware('web')->group(function () {
   // SECURITY (QA fix): browser-accessible 'db-patch' migration route removed.
   // Run migrations via CLI (`php artisan migrate --force`) during deployment.
 
-  Route::get('/auth/register', [AuthController::class, 'register'])->name('auth.register');
-  Route::post('/auth/register', [AuthController::class, 'registerPost'])->name('auth.registerPost');
+  // Self-registration is disabled — employees are provisioned by HR, never self-registered.
+  Route::get('/auth/register', fn() => abort(403, 'Registration is not available.'))->name('auth.register');
+  Route::post('/auth/register', fn() => abort(403, 'Registration is not available.'))->name('auth.registerPost');
 
   Route::get('/', [AuthController::class, 'rootRedirect'])->name('root');
 
