@@ -187,7 +187,7 @@ class HolidayController extends Controller
           $nestedData['date'] = $holiday->date->format(Constants::DateFormat);
           $nestedData['site_name'] = $holiday->site ? $holiday->site->name : 'All Units';
           $nestedData['notes'] = $holiday->notes;
-          $nestedData['status'] = $holiday->status;
+          $nestedData['status'] = $holiday->status instanceof Status ? $holiday->status->value : $holiday->status;
           $nestedData['action'] = '<div class="d-flex align-items-center justify-content-center gap-2">' .
             '<a href="javascript:;" class="text-hitech edit-record me-2" data-id="' . $holiday->id . '" data-bs-toggle="modal" data-bs-target="#modalAddOrUpdateHoliday" title="Edit"><i class="bx bx-edit fs-4"></i></a>' .
             '<a href="javascript:;" class="text-danger delete-record" data-id="' . $holiday->id . '" title="Delete"><i class="bx bx-trash fs-4"></i></a>' .
@@ -368,13 +368,13 @@ class HolidayController extends Controller
 
   public function changeStatusAjax($id)
   {
-    $holiday = Holiday::findOrFail($id);
-    if (!$holiday) {
-      return Error::response('Holiday not found');
+    try {
+      $holiday = Holiday::findOrFail($id);
+      $holiday->status = $holiday->status === Status::ACTIVE ? Status::INACTIVE : Status::ACTIVE;
+      $holiday->save();
+      return Success::response('Holiday status changed successfully');
+    } catch (\Exception $e) {
+      return Error::response($e->getMessage());
     }
-
-    $holiday->status = $holiday->status == Status::ACTIVE ? Status::INACTIVE : Status::ACTIVE;
-    $holiday->save();
-    return Success::response('Holiday status changed successfully');
   }
 }

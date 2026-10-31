@@ -526,7 +526,7 @@ class AttendanceDayStatus
      */
     public static function holidayForUserOnDateSingle(User $user, string $dateStr): ?Holiday
     {
-        $full = Holiday::where('status', 1)
+        $full = Holiday::where('status', 'active')
             ->forUser($user)
             ->whereDate('date', $dateStr)
             ->where('holiday_type', 'full')
@@ -536,7 +536,7 @@ class AttendanceDayStatus
             return $full;
         }
 
-        return Holiday::where('status', 1)
+        return Holiday::where('status', 'active')
             ->forUser($user)
             ->whereDate('date', $dateStr)
             ->whereIn('holiday_type', ['half', 'hours'])
