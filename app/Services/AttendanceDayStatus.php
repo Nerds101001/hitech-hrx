@@ -464,7 +464,7 @@ class AttendanceDayStatus
      */
     public static function holidayMapsForMonth(int $month, int $year): array
     {
-        $rows = Holiday::where('status', 1)
+        $rows = Holiday::where('status', 'active')
             ->whereYear('date', $year)->whereMonth('date', $month)->get();
 
         $full = [];
