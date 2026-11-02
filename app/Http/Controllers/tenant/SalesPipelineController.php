@@ -1031,7 +1031,11 @@ class SalesPipelineController extends Controller
                             continue; // no team → keep their own individual actual
                         }
                         foreach ($achieveMonthKeys as $mk) {
-                            $teamActual = 0.0; $teamPending = 0.0; $teamForecast = 0.0;
+                            // Start with the manager's own individual pipelines, then add team.
+                            $ownRow = $actualByKey[$mk . '|' . $mgr] ?? null;
+                            $teamActual   = (float) ($ownRow->actual   ?? 0.0);
+                            $teamPending  = (float) ($ownRow->pending  ?? 0.0);
+                            $teamForecast = (float) ($ownRow->forecast ?? 0.0);
                             foreach ($reportIds as $rid) {
                                 $r = $actualByKey[$mk . '|' . $rid] ?? null;
                                 if ($r) {
