@@ -1013,50 +1013,22 @@ class SalesPipelineController extends Controller
                     }
                 }
 
-                // For managers: replace individual actual with the sum of all
-                // their direct reports' actuals (reporting_to_id = manager).
-                // A manager's Bingo/Kingo target represents what their team
-                // should collectively achieve, so the actual must match that scope.
+                // Identify managers among the target holders so the display loop
+                // can replace their row with own + team total (computed from the
+                // visible rows, never from a pre-processing pass — that approach
+                // cascades across hierarchies and inflates totals when a sub-manager
+                // is processed before their own manager).
                 $managerIds = User::whereIn('id', $targetHolderIds)
                     ->whereHas('roles', fn ($q) => $q->whereIn('name', ['manager', 'Manager']))
                     ->pluck('id')->all();
+                $reportsByManager = [];
                 if ($managerIds) {
                     $reportsByManager = User::whereIn('reporting_to_id', $managerIds)
                         ->notTerminated()
                         ->get(['id', 'reporting_to_id'])
-                        ->groupBy('reporting_to_id');
-                    // Snapshot individual actuals BEFORE any manager row is overwritten.
-                    // Without this, if manager B is processed first (B reports to A),
-                    // A's aggregation picks up B's already-inflated team total instead
-                    // of B's individual value — cascading double-count across hierarchy.
-                    $individualActualByKey = $actualByKey;
-                    foreach ($managerIds as $mgr) {
-                        $reportIds = $reportsByManager->get($mgr)?->pluck('id')->all() ?? [];
-                        if (empty($reportIds)) {
-                            continue; // no team → keep their own individual actual
-                        }
-                        foreach ($achieveMonthKeys as $mk) {
-                            // Start with the manager's own personal pipelines (snapshot),
-                            // then add each direct report's individual value (snapshot).
-                            $ownRow = $individualActualByKey[$mk . '|' . $mgr] ?? null;
-                            $teamActual   = (float) ($ownRow->actual   ?? 0.0);
-                            $teamPending  = (float) ($ownRow->pending  ?? 0.0);
-                            $teamForecast = (float) ($ownRow->forecast ?? 0.0);
-                            foreach ($reportIds as $rid) {
-                                $r = $individualActualByKey[$mk . '|' . $rid] ?? null;
-                                if ($r) {
-                                    $teamActual   += $r->actual;
-                                    $teamPending  += $r->pending;
-                                    $teamForecast += $r->forecast;
-                                }
-                            }
-                            $actualByKey[$mk . '|' . $mgr] = (object) [
-                                'actual'   => $teamActual,
-                                'pending'  => $teamPending,
-                                'forecast' => $teamForecast,
-                            ];
-                        }
-                    }
+                        ->groupBy('reporting_to_id')
+                        ->map(fn ($g) => $g->pluck('id')->all())
+                        ->all();
                 }
             }
             $nameMap = User::whereIn('id', $targetHolderIds)
@@ -1119,6 +1091,50 @@ class SalesPipelineController extends Controller
                         'month_key'   => $mk,
                     ];
                 }
+
+                // For each manager row in the popup: replace their actual with
+                // own individual pipelines + sum of their visible direct reports.
+                // Doing this AFTER building all rows (not in a pre-processing pass)
+                // prevents cascading: each team-member row always shows their own
+                // individual value regardless of whether they are also a manager.
+                if ($managerIds) {
+                    $actualById = [];
+                    foreach ($list as $r) {
+                        $actualById[(int) $r['id']] = [
+                            'actual'   => $r['actual'],
+                            'pending'  => $r['pending'],
+                            'forecast' => $r['forecast'],
+                        ];
+                    }
+                    $managerIdSet = array_flip($managerIds);
+                    foreach ($list as &$r) {
+                        $mgr = (int) $r['id'];
+                        if (!isset($managerIdSet[$mgr])) {
+                            continue;
+                        }
+                        $mgrReports = $reportsByManager[$mgr] ?? [];
+                        if (empty($mgrReports)) {
+                            continue;
+                        }
+                        // Start with the manager's own individual pipeline actuals.
+                        $ownRow = $actualByKey[$mk . '|' . $mgr] ?? null;
+                        $teamActual   = (float) ($ownRow->actual   ?? 0);
+                        $teamPending  = (float) ($ownRow->pending  ?? 0);
+                        $teamForecast = (float) ($ownRow->forecast ?? 0);
+                        foreach ($mgrReports as $rid) {
+                            if (isset($actualById[$rid])) {
+                                $teamActual   += $actualById[$rid]['actual'];
+                                $teamPending  += $actualById[$rid]['pending'];
+                                $teamForecast += $actualById[$rid]['forecast'];
+                            }
+                        }
+                        $r['actual']   = $teamActual;
+                        $r['pending']  = $teamPending;
+                        $r['forecast'] = $teamForecast;
+                    }
+                    unset($r);
+                }
+
                 usort($list, fn($a, $b) => $b['actual'] <=> $a['actual']);
                 $targetAchieversByMonth[$mk] = $list;
             }
