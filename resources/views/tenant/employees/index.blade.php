@@ -204,13 +204,7 @@
         const userName = $(this).data('name') || 'Employee';
         const userPhone = $(this).data('phone') || '';
         
-        // Formula: Ucfirst(Name[:4]) + @ + Phone[-4]
-        let rawName = userName.split(' ')[0] || 'User';
-        let lastFourDigits = userPhone && userPhone !== 'N/A' ? String(userPhone).slice(-4) : '1234';
-        let namePart = rawName.substring(0, 1).toUpperCase() + rawName.substring(1, 4).toLowerCase();
-        let passwordPreview = namePart + '@' + lastFourDigits;
-
-        $('#displayResetPassword').text(passwordPreview);
+        $('#displayResetPassword').text('Will be shown after reset');
         $('#confirmResetBtn').data('id', user_id);
         $('#hitechResetPasswordModal').modal('show');
       });
@@ -231,12 +225,13 @@
             $('#hitechResetPasswordModal').modal('hide');
             btn.prop('disabled', false).text('Confirm Reset');
 
+            const newPwd = response.data && response.data.password;
             Swal.fire({
               icon: 'success',
-              title: 'Success!',
-              // Success::response() nests the payload under .data -- {message, password}
-              // here. Reading .message directly always showed "undefined".
-              text: (response.data && response.data.message) || 'Password reset successfully.',
+              title: 'Password Reset!',
+              html: newPwd
+                ? `Password reset successfully.<br><br><strong>New Password:</strong><br><code style="font-size:1.3rem;letter-spacing:2px;">${newPwd}</code><br><small class="text-muted">Please share this with the employee.</small>`
+                : 'Password reset successfully.',
               customClass: { confirmButton: 'btn btn-success' }
             });
           },
@@ -634,12 +629,12 @@
             </div>
             <div class="modal-body modal-body-hitech text-center py-6 px-5">
                 <div class="p-6 mb-6 border animate__animated animate__pulse" style="background: rgba(0, 128, 128, 0.06); border: 1px dashed rgba(0, 128, 128, 0.3) !important; border-radius: 2rem !important;">
-                    <p class="text-muted mb-3 small fw-bold text-uppercase" style="letter-spacing: 1.5px; opacity: 0.8;">The New Password Will Be:</p>
-                    <h1 class="text-primary fw-extrabold mb-0" id="displayResetPassword" style="letter-spacing: 3px; font-size: 2.5rem; text-shadow: 0 2px 4px rgba(0,128,128,0.1);">Arch7850</h1>
+                    <p class="text-muted mb-3 small fw-bold text-uppercase" style="letter-spacing: 1.5px; opacity: 0.8;">A secure random password will be generated</p>
+                    <h1 class="text-muted fw-extrabold mb-0" id="displayResetPassword" style="letter-spacing: 3px; font-size: 1.4rem;">Shown after confirming</h1>
                 </div>
                 <p class="text-muted small px-4">
                     <i class="bx bx-info-circle me-1"></i>
-                    The user's password will be updated to this new password immediately.
+                    A new secure random password will be generated and shown to you after confirming.
                 </p>
             </div>
             <div class="modal-footer border-0 px-4 pb-4 mt-2">
