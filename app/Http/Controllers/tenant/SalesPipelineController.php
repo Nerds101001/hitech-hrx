@@ -1025,19 +1025,25 @@ class SalesPipelineController extends Controller
                         ->notTerminated()
                         ->get(['id', 'reporting_to_id'])
                         ->groupBy('reporting_to_id');
+                    // Snapshot individual actuals BEFORE any manager row is overwritten.
+                    // Without this, if manager B is processed first (B reports to A),
+                    // A's aggregation picks up B's already-inflated team total instead
+                    // of B's individual value — cascading double-count across hierarchy.
+                    $individualActualByKey = $actualByKey;
                     foreach ($managerIds as $mgr) {
                         $reportIds = $reportsByManager->get($mgr)?->pluck('id')->all() ?? [];
                         if (empty($reportIds)) {
                             continue; // no team → keep their own individual actual
                         }
                         foreach ($achieveMonthKeys as $mk) {
-                            // Start with the manager's own individual pipelines, then add team.
-                            $ownRow = $actualByKey[$mk . '|' . $mgr] ?? null;
+                            // Start with the manager's own personal pipelines (snapshot),
+                            // then add each direct report's individual value (snapshot).
+                            $ownRow = $individualActualByKey[$mk . '|' . $mgr] ?? null;
                             $teamActual   = (float) ($ownRow->actual   ?? 0.0);
                             $teamPending  = (float) ($ownRow->pending  ?? 0.0);
                             $teamForecast = (float) ($ownRow->forecast ?? 0.0);
                             foreach ($reportIds as $rid) {
-                                $r = $actualByKey[$mk . '|' . $rid] ?? null;
+                                $r = $individualActualByKey[$mk . '|' . $rid] ?? null;
                                 if ($r) {
                                     $teamActual   += $r->actual;
                                     $teamPending  += $r->pending;
