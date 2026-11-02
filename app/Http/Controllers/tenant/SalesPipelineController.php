@@ -824,25 +824,19 @@ class SalesPipelineController extends Controller
         // sub-manager's row carries only their own individual actual, making
         // the top manager's total lower than what admin sees.
         //
-        // $popupDisplayIds  — direct team only  → controls which ROWS appear.
-        // $popupAllowedIds  — full hierarchy    → controls which pipelines are fetched.
+        // $popupDisplayIds  — direct team only  → controls which ROWS appear in the popup.
+        // $popupAllowedIds  — null for managers → compute exactly like admin (all pipelines),
+        //                     so leaver-handover pipelines and cross-team ccare/new-biz tags
+        //                     are all fetched and manager aggregation gives the same total.
         $popupDisplayIds = null;
         $popupAllowedIds = $allowedSpIds;
         if ($allowedSpIds !== null && $user->hasRole(['manager', 'Manager'])) {
-            $directTeam = \App\Support\SalesScope::allowedUserIds($user); // [self, ...direct reports]
-            $popupDisplayIds = $directTeam;
-            // Walk down the org tree to collect every descendant.
-            $allDescendants = collect($directTeam);
-            $frontier = $directTeam;
-            for ($depth = 0; $depth < 4 && !empty($frontier); $depth++) {
-                $children = \App\Models\User::whereIn('reporting_to_id', $frontier)
-                    ->notTerminated()->pluck('id')->all();
-                $frontier = array_values(array_diff($children, $allDescendants->all()));
-                if ($frontier) {
-                    $allDescendants = $allDescendants->merge($frontier)->unique()->values();
-                }
-            }
-            $popupAllowedIds = $allDescendants->all();
+            // Display: only the manager's own direct team appears as popup rows.
+            $popupDisplayIds = \App\Support\SalesScope::allowedUserIds($user);
+            // Computation: unrestricted (null), identical to admin. This ensures
+            // pipelines where the DB salesperson_id is outside the team but was
+            // handed over to a team member are still fetched and counted.
+            $popupAllowedIds = null;
         }
 
         $allTargets = $salespersonTargets->whereIn('month_year', $achieveMonthKeys)
