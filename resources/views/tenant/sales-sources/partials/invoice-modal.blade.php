@@ -236,6 +236,22 @@
                 + '<div class="inv-sec-title">Price over time</div><div id="itemPriceChart" style="min-height:220px;margin-bottom:1rem;"></div>';
         }
 
+        // Item master specs -- "SKU Code" is misleadingly named: for this company it's the item's own
+        // WEIGHT PER PIECE in Kg (a decimal, e.g. 0.002), not a text code -- confirmed live, 2026-10-30,
+        // against the company's own "SKU Report - Sales Order". Only shown when Tally actually has a
+        // value for it (many items don't).
+        if (d.specs) {
+            const sp = d.specs;
+            const factRow = (k, v) => v ? '<div class="inv-fact"><div class="k">' + esc(k) + '</div><div class="v">' + esc(v) + '</div></div>' : '';
+            const specFacts = factRow('Weight / piece (Kg)', sp.sku_code && Number(sp.sku_code) > 0 ? sp.sku_code : '')
+                + factRow('Colour', sp.colour) + factRow('Size', sp.size) + factRow('Description', sp.description)
+                + factRow('Lamination', sp.lamination === null ? '' : (sp.lamination ? 'Yes' : 'No'))
+                + factRow('Printing', sp.printing === null ? '' : (sp.printing ? 'Yes' : 'No'));
+            if (specFacts) {
+                h += '<div class="inv-sec-title mt-3">Item specs</div><div class="inv-facts">' + specFacts + '</div>';
+            }
+        }
+
         if (d.restricted) {
             h += '<div class="inv-note"><i class="bx bx-lock-alt"></i><div>Showing only this customer’s own purchases of this item — the company-wide buyer list is limited to admin.</div></div>';
         }
