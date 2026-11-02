@@ -809,10 +809,20 @@ class SalesPipelineController extends Controller
             ->merge(User::notTerminated()->pluck('id'))
             ->unique();
 
+        // The popup must always use the manager's FULL team scope so that
+        // direct reports' pipelines are loaded and their actuals can be
+        // summed into the manager's own row — regardless of whether the
+        // page is currently showing "My Data" or "Team" view.
+        // viewIds() returns [$user->id] alone when ?team is absent, which
+        // would leave the reports out of $targetHolderIds and produce 0.
+        $popupAllowedIds = ($allowedSpIds !== null && $user->hasRole(['manager', 'Manager']))
+            ? \App\Support\SalesScope::allowedUserIds($user)
+            : $allowedSpIds;
+
         $allTargets = $salespersonTargets->whereIn('month_year', $achieveMonthKeys)
             ->whereIn('salesperson_id', $activeIds);
-        if ($allowedSpIds !== null) {
-            $allTargets = $allTargets->whereIn('salesperson_id', $allowedSpIds);
+        if ($popupAllowedIds !== null) {
+            $allTargets = $allTargets->whereIn('salesperson_id', $popupAllowedIds);
         }
 
         // Everyone in Sales/Export/CCare/New Biz belongs in this popup, even
@@ -831,8 +841,8 @@ class SalesPipelineController extends Controller
                     ->notTerminated()->pluck('id')
             )
             ->unique()->values();
-        if ($allowedSpIds !== null) {
-            $allCoordinatorIds = $allCoordinatorIds->intersect($allowedSpIds);
+        if ($popupAllowedIds !== null) {
+            $allCoordinatorIds = $allCoordinatorIds->intersect($popupAllowedIds);
         }
         $existingTargetKeys = $allTargets->map(fn ($t) => $t->month_year . '|' . $t->salesperson_id)->flip();
         foreach ($achieveMonthKeys as $mk) {
