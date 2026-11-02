@@ -982,6 +982,42 @@ class SalesPipelineController extends Controller
                         $actualByKey[$mk . '|' . $spId] = (object) ['actual' => $actual, 'pending' => $pending, 'forecast' => $forecast];
                     }
                 }
+
+                // For managers: replace individual actual with the sum of all
+                // their direct reports' actuals (reporting_to_id = manager).
+                // A manager's Bingo/Kingo target represents what their team
+                // should collectively achieve, so the actual must match that scope.
+                $managerIds = User::whereIn('id', $targetHolderIds)
+                    ->whereHas('roles', fn ($q) => $q->whereIn('name', ['manager', 'Manager']))
+                    ->pluck('id')->all();
+                if ($managerIds) {
+                    $reportsByManager = User::whereIn('reporting_to_id', $managerIds)
+                        ->notTerminated()
+                        ->get(['id', 'reporting_to_id'])
+                        ->groupBy('reporting_to_id');
+                    foreach ($managerIds as $mgr) {
+                        $reportIds = $reportsByManager->get($mgr)?->pluck('id')->all() ?? [];
+                        if (empty($reportIds)) {
+                            continue; // no team → keep their own individual actual
+                        }
+                        foreach ($achieveMonthKeys as $mk) {
+                            $teamActual = 0.0; $teamPending = 0.0; $teamForecast = 0.0;
+                            foreach ($reportIds as $rid) {
+                                $r = $actualByKey[$mk . '|' . $rid] ?? null;
+                                if ($r) {
+                                    $teamActual   += $r->actual;
+                                    $teamPending  += $r->pending;
+                                    $teamForecast += $r->forecast;
+                                }
+                            }
+                            $actualByKey[$mk . '|' . $mgr] = (object) [
+                                'actual'   => $teamActual,
+                                'pending'  => $teamPending,
+                                'forecast' => $teamForecast,
+                            ];
+                        }
+                    }
+                }
             }
             $nameMap = User::whereIn('id', $targetHolderIds)
                 ->get()->mapWithKeys(fn($u) => [$u->id => $u->name]);
