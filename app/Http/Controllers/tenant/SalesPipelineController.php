@@ -815,9 +815,35 @@ class SalesPipelineController extends Controller
         // page is currently showing "My Data" or "Team" view.
         // viewIds() returns [$user->id] alone when ?team is absent, which
         // would leave the reports out of $targetHolderIds and produce 0.
-        $popupAllowedIds = ($allowedSpIds !== null && $user->hasRole(['manager', 'Manager']))
-            ? \App\Support\SalesScope::allowedUserIds($user)
-            : $allowedSpIds;
+        //
+        // We also need all DESCENDANTS (sub-reports at every level) so that
+        // nested manager aggregation chains correctly: a sub-manager's
+        // $actualByKey is replaced with their own team total first, and only
+        // then is summed into the top-level manager's row — exactly as the
+        // unrestricted admin view computes it.  Without descendants, a
+        // sub-manager's row carries only their own individual actual, making
+        // the top manager's total lower than what admin sees.
+        //
+        // $popupDisplayIds  — direct team only  → controls which ROWS appear.
+        // $popupAllowedIds  — full hierarchy    → controls which pipelines are fetched.
+        $popupDisplayIds = null;
+        $popupAllowedIds = $allowedSpIds;
+        if ($allowedSpIds !== null && $user->hasRole(['manager', 'Manager'])) {
+            $directTeam = \App\Support\SalesScope::allowedUserIds($user); // [self, ...direct reports]
+            $popupDisplayIds = $directTeam;
+            // Walk down the org tree to collect every descendant.
+            $allDescendants = collect($directTeam);
+            $frontier = $directTeam;
+            for ($depth = 0; $depth < 4 && !empty($frontier); $depth++) {
+                $children = \App\Models\User::whereIn('reporting_to_id', $frontier)
+                    ->notTerminated()->pluck('id')->all();
+                $frontier = array_values(array_diff($children, $allDescendants->all()));
+                if ($frontier) {
+                    $allDescendants = $allDescendants->merge($frontier)->unique()->values();
+                }
+            }
+            $popupAllowedIds = $allDescendants->all();
+        }
 
         $allTargets = $salespersonTargets->whereIn('month_year', $achieveMonthKeys)
             ->whereIn('salesperson_id', $activeIds);
@@ -1060,6 +1086,12 @@ class SalesPipelineController extends Controller
                 $list = [];
                 foreach ($allTargets->where('month_year', $mk) as $t) {
                     $spId = $t->salesperson_id;
+                    // For a manager's login: only show their direct team in the
+                    // popup (descendants beyond level 1 were loaded for pipeline
+                    // computation only — they must not appear as extra rows).
+                    if ($popupDisplayIds !== null && !in_array($spId, $popupDisplayIds, false)) {
+                        continue;
+                    }
                     $row = $actualByKey[$mk . '|' . $spId] ?? null;
                     $list[] = [
                         // Carried so callers can match a row to a person without
