@@ -131,7 +131,9 @@
                                     @endif
                                     
                                     <a href="{{ route('hr-policies.targets', $policy->id) }}" class="text-decoration-none" title="See who this policy targets">
-                                    @if(empty($policy->target_departments))
+                                    @if(!empty($policy->target_users))
+                                        <span class="badge bg-label-primary rounded-pill px-3 py-1 fw-bold" style="font-size: 0.7rem;"><i class="bx bx-user small me-1"></i>{{ count($policy->target_users) }} Employee{{ count($policy->target_users) !== 1 ? 's' : '' }} <i class="bx bx-link-external small ms-1"></i></span>
+                                    @elseif(empty($policy->target_departments))
                                         <span class="badge bg-success-light text-success rounded-pill px-3 py-1 fw-bold" style="font-size: 0.7rem;"><i class="bx bx-buildings small me-1"></i>All Depts <i class="bx bx-link-external small ms-1"></i></span>
                                     @else
                                         <span class="badge bg-info-light text-info rounded-pill px-3 py-1 fw-bold" style="font-size: 0.7rem;"><i class="bx bx-target-lock small me-1"></i>Targeted ({{ count($policy->target_departments) }}) <i class="bx bx-link-external small ms-1"></i></span>
@@ -210,14 +212,38 @@
                             </select>
                         </div>
                         <div class="col-12">
-                            <label class="form-label-hitech">Target Departments</label>
-                            <select name="target_departments[]" class="form-select select2 form-control-hitech" multiple="multiple" data-placeholder="All Departments (Default)">
-                                <option value="all">All Departments (Default)</option>
-                                @foreach($departments as $department)
-                                    <option value="{{ $department->id }}">{{ $department->name }}</option>
-                                @endforeach
-                            </select>
-                            <div class="form-text small mt-1 text-muted">Leave blank or select "All Departments" to apply to everyone.</div>
+                            <label class="form-label-hitech">Target Audience</label>
+                            <ul class="nav nav-pills mb-3" id="createTargetTabs" role="tablist" style="background:#f8fafc;border-radius:8px;padding:4px;">
+                                <li class="nav-item" role="presentation">
+                                    <button class="nav-link active px-4 py-2" id="create-dept-tab" data-bs-toggle="pill" data-bs-target="#create-dept-pane" type="button" role="tab">
+                                        <i class="bx bx-buildings me-1"></i>Departments
+                                    </button>
+                                </li>
+                                <li class="nav-item" role="presentation">
+                                    <button class="nav-link px-4 py-2" id="create-emp-tab" data-bs-toggle="pill" data-bs-target="#create-emp-pane" type="button" role="tab">
+                                        <i class="bx bx-user me-1"></i>Employees
+                                    </button>
+                                </li>
+                            </ul>
+                            <div class="tab-content">
+                                <div class="tab-pane fade show active" id="create-dept-pane" role="tabpanel">
+                                    <select name="target_departments[]" class="form-select select2 form-control-hitech" multiple="multiple" data-placeholder="All Departments (Default)">
+                                        <option value="all">All Departments (Default)</option>
+                                        @foreach($departments as $department)
+                                            <option value="{{ $department->id }}">{{ $department->name }}</option>
+                                        @endforeach
+                                    </select>
+                                    <div class="form-text small mt-1 text-muted">Leave blank or select "All Departments" to apply to everyone.</div>
+                                </div>
+                                <div class="tab-pane fade" id="create-emp-pane" role="tabpanel">
+                                    <select name="target_users[]" class="form-select select2-employees form-control-hitech" multiple="multiple" data-placeholder="Select specific employees…">
+                                        @foreach($employees as $emp)
+                                            <option value="{{ $emp['id'] }}">{{ $emp['name'] }}</option>
+                                        @endforeach
+                                    </select>
+                                    <div class="form-text small mt-1 text-muted">Only the selected employees will see and be required to acknowledge this policy.</div>
+                                </div>
+                            </div>
                         </div>
                         <div class="col-12">
                             <label class="form-label-hitech">Policy PDF</label>
@@ -281,27 +307,57 @@
                                 @endforeach
                             </select>
                         </div>
-                        @php $isAllDepts = empty($pt) || count($pt) === $departments->count(); @endphp
+                        @php
+                            $isAllDepts = empty($pt) || count($pt) === $departments->count();
+                            $pu = $policy->target_users ?? [];
+                            $editActiveTab = !empty($pu) ? 'emp' : 'dept';
+                        @endphp
                         <div class="col-12">
-                            <label class="form-label-hitech">Target Departments</label>
-                            <div class="form-check mb-2 p-3 rounded-3" style="background-color: #F8FAFC;">
-                                <input class="form-check-input hitech-all-depts-toggle" type="checkbox" id="edit_all_depts{{ $policy->id }}"
-                                       @checked($isAllDepts)
-                                       data-target="#edit_depts_select{{ $policy->id }}">
-                                <label class="form-check-label fw-bold text-dark" for="edit_all_depts{{ $policy->id }}">
-                                    Applies to <span class="text-uppercase">ALL</span> departments — no restriction
-                                </label>
-                            </div>
-                            <select name="target_departments[]" id="edit_depts_select{{ $policy->id }}"
-                                    class="form-select form-control-hitech hitech-dept-select" multiple size="7"
-                                    @disabled($isAllDepts)>
-                                @foreach($departments as $department)
-                                    <option value="{{ $department->id }}" @selected(in_array($department->id, $pt))>{{ $department->name }}</option>
-                                @endforeach
-                            </select>
-                            <div class="form-text small mt-1 text-muted">
-                                Untick "ALL departments" above to pick specific ones (hold Ctrl / Cmd to pick several).
-                                Currently: <strong>{{ $isAllDepts ? 'ALL departments' : count($pt) . ' department' . (count($pt) === 1 ? '' : 's') . ' selected' }}</strong>.
+                            <label class="form-label-hitech">Target Audience</label>
+                            <ul class="nav nav-pills mb-3" id="editTargetTabs{{ $policy->id }}" role="tablist" style="background:#f8fafc;border-radius:8px;padding:4px;">
+                                <li class="nav-item" role="presentation">
+                                    <button class="nav-link {{ $editActiveTab === 'dept' ? 'active' : '' }} px-4 py-2" id="edit-dept-tab{{ $policy->id }}" data-bs-toggle="pill" data-bs-target="#edit-dept-pane{{ $policy->id }}" type="button" role="tab">
+                                        <i class="bx bx-buildings me-1"></i>Departments
+                                    </button>
+                                </li>
+                                <li class="nav-item" role="presentation">
+                                    <button class="nav-link {{ $editActiveTab === 'emp' ? 'active' : '' }} px-4 py-2" id="edit-emp-tab{{ $policy->id }}" data-bs-toggle="pill" data-bs-target="#edit-emp-pane{{ $policy->id }}" type="button" role="tab">
+                                        <i class="bx bx-user me-1"></i>Employees
+                                        @if(!empty($pu))<span class="badge bg-info rounded-pill ms-1">{{ count($pu) }}</span>@endif
+                                    </button>
+                                </li>
+                            </ul>
+                            <div class="tab-content">
+                                <div class="tab-pane fade {{ $editActiveTab === 'dept' ? 'show active' : '' }}" id="edit-dept-pane{{ $policy->id }}" role="tabpanel">
+                                    <div class="form-check mb-2 p-3 rounded-3" style="background-color: #F8FAFC;">
+                                        <input class="form-check-input hitech-all-depts-toggle" type="checkbox" id="edit_all_depts{{ $policy->id }}"
+                                               @checked($isAllDepts)
+                                               data-target="#edit_depts_select{{ $policy->id }}">
+                                        <label class="form-check-label fw-bold text-dark" for="edit_all_depts{{ $policy->id }}">
+                                            Applies to <span class="text-uppercase">ALL</span> departments — no restriction
+                                        </label>
+                                    </div>
+                                    <select name="target_departments[]" id="edit_depts_select{{ $policy->id }}"
+                                            class="form-select form-control-hitech hitech-dept-select" multiple size="7"
+                                            @disabled($isAllDepts)>
+                                        @foreach($departments as $department)
+                                            <option value="{{ $department->id }}" @selected(in_array($department->id, $pt))>{{ $department->name }}</option>
+                                        @endforeach
+                                    </select>
+                                    <div class="form-text small mt-1 text-muted">
+                                        Untick "ALL departments" above to pick specific ones (hold Ctrl / Cmd to pick several).
+                                        Currently: <strong>{{ $isAllDepts ? 'ALL departments' : count($pt) . ' department' . (count($pt) === 1 ? '' : 's') . ' selected' }}</strong>.
+                                    </div>
+                                </div>
+                                <div class="tab-pane fade {{ $editActiveTab === 'emp' ? 'show active' : '' }}" id="edit-emp-pane{{ $policy->id }}" role="tabpanel">
+                                    <select name="target_users[]" id="edit_users_select{{ $policy->id }}"
+                                            class="form-select form-control-hitech select2-edit-employees" multiple size="7">
+                                        @foreach($employees as $emp)
+                                            <option value="{{ $emp['id'] }}" @selected(in_array($emp['id'], $pu))>{{ $emp['name'] }}</option>
+                                        @endforeach
+                                    </select>
+                                    <div class="form-text small mt-1 text-muted">Only the selected employees will see and be required to acknowledge this policy. Clear all to remove individual targeting.</div>
+                                </div>
                             </div>
                         </div>
                         <div class="col-12">
@@ -427,12 +483,28 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         });
         
-        // Initialize select2
+        // Select2 for department targeting in create modal
         if ($('.select2').length) {
             $('.select2').select2({
                 dropdownParent: $('#uploadPolicyModal')
             });
         }
+
+        // Select2 for employee targeting in create modal
+        $('.select2-employees').select2({
+            dropdownParent: $('#uploadPolicyModal'),
+            placeholder: 'Select specific employees…',
+            allowClear: true
+        });
+
+        // Select2 for employee targeting in every edit modal
+        @foreach($policies as $policy)
+        $('#edit_users_select{{ $policy->id }}').select2({
+            dropdownParent: $('#editPolicyModal{{ $policy->id }}'),
+            placeholder: 'Select specific employees…',
+            allowClear: true
+        });
+        @endforeach
     });
 });
 </script>

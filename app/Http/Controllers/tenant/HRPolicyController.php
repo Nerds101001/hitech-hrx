@@ -22,7 +22,11 @@ class HRPolicyController extends Controller
     {
         $policies = HRPolicy::withCount('acknowledgments')->get();
         $departments = \App\Models\Department::orderBy('name')->get();
-        return view('tenant.hr-policies.admin-index', compact('policies', 'departments'));
+        $employees = \App\Models\User::where('status', \App\Enums\UserAccountStatus::ACTIVE)
+            ->orderBy('first_name')
+            ->get(['id', 'first_name', 'last_name', 'department_id'])
+            ->map(fn($u) => ['id' => $u->id, 'name' => trim($u->first_name . ' ' . $u->last_name)]);
+        return view('tenant.hr-policies.admin-index', compact('policies', 'departments', 'employees'));
     }
 
     /**
@@ -32,10 +36,20 @@ class HRPolicyController extends Controller
     {
         $user = auth()->user();
         $policies = HRPolicy::where('is_active', true)->get()->filter(function ($policy) use ($user) {
-            if (empty($policy->target_departments)) {
+            $hasDeptTarget  = !empty($policy->target_departments);
+            $hasUserTarget  = !empty($policy->target_users);
+
+            // No restrictions at all → visible to everyone
+            if (!$hasDeptTarget && !$hasUserTarget) {
                 return true;
             }
-            return in_array((string)$user->department_id, $policy->target_departments);
+            if ($hasDeptTarget && in_array((string)$user->department_id, $policy->target_departments)) {
+                return true;
+            }
+            if ($hasUserTarget && in_array((string)$user->id, array_map('strval', $policy->target_users))) {
+                return true;
+            }
+            return false;
         });
         $acknowledgedIds = HRPolicyAcknowledgment::where('user_id', $user->id)
             ->pluck('hr_policy_id')
@@ -66,7 +80,9 @@ class HRPolicyController extends Controller
             'is_mandatory' => 'boolean',
             'show_as_popup' => 'boolean',
             'target_departments' => 'nullable|array',
-            'target_departments.*' => 'exists:departments,id'
+            'target_departments.*' => 'exists:departments,id',
+            'target_users' => 'nullable|array',
+            'target_users.*' => 'exists:users,id',
         ]);
 
         if ($request->hasFile('file')) {
@@ -83,6 +99,7 @@ class HRPolicyController extends Controller
                 'is_mandatory' => $request->boolean('is_mandatory'),
                 'show_as_popup' => $request->boolean('show_as_popup'),
                 'target_departments' => $request->input('target_departments'),
+                'target_users' => $request->filled('target_users') ? array_values($request->target_users) : null,
                 'created_by_id' => auth()->id()
             ]);
 
@@ -109,6 +126,8 @@ class HRPolicyController extends Controller
             'show_as_popup' => 'boolean',
             'target_departments' => 'nullable|array',
             'target_departments.*' => 'exists:departments,id',
+            'target_users' => 'nullable|array',
+            'target_users.*' => 'exists:users,id',
         ]);
 
         $data = [
@@ -119,6 +138,7 @@ class HRPolicyController extends Controller
             'show_as_popup' => $request->boolean('show_as_popup'),
             // Empty = everyone (same meaning as on create).
             'target_departments' => $request->filled('target_departments') ? array_values($request->target_departments) : null,
+            'target_users' => $request->filled('target_users') ? array_values($request->target_users) : null,
         ];
 
         if ($request->hasFile('file')) {
@@ -144,28 +164,35 @@ class HRPolicyController extends Controller
     {
         $policy = HRPolicy::findOrFail($id);
 
-        $query = \App\Models\User::query()
+        // Department-targeted users
+        $deptQuery = \App\Models\User::query()
             ->where('status', \App\Enums\UserAccountStatus::ACTIVE)
             ->with('department:id,name');
         if (!empty($policy->target_departments)) {
-            $query->whereIn('department_id', $policy->target_departments);
+            $deptQuery->whereIn('department_id', $policy->target_departments);
         }
-        $users = $query->orderBy('first_name')->get(['id', 'first_name', 'last_name', 'email', 'department_id']);
+        $users = $deptQuery->orderBy('first_name')->get(['id', 'first_name', 'last_name', 'email', 'department_id']);
+
+        // Individually targeted users
+        $individualUsers = collect();
+        if (!empty($policy->target_users)) {
+            $individualUsers = \App\Models\User::whereIn('id', $policy->target_users)
+                ->with('department:id,name')
+                ->orderBy('first_name')
+                ->get(['id', 'first_name', 'last_name', 'email', 'department_id']);
+        }
 
         $ackMap = HRPolicyAcknowledgment::where('hr_policy_id', $policy->id)
             ->pluck('acknowledged_at', 'user_id');
 
-        // Resolve each targeted department id to a name so a policy aimed at a
-        // department that no longer exists (e.g. a stale "999") reads clearly
-        // instead of showing a blank list with no explanation.
         $existing = \App\Models\Department::whereIn('id', $policy->target_departments ?? [])->pluck('name', 'id');
-        $targetDepts = collect($policy->target_departments ?? [])->map(fn ($id) => [
-            'id' => $id,
-            'name' => $existing[$id] ?? null,
+        $targetDepts = collect($policy->target_departments ?? [])->map(fn ($deptId) => [
+            'id' => $deptId,
+            'name' => $existing[$deptId] ?? null,
         ]);
         $deptNames = $existing->values()->all();
 
-        return view('tenant.hr-policies.targets', compact('policy', 'users', 'ackMap', 'deptNames', 'targetDepts'));
+        return view('tenant.hr-policies.targets', compact('policy', 'users', 'ackMap', 'deptNames', 'targetDepts', 'individualUsers'));
     }
 
     /**

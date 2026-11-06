@@ -23,11 +23,13 @@ class HRPolicy extends Model implements AuditableContract
         'show_as_popup',
         'is_active',
         'created_by_id',
-        'target_departments'
+        'target_departments',
+        'target_users',
     ];
 
     protected $casts = [
         'target_departments' => 'array',
+        'target_users' => 'array',
         'is_mandatory' => 'boolean',
         'show_as_popup' => 'boolean',
         'is_active' => 'boolean',
