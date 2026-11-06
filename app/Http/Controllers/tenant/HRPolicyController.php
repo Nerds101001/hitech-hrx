@@ -22,10 +22,14 @@ class HRPolicyController extends Controller
     {
         $policies = HRPolicy::withCount('acknowledgments')->get();
         $departments = \App\Models\Department::orderBy('name')->get();
+        $deptMap = \App\Models\Department::pluck('name', 'id');
         $employees = \App\Models\User::where('status', \App\Enums\UserAccountStatus::ACTIVE)
             ->orderBy('first_name')
             ->get(['id', 'first_name', 'last_name', 'department_id'])
-            ->map(fn($u) => ['id' => $u->id, 'name' => trim($u->first_name . ' ' . $u->last_name)]);
+            ->map(fn($u) => [
+                'id'   => $u->id,
+                'name' => trim($u->first_name . ' ' . $u->last_name) . ($u->department_id && isset($deptMap[$u->department_id]) ? ' (' . $deptMap[$u->department_id] . ')' : ''),
+            ]);
         return view('tenant.hr-policies.admin-index', compact('policies', 'departments', 'employees'));
     }
 

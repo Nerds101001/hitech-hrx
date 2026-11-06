@@ -20,15 +20,40 @@
 
 @section('content')
 <style>
-  /* A native multi-select's custom "hitech" skin suppressed the browser's
-     own selected-row highlight, so a policy targeting many/all departments
-     looked like only the focused row was picked (reported on the
-     Confidentiality policy - all 30 were genuinely selected server-side,
-     none of that showed on screen). Force a clear, consistent highlight on
-     every selected option, not just the one with keyboard focus. */
   .hitech-dept-select option:checked {
     background-color: #127464 !important;
     color: #ffffff !important;
+  }
+  /* Select2 multi-select: selected tags/chips */
+  .select2-container--default .select2-selection__choice {
+    background-color: #127464 !important;
+    color: #ffffff !important;
+    border: 1px solid #0d5c4f !important;
+    border-radius: 4px !important;
+  }
+  .select2-container--default .select2-selection__choice__display {
+    color: #ffffff !important;
+  }
+  .select2-container--default .select2-selection__choice__remove {
+    color: rgba(255,255,255,0.75) !important;
+    border-right: 1px solid rgba(255,255,255,0.3) !important;
+  }
+  .select2-container--default .select2-selection__choice__remove:hover {
+    background-color: #0d5c4f !important;
+    color: #ffffff !important;
+  }
+  /* Nav pills (Departments / Employees tabs) active state */
+  .hitech-target-tabs .nav-link {
+    color: #127464;
+    font-weight: 600;
+    font-size: 0.85rem;
+  }
+  .hitech-target-tabs .nav-link.active {
+    background-color: #127464 !important;
+    color: #ffffff !important;
+  }
+  .hitech-target-tabs .nav-link:not(.active):hover {
+    background-color: rgba(18,116,100,0.1);
   }
 </style>
 <div class="layout-full-width animate__animated animate__fadeIn">
@@ -213,7 +238,7 @@
                         </div>
                         <div class="col-12">
                             <label class="form-label-hitech">Target Audience</label>
-                            <ul class="nav nav-pills mb-3" id="createTargetTabs" role="tablist" style="background:#f8fafc;border-radius:8px;padding:4px;">
+                            <ul class="nav nav-pills hitech-target-tabs mb-3" id="createTargetTabs" role="tablist" style="background:#f8fafc;border-radius:8px;padding:4px;">
                                 <li class="nav-item" role="presentation">
                                     <button class="nav-link active px-4 py-2" id="create-dept-tab" data-bs-toggle="pill" data-bs-target="#create-dept-pane" type="button" role="tab">
                                         <i class="bx bx-buildings me-1"></i>Departments
@@ -314,7 +339,7 @@
                         @endphp
                         <div class="col-12">
                             <label class="form-label-hitech">Target Audience</label>
-                            <ul class="nav nav-pills mb-3" id="editTargetTabs{{ $policy->id }}" role="tablist" style="background:#f8fafc;border-radius:8px;padding:4px;">
+                            <ul class="nav nav-pills hitech-target-tabs mb-3" id="editTargetTabs{{ $policy->id }}" role="tablist" style="background:#f8fafc;border-radius:8px;padding:4px;">
                                 <li class="nav-item" role="presentation">
                                     <button class="nav-link {{ $editActiveTab === 'dept' ? 'active' : '' }} px-4 py-2" id="edit-dept-tab{{ $policy->id }}" data-bs-toggle="pill" data-bs-target="#edit-dept-pane{{ $policy->id }}" type="button" role="tab">
                                         <i class="bx bx-buildings me-1"></i>Departments
