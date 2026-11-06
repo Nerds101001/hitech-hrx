@@ -784,6 +784,7 @@ Route::middleware([
     // clearance rather than by job title.
     Route::prefix('exit-clearance')->name('exit-clearance.')->group(function () {
         Route::get('/', [\App\Http\Controllers\tenant\ExitClearanceController::class, 'index'])->name('index');
+        Route::get('{type}/{exitId}', [\App\Http\Controllers\tenant\ExitClearanceController::class, 'show'])->name('show');
         Route::post('{id}', [\App\Http\Controllers\tenant\ExitClearanceController::class, 'update'])->name('update');
     });
 

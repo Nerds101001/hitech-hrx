@@ -82,10 +82,11 @@
                   <td>
                     @if($termination->id && isset($clearanceMap[$termination->id]))
                       @php $prog = $clearanceMap[$termination->id]; @endphp
-                      <span class="badge {{ $prog['done'] ? 'bg-label-success' : ($prog['blocked'] ? 'bg-label-danger' : 'bg-label-warning') }}"
-                            title="{{ $prog['label'] }}">
+                      <a href="{{ route('exit-clearance.show', ['type' => 'termination', 'exitId' => $termination->id]) }}"
+                         class="badge {{ $prog['done'] ? 'bg-label-success' : ($prog['blocked'] ? 'bg-label-danger' : 'bg-label-warning') }} text-decoration-none"
+                         title="{{ $prog['label'] }}">
                         {{ $prog['cleared'] }}/{{ $prog['total'] }} cleared
-                      </span>
+                      </a>
                     @elseif($termination->id)
                       <span class="badge bg-label-secondary">No NOC raised</span>
                     @else

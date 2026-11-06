@@ -10,6 +10,7 @@ use App\Services\HrNotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * The NOC tracker: HR watches which departments still owe clearance for a
@@ -77,6 +78,58 @@ class ExitClearanceController extends Controller
             'myHistory'   => $myHistory,
             'isOverseer'  => $isOverseer,
             'progressMap' => $progressMap,
+        ]);
+    }
+
+    /**
+     * Full NOC detail for one exit — all department steps, who signed what, when.
+     *
+     * HR/admin see everything. A department signatory may view any exit they have
+     * a step in (they should be able to see the overall progress, not just their
+     * own row). Anyone else gets a 403.
+     */
+    public function show(Request $request, string $type, int $exitId)
+    {
+        abort_unless(in_array($type, ['termination', 'resignation'], true), 404);
+
+        $user       = auth()->user();
+        $isOverseer = $user && $user->hasRole(['admin', 'Admin', 'hr', 'HR']);
+
+        $rows = ExitClearance::with(['clearedBy'])
+            ->forExit($type, $exitId)
+            ->orderByRaw("FIELD(step_key,'it','hr','accounts','finance','reporting_manager')")
+            ->get();
+
+        if ($rows->isEmpty()) {
+            abort(404, 'No clearance record found for this exit.');
+        }
+
+        // Non-overseers must have at least one step they can sign (or have signed).
+        if (!$isOverseer) {
+            $canView = $rows->contains(fn($r) => $r->isSignableBy($user));
+            abort_unless($canView, 403, 'You are not a signatory for this exit.');
+        }
+
+        // Load the underlying exit record for context (dates, reason, type label).
+        $exitRecord = $type === 'termination'
+            ? EmployeeTermination::with('user.department')->find($exitId)
+            : EmployeeResignation::with('user.department')->find($exitId);
+
+        // Leaver from either the exit record or the first clearance row.
+        $leaver = optional($exitRecord)->user ?? optional($rows->first())->user;
+
+        $progress = ExitClearance::progress($type, $exitId);
+
+        return view('tenant.employee-lifecycle.exit-clearance-detail', [
+            'pageConfigs' => ['contentLayout' => 'wide'],
+            'type'        => $type,
+            'exitId'      => $exitId,
+            'exitRecord'  => $exitRecord,
+            'leaver'      => $leaver,
+            'rows'        => $rows,
+            'progress'    => $progress,
+            'isOverseer'  => $isOverseer,
+            'currentUser' => $user,
         ]);
     }
 

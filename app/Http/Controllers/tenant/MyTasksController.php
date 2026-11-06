@@ -443,7 +443,10 @@ class MyTasksController extends Controller
                             'title' => optional($c->user)->getFullName() ?? 'Employee',
                             'meta'  => $c->label . ' clearance · ' . ucfirst($c->exit_type),
                             'tags'  => [$c->label],
-                            'url'   => url('/exit-clearance'),
+                            // Link directly to the per-exit detail page so the
+                            // signatory lands on the full NOC card for that
+                            // employee, not the whole tracker board.
+                            'url'   => url('/exit-clearance/' . $c->exit_type . '/' . $c->exit_id),
                         ])->values()->all(),
                     ];
                 }
