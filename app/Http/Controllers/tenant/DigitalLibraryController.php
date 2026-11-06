@@ -66,33 +66,54 @@ class DigitalLibraryController extends Controller
             $brandCounts = $countRows->groupBy(fn($f) => strtolower($f->brand ?? ''))->map->count();
 
             $activeBrandSlug = $request->get('brand');
-            $activeBrand = $activeBrandSlug
-                ? $brands->first(fn($b) => \Illuminate\Support\Str::slug($b->name) === $activeBrandSlug)
-                : $brands->first(fn($b) => ($brandCounts[strtolower($b->name)] ?? 0) > 0);
-            $activeBrand = $activeBrand ?? $brands->first();
 
-            if ($activeBrand) {
-                $brandTaxonomies = $taxonomies[$activeBrand->id] ?? collect();
-                $brandRows = $countRows->where('brand', $activeBrand->name);
+            if ($activeBrandSlug === 'general') {
+                $activeBrand = (object)['id' => null, 'name' => 'General', 'color' => '#78909c'];
+                $brandTaxonomies = collect();
+                $brandRows = $countRows->where('brand', 'General');
                 $subCatCounts = $brandRows->groupBy('sub_category')->map->count();
                 $totalScopedDocs = $brandRows->count();
-                $catNames = $brandTaxonomies->pluck('name')->merge($subCatCounts->keys())->filter()->unique()->values();
-
+                $catNames = $subCatCounts->keys()->filter()->unique()->values();
                 $activeCatName = $activeSubcat === 'all' ? null
                     : $catNames->first(fn($n) => \Illuminate\Support\Str::slug($n) === $activeSubcat);
-
                 $fullQuery = LibraryFile::query()
                     ->when($category && $category !== 'all', fn($q) => $q->where('category', $category))
-                    ->where('brand', $activeBrand->name);
-                if ($activeCatName) {
-                    $fullQuery->where('sub_category', $activeCatName);
-                }
+                    ->where('brand', 'General');
+                if ($activeCatName) $fullQuery->where('sub_category', $activeCatName);
                 $products = $fullQuery->orderBy('created_at', 'desc')->get()->groupBy('title');
-
                 $paginated = new LengthAwarePaginator(
                     $products->forPage($page, $perPage), $products->count(), $perPage, $page,
                     ['path' => $request->url(), 'query' => $request->except('page')]
                 );
+            } else {
+                $activeBrand = $activeBrandSlug
+                    ? $brands->first(fn($b) => \Illuminate\Support\Str::slug($b->name) === $activeBrandSlug)
+                    : $brands->first(fn($b) => ($brandCounts[strtolower($b->name)] ?? 0) > 0);
+                $activeBrand = $activeBrand ?? $brands->first();
+
+                if ($activeBrand) {
+                    $brandTaxonomies = $taxonomies[$activeBrand->id] ?? collect();
+                    $brandRows = $countRows->where('brand', $activeBrand->name);
+                    $subCatCounts = $brandRows->groupBy('sub_category')->map->count();
+                    $totalScopedDocs = $brandRows->count();
+                    $catNames = $brandTaxonomies->pluck('name')->merge($subCatCounts->keys())->filter()->unique()->values();
+
+                    $activeCatName = $activeSubcat === 'all' ? null
+                        : $catNames->first(fn($n) => \Illuminate\Support\Str::slug($n) === $activeSubcat);
+
+                    $fullQuery = LibraryFile::query()
+                        ->when($category && $category !== 'all', fn($q) => $q->where('category', $category))
+                        ->where('brand', $activeBrand->name);
+                    if ($activeCatName) {
+                        $fullQuery->where('sub_category', $activeCatName);
+                    }
+                    $products = $fullQuery->orderBy('created_at', 'desc')->get()->groupBy('title');
+
+                    $paginated = new LengthAwarePaginator(
+                        $products->forPage($page, $perPage), $products->count(), $perPage, $page,
+                        ['path' => $request->url(), 'query' => $request->except('page')]
+                    );
+                }
             }
         }
 

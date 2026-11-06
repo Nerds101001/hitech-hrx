@@ -384,6 +384,11 @@
                     </div>
                 @endforeach
                 @if($vaultCanManage ?? (auth()->user()->hasRole(['admin','Admin','hr','HR']) || auth()->user()->can('vault.upload')))
+                <a href="{{ route('library.index', ['category' => $category, 'brand' => 'general']) }}"
+                   class="nav-link brand-tab {{ request('brand') === 'general' ? 'active' : '' }}">
+                    General
+                </a>
+                @if($vaultCanManage ?? (auth()->user()->hasRole(['admin','Admin','hr','HR']) || auth()->user()->can('vault.upload')))
                 <a href="javascript:void(0)" class="nav-link brand-tab-add" onclick="openAddModal('brand')">+ Add Brand</a>
                 @endif
             </div>
@@ -402,6 +407,9 @@
                         {{ $b->name }}
                     </option>
                 @endforeach
+                <option value="{{ route('library.index', ['category' => $category, 'brand' => 'general']) }}" {{ request('brand') === 'general' ? 'selected' : '' }}>
+                    General
+                </option>
             </select>
         </div>
         @endif
@@ -561,7 +569,7 @@
                     </div>
                 @endforeach
 
-                @if($vaultCanManage ?? (auth()->user()->hasRole(['admin','Admin','hr','HR']) || auth()->user()->can('vault.upload')))
+                @if(($vaultCanManage ?? (auth()->user()->hasRole(['admin','Admin','hr','HR']) || auth()->user()->can('vault.upload'))) && $activeBrand->id)
                 <hr class="my-2 opacity-25">
                 <div class="side-nav-item text-primary" onclick="openAddModal('category', {{ $activeBrand->id }})">
                     <span class="fw-bold"><i class="bx bx-plus me-1"></i> New Category</span>
@@ -618,6 +626,7 @@
 <script>
     let currentView = 'grid';
     const libraryTaxonomy = @json($taxonomies);
+    window._vaultBrands = @json($brands->map(fn($b) => ['id' => $b->id, 'name' => $b->name])->values());
 
     const pendingFiles = new Map();
     const auditState = new Map();
@@ -817,13 +826,7 @@
                         <div class="col-6 text-start">
                             <label class="form-label fw-bold small text-uppercase text-muted letter-spacing-1 mb-1">Brand Ecosystem</label>
                             <select id="brand-select-${id}" class="form-select border-light bg-light py-2 shadow-none" style="border-radius: 10px; font-size: 0.8rem; font-weight: 700;" onchange="updateCategoryDropdown('${id}')">
-                                <option value="RUST-X" data-id="1" ${data.brand === 'RUST-X' ? 'selected' : ''}>RUST-X</option>
-                                <option value="Dr.Bio" data-id="2" ${data.brand === 'Dr.Bio' ? 'selected' : ''}>Dr.Bio</option>
-                                <option value="Fillezy" data-id="3" ${data.brand === 'Fillezy' ? 'selected' : ''}>Fillezy</option>
-                                <option value="KIF" data-id="4" ${data.brand === 'KIF' ? 'selected' : ''}>KIF</option>
-                                <option value="ZOrbit" data-id="5" ${data.brand === 'ZOrbit' ? 'selected' : ''}>ZOrbit</option>
-                                <option value="Tuffpaulin" data-id="6" ${data.brand === 'Tuffpaulin' ? 'selected' : ''}>Tuffpaulin</option>
-                                <option value="HITECH" data-id="7" ${data.brand === 'HITECH' ? 'selected' : ''}>HITECH</option>
+                                ${window._vaultBrands.map(b => `<option value="${b.name}" data-id="${b.id}" ${data.brand === b.name ? 'selected' : ''}>${b.name}</option>`).join('')}
                             </select>
                         </div>
                         <div class="col-6 text-start">

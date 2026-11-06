@@ -89,15 +89,11 @@
                             <div class="row g-2 mb-3" id="brandSection">
                                 <div class="col-6" id="brandFieldCol">
                                     <label class="form-label fw-bold small text-uppercase">Brand <span class="text-muted fw-normal">(optional for reports)</span></label>
-                                    <select name="brand" id="brandSelect" class="form-select border-0 bg-light" style="border-radius: 12px; height: 45px;">
+                                    <select name="brand" id="brandSelect" class="form-select border-0 bg-light" style="border-radius: 12px; height: 45px;" onchange="updateSubCategoriesForBrand()">
                                         <option value="General">General / No Brand</option>
-                                        <option value="RUST-X">RUST-X</option>
-                                        <option value="Dr.Bio">Dr.Bio</option>
-                                        <option value="KIF">KIF</option>
-                                        <option value="Fillezy">Fillezy</option>
-                                        <option value="Tuffpaulin">Tuffpaulin</option>
-                                        <option value="ZOrbit">ZOrbit</option>
-                                        <option value="HITECH">HITECH</option>
+                                        @foreach($brands as $b)
+                                            <option value="{{ $b->name }}">{{ $b->name }}</option>
+                                        @endforeach
                                     </select>
                                 </div>
                                 <div class="col-6" id="subCategorySection">
@@ -203,13 +199,9 @@
                 <div class="mb-3">
                     <label class="form-label fw-bold small text-uppercase">New Target Brand</label>
                     <select id="moveBrand" class="form-select border-0 bg-light" style="border-radius: 12px; height: 45px;">
-                        <option value="RUST-X">RUST-X</option>
-                        <option value="Dr.Bio">Dr.Bio</option>
-                        <option value="Fillezy">Fillezy</option>
-                        <option value="KIF">KIF</option>
-                        <option value="ZOrbit">ZOrbit</option>
-                        <option value="Tuffpaulin">Tuffpaulin</option>
-                        <option value="HITECH">HITECH</option>
+                        @foreach($brands as $b)
+                            <option value="{{ $b->name }}">{{ $b->name }}</option>
+                        @endforeach
                     </select>
                 </div>
                 
@@ -393,6 +385,10 @@ let taxonomyModal = null;
 const DOCUMENT_TYPES = @json(config('digital_library.document_types'));
 const LEARN_CATEGORY = @json(\App\Console\Commands\MigrateLearnToVideoCommand::LEARN_CATEGORY);
 const VIDEO_CATEGORIES = @json($videoTaxonomies->pluck('name'));
+// Brand taxonomy data: keyed by brand ID, each value is array of category objects.
+const _BRAND_TAXONOMIES = @json($taxonomies);
+const _BRANDS_LIST = @json($brands->map(fn($b) => ['id' => $b->id, 'name' => $b->name])->values());
+// Legacy hardcoded list — only used as fallback for Rust-X (which predates the taxonomy table).
 const CHEMICAL_SUBCATEGORIES = [
     { value: 'Cleaners', label: 'Cleaners' },
     { value: 'Cutting Oil', label: 'Cutting Oil' },
@@ -444,13 +440,29 @@ function toggleBrandSection() {
         brandFieldCol.className = 'col-12';
         subCategorySection.style.display = 'none';
     } else {
-        // SDS / TDS / Test Report: brand + chemical sub-category, as before.
+        // SDS / TDS / Test Report: brand + sub-category from taxonomy (or empty if brand has none).
         brandFieldCol.style.display = '';
         brandFieldCol.className = 'col-6';
         subCategorySection.style.display = '';
         subCategorySection.className = 'col-6';
         subCategoryLabel.textContent = 'Sub-Category / Subject';
-        populateSelect(subCategorySelect, CHEMICAL_SUBCATEGORIES);
+        updateSubCategoriesForBrand();
+    }
+}
+
+function updateSubCategoriesForBrand() {
+    const subCategorySection = document.getElementById('subCategorySection');
+    if (!subCategorySection || subCategorySection.style.display === 'none') return;
+    const subCategorySelect = document.getElementById('subCategorySelect');
+    const selectedBrand = document.getElementById('brandSelect')?.value;
+    const brandObj = _BRANDS_LIST.find(b => b.name === selectedBrand);
+    const taxEntries = brandObj ? (_BRAND_TAXONOMIES[brandObj.id] || []) : [];
+
+    if (taxEntries.length > 0) {
+        populateSelect(subCategorySelect, taxEntries.map(t => ({ value: t.name, label: t.name })));
+    } else {
+        // No taxonomy categories for this brand — show empty placeholder
+        subCategorySelect.innerHTML = '<option value="">— None defined —</option>';
     }
 }
 
