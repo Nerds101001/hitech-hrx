@@ -62,7 +62,7 @@ class LeaveAttendanceReconciler
     {
         $alp = LeaveType::where('code', 'ALP')->first();
         if (!$alp) {
-            return ['scanned' => 0, 'conflicts' => 0, 'credited' => 0.0, 'cancelled' => 0,
+            return ['scanned' => 0, 'conflicts' => 0, 'credited' => 0.0, 'cancelled' => 0, 'converted' => 0,
                     'rows' => [['error' => 'All Purpose Leave type not found']]];
         }
 
@@ -73,7 +73,7 @@ class LeaveAttendanceReconciler
             ->when($userId, fn($q) => $q->where('user_id', $userId))
             ->get();
 
-        $scanned = 0; $conflicts = 0; $credited = 0.0; $cancelled = 0; $rows = [];
+        $scanned = 0; $conflicts = 0; $credited = 0.0; $cancelled = 0; $converted = 0; $rows = [];
 
         foreach ($requests as $leave) {
             $scanned++;
@@ -123,7 +123,7 @@ class LeaveAttendanceReconciler
             $refundCap = self::paidDaysOf($leave);
             $refunded  = 0.0;
 
-            $covered = 0; $attended = 0;
+            $covered = 0; $attended = 0; $halfAttendedCount = 0;
             $cursor = Carbon::parse($leave->from_date);
             $end    = Carbon::parse($leave->to_date);
 
@@ -161,24 +161,43 @@ class LeaveAttendanceReconciler
                     }
                 }
 
+                // For a full-day leave: if the employee worked a partial day
+                // (<465 min but >0) credit only 0.5 days back — the leave
+                // effectively converts to half-day for that date.
+                $creditAmount   = $perDay;
+                $isHalfDayPunch = false;
+                if ($att && !$needsFullDay && !$leave->is_half_day && $att->check_out_time) {
+                    $punchMins = \App\Services\AttendanceDayStatus::workedMinutes(
+                        Carbon::parse($att->check_in_time),
+                        Carbon::parse($att->check_out_time)
+                    );
+                    if ($punchMins > 0 && $punchMins < 465) {
+                        $creditAmount   = 0.5;
+                        $isHalfDayPunch = true;
+                    }
+                }
+
                 if ($att) {
                     $attended++;
+                    if ($isHalfDayPunch) {
+                        $halfAttendedCount++;
+                    }
                     $already = $att->admin_reason && str_contains($att->admin_reason, self::MARK);
 
-                    if (!$already && $isPaid && !$isWfh && ($refunded + $perDay) <= $refundCap + 0.001) {
+                    if (!$already && $isPaid && !$isWfh && ($refunded + $creditAmount) <= $refundCap + 0.001) {
                         $conflicts++;
-                        $refunded += $perDay;
+                        $refunded += $creditAmount;
 
                         $rows[] = [
                             'user'    => optional($leave->user)->getFullName(),
                             'leave'   => $leave->id,
-                            'type'    => $type->name,
+                            'type'    => $isHalfDayPunch ? $type->name . ' (partial attendance → 0.5d)' : $type->name,
                             'date'    => $date,
-                            'days'    => $perDay,
+                            'days'    => $creditAmount,
                         ];
 
                         if (!$dry) {
-                            self::credit($leave, $poolTypeId, $perDay, $date);
+                            self::credit($leave, $poolTypeId, $creditAmount, $date);
                             $att->admin_reason = trim(($att->admin_reason ? $att->admin_reason . ' | ' : '')
                                 . self::MARK);
                             $att->save();
@@ -221,40 +240,69 @@ class LeaveAttendanceReconciler
             // Unpaid leave is never cancelled: it cost nothing, so the day just
             // reads as present and the record stands.
             if ($isPaid && $covered > 0 && $attended === $covered) {
-                $cancelled++;
-                if (!$dry) {
-                    $leave->status        = 'cancelled';
-                    $leave->cancel_reason = self::MARK;
-                    $leave->cancelled_at  = now();
-                    $leave->saveQuietly();   // balance already settled above via
-                                              // self::credit(); saveQuietly() skips
-                                              // LeaveRequest::booted()'s own reversal
-                                              // so it cannot refund the same days twice.
+                // A single-day full-day leave where the employee only worked a
+                // partial day gets converted to half-day rather than cancelled:
+                // 0.5 was already credited back via credit() above; here we just
+                // flip is_half_day so the leave history reflects what actually
+                // happened and the placeholder row becomes half-Day for payroll.
+                $isSingleDay    = $leave->from_date->isSameDay($leave->to_date);
+                $convertHalfDay = $isSingleDay && $halfAttendedCount === 1
+                                  && !$leave->is_half_day && !$leave->is_short_leave;
 
-                    // But that reversal is also the ONLY place that deletes the
-                    // placeholder attendance row the approval auto-created (WFH,
-                    // half-day, or full-day leave alike) — skipped here for the
-                    // same reason, its absence left that row behind next to the
-                    // real, actually-worked punch. Two rows for one date then fed
-                    // PayrollService's calculateAttendanceStats() twice — 0.5 (the
-                    // stale leave placeholder) plus 1.0 (the real punch) instead of
-                    // the correct 1.0, silently overpaying every day this reconciler
-                    // reverted. Delete it explicitly instead of via the event hook.
-                    Attendance::where('user_id', $leave->user_id)
-                        ->whereBetween('check_in_time', [
-                            $leave->from_date->copy()->startOfDay(),
-                            $leave->to_date->copy()->endOfDay(),
-                        ])
-                        ->where(function ($q) use ($leave) {
-                            $q->whereIn('status', ['leave', 'paid_leave', 'unpaid_leave', 'on_leave', 'half-Day', 'work_from_home'])
-                              ->orWhere('leave_request_id', $leave->id);
-                        })
-                        ->delete();
+                if ($convertHalfDay) {
+                    $converted++;
+                    if (!$dry) {
+                        $leave->is_half_day = true;
+                        $leave->saveQuietly();
+                        // The placeholder row was created as full-day; flip it to
+                        // half-Day so payroll counts it as 0.5, not 1.0.
+                        Attendance::where('user_id', $leave->user_id)
+                            ->whereBetween('check_in_time', [
+                                $leave->from_date->copy()->startOfDay(),
+                                $leave->to_date->copy()->endOfDay(),
+                            ])
+                            ->where(function ($q) use ($leave) {
+                                $q->whereIn('status', ['leave', 'paid_leave', 'unpaid_leave', 'on_leave'])
+                                  ->orWhere('leave_request_id', $leave->id);
+                            })
+                            ->update(['status' => 'half-Day']);
+                    }
+                } else {
+                    $cancelled++;
+                    if (!$dry) {
+                        $leave->status        = 'cancelled';
+                        $leave->cancel_reason = self::MARK;
+                        $leave->cancelled_at  = now();
+                        $leave->saveQuietly();   // balance already settled above via
+                                                  // self::credit(); saveQuietly() skips
+                                                  // LeaveRequest::booted()'s own reversal
+                                                  // so it cannot refund the same days twice.
+
+                        // But that reversal is also the ONLY place that deletes the
+                        // placeholder attendance row the approval auto-created (WFH,
+                        // half-day, or full-day leave alike) — skipped here for the
+                        // same reason, its absence left that row behind next to the
+                        // real, actually-worked punch. Two rows for one date then fed
+                        // PayrollService's calculateAttendanceStats() twice — 0.5 (the
+                        // stale leave placeholder) plus 1.0 (the real punch) instead of
+                        // the correct 1.0, silently overpaying every day this reconciler
+                        // reverted. Delete it explicitly instead of via the event hook.
+                        Attendance::where('user_id', $leave->user_id)
+                            ->whereBetween('check_in_time', [
+                                $leave->from_date->copy()->startOfDay(),
+                                $leave->to_date->copy()->endOfDay(),
+                            ])
+                            ->where(function ($q) use ($leave) {
+                                $q->whereIn('status', ['leave', 'paid_leave', 'unpaid_leave', 'on_leave', 'half-Day', 'work_from_home'])
+                                  ->orWhere('leave_request_id', $leave->id);
+                            })
+                            ->delete();
+                    }
                 }
             }
         }
 
-        return compact('scanned', 'conflicts', 'credited', 'cancelled', 'rows');
+        return compact('scanned', 'conflicts', 'credited', 'cancelled', 'converted', 'rows');
     }
 
     /** Return one day to whichever balance the leave actually drew from, with a ledger line. */
