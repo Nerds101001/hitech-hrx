@@ -34,6 +34,7 @@ class ProcessProbationExpirations extends Command
         $employees = User::where('probation_end_date', '<=', $today)
             ->whereNull('probation_confirmed_at')
             ->whereNotNull('reporting_to_id')
+            ->where('status', \App\Enums\UserAccountStatus::ACTIVE)
             ->whereDoesntHave('probationEvaluations')
             ->get();
 
