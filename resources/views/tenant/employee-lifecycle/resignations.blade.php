@@ -51,6 +51,7 @@
                 <th>Relieving Date</th>
                 <th>Reason</th>
                 <th>Status</th>
+                <th>NOC Clearance</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -78,6 +79,19 @@
                     </span>
                   </td>
                   <td>
+                    @if($resignation->id && isset($clearanceMap[$resignation->id]))
+                      @php $prog = $clearanceMap[$resignation->id]; @endphp
+                      <span class="badge {{ $prog['done'] ? 'bg-label-success' : ($prog['blocked'] ? 'bg-label-danger' : 'bg-label-warning') }}"
+                            title="{{ $prog['label'] }}">
+                        {{ $prog['cleared'] }}/{{ $prog['total'] }} cleared
+                      </span>
+                    @elseif($resignation->id)
+                      <span class="badge bg-label-secondary">No NOC raised</span>
+                    @else
+                      <span class="text-muted small">—</span>
+                    @endif
+                  </td>
+                  <td>
                     <div class="dropdown">
                       <button class="btn btn-sm p-0" type="button" data-bs-toggle="dropdown">
                         <i class="ti ti-dots-vertical"></i>
@@ -96,7 +110,7 @@
                 </tr>
               @empty
                 <tr>
-                  <td colspan="7" class="text-center py-4 text-muted">No resignation records found.</td>
+                  <td colspan="8" class="text-center py-4 text-muted">No resignation records found.</td>
                 </tr>
               @endforelse
             </tbody>

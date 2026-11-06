@@ -21,40 +21,62 @@ class ExitClearanceController extends Controller
     /** HR's tracker across all exits; everyone else sees only their own steps. */
     public function index(Request $request)
     {
-        $user = auth()->user();
-
-        $rows = ExitClearance::with(['user.department', 'clearedBy'])
-            ->when($request->filled('status'), fn($q) => $q->where('status', $request->status))
-            ->orderByRaw("FIELD(status,'pending','blocked','cleared')")
-            ->orderByDesc('created_at')
-            ->get();
-
-        // HR and admin own the process and see every exit. Anyone else — a
-        // department signatory or a leaver's reporting manager — sees only the
-        // exits they actually have a step in; an exit is confidential to the
-        // people handling it.
+        $user       = auth()->user();
         $isOverseer = $user && $user->hasRole(['admin', 'Admin', 'hr', 'HR']);
-        if (!$isOverseer) {
-            $mineKeys = $rows->filter(fn($r) => $r->isSignableBy($user))
-                ->map(fn($r) => $r->exit_type . ':' . $r->exit_id)
-                ->unique()->all();
 
-            // Nothing to sign and no oversight role — nothing to show.
-            if (empty($mineKeys)) {
+        if ($isOverseer) {
+            // HR / admin: full board — every exit, every step.
+            $rows = ExitClearance::with(['user.department', 'clearedBy'])
+                ->when($request->filled('status'), fn($q) => $q->where('status', $request->status))
+                ->orderByRaw("FIELD(status,'pending','blocked','cleared')")
+                ->orderByDesc('created_at')
+                ->get();
+
+            $groups       = $rows->groupBy(fn($r) => $r->exit_type . ':' . $r->exit_id);
+            $pendingCount = ExitClearance::pending()->count();
+            $myHistory    = collect();
+            $progressMap  = [];
+        } else {
+            // Department signatory / reporting manager: load everything, then
+            // keep ONLY the rows they can actually sign — not all five steps for
+            // every exit they appear in. This is the security fix: IT should not
+            // see HR's or Finance's clearance rows.
+            $allRows = ExitClearance::with(['user.department', 'clearedBy'])
+                ->orderByRaw("FIELD(status,'pending','blocked','cleared')")
+                ->orderByDesc('created_at')
+                ->get();
+
+            $myRows = $allRows->filter(fn($r) => $r->isSignableBy($user));
+
+            if ($myRows->isEmpty()) {
                 abort(403, 'You have no clearances to action.');
             }
 
-            $rows = $rows->filter(
-                fn($r) => in_array($r->exit_type . ':' . $r->exit_id, $mineKeys, true)
-            );
-        }
+            // Split into pending/blocked (needs action) vs already cleared (history).
+            $myPending = $myRows->filter(fn($r) => $r->status !== 'cleared');
+            $myHistory = $myRows->filter(fn($r) => $r->status === 'cleared')
+                ->sortByDesc('cleared_at')
+                ->values();
 
-        $rows = $rows->groupBy(fn($r) => $r->exit_type . ':' . $r->exit_id);
+            $groups       = $myPending->groupBy(fn($r) => $r->exit_type . ':' . $r->exit_id);
+            $pendingCount = $myPending->count();
+
+            // Overall progress per exit (all departments, not just this user's
+            // step) so a signatory can see "2 of 4 cleared" for the full exit.
+            $progressMap = [];
+            foreach ($groups as $key => $_) {
+                [$exitType, $exitId] = explode(':', $key, 2);
+                $progressMap[$key] = ExitClearance::progress($exitType, (int) $exitId);
+            }
+        }
 
         return view('tenant.employee-lifecycle.exit-clearances', [
             'pageConfigs' => ['contentLayout' => 'wide'],
-            'groups'      => $rows,
-            'pendingCount' => ExitClearance::pending()->count(),
+            'groups'      => $groups,
+            'pendingCount' => $pendingCount,
+            'myHistory'   => $myHistory,
+            'isOverseer'  => $isOverseer,
+            'progressMap' => $progressMap,
         ]);
     }
 

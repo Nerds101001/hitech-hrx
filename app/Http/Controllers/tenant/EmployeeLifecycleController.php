@@ -8,6 +8,7 @@ use App\Models\EmployeeTransfer;
 use App\Models\EmployeeWarning;
 use App\Models\EmployeeResignation;
 use App\Models\EmployeeTermination;
+use App\Models\ExitClearance;
 use App\Models\EmployeeComplaint;
 use App\Models\EmployeeTrip;
 use App\Models\Announcement;
@@ -382,7 +383,14 @@ class EmployeeLifecycleController extends Controller
     {
         $resignations = $this->exitRows(true);
 
-        return view('tenant.employee-lifecycle.resignations', compact('resignations'));
+        $clearanceMap = [];
+        foreach ($resignations as $r) {
+            if ($r->id && !($r->from_user_record ?? false)) {
+                $clearanceMap[$r->id] = ExitClearance::progress('resignation', $r->id);
+            }
+        }
+
+        return view('tenant.employee-lifecycle.resignations', compact('resignations', 'clearanceMap'));
     }
 
     /**
@@ -426,7 +434,14 @@ class EmployeeLifecycleController extends Controller
     {
         $terminations = $this->exitRows(false);
 
-        return view('tenant.employee-lifecycle.terminations', compact('terminations'));
+        $clearanceMap = [];
+        foreach ($terminations as $t) {
+            if ($t->id && !($t->from_user_record ?? false)) {
+                $clearanceMap[$t->id] = ExitClearance::progress('termination', $t->id);
+            }
+        }
+
+        return view('tenant.employee-lifecycle.terminations', compact('terminations', 'clearanceMap'));
     }
 
     /**

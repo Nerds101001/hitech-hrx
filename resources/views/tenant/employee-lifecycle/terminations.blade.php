@@ -50,6 +50,7 @@
                 <th>Notice Date</th>
                 <th>Termination Date</th>
                 <th>Status</th>
+                <th>NOC Clearance</th>
                 <th>Processed By</th>
                 <th>Actions</th>
               </tr>
@@ -78,6 +79,19 @@
                       {{ ucfirst($termination->status) }}
                     </span>
                   </td>
+                  <td>
+                    @if($termination->id && isset($clearanceMap[$termination->id]))
+                      @php $prog = $clearanceMap[$termination->id]; @endphp
+                      <span class="badge {{ $prog['done'] ? 'bg-label-success' : ($prog['blocked'] ? 'bg-label-danger' : 'bg-label-warning') }}"
+                            title="{{ $prog['label'] }}">
+                        {{ $prog['cleared'] }}/{{ $prog['total'] }} cleared
+                      </span>
+                    @elseif($termination->id)
+                      <span class="badge bg-label-secondary">No NOC raised</span>
+                    @else
+                      <span class="text-muted small">—</span>
+                    @endif
+                  </td>
                   <td>{{ $termination->processedBy->name ?? 'System' }}</td>
                   <td>
                     <button class="btn btn-sm btn-icon btn-label-primary"><i class="ti ti-file-text"></i></button>
@@ -86,7 +100,7 @@
                 </tr>
               @empty
                 <tr>
-                  <td colspan="7" class="text-center py-4 text-muted">No termination records found.</td>
+                  <td colspan="8" class="text-center py-4 text-muted">No termination records found.</td>
                 </tr>
               @endforelse
             </tbody>
