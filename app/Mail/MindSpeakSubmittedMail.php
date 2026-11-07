@@ -19,12 +19,10 @@ class MindSpeakSubmittedMail extends Mailable
 
     public function __construct(MindSpeak $entry)
     {
-        $this->entry     = $entry;
-        // Eager-load so the view can use it without an extra query.
-        // Anonymous entries intentionally still expose the User model to the
-        // reviewer — they need to know who filed what. is_anonymous only hides
-        // identity from peers, not from HR/reviewer.
-        $this->submitter = $entry->user;
+        $this->entry = $entry;
+        // Completely withhold identity for anonymous submissions — null is
+        // passed to the view so there is no way to accidentally expose it.
+        $this->submitter = $entry->is_anonymous ? null : $entry->user;
     }
 
     public function envelope(): Envelope

@@ -281,7 +281,7 @@ class MindSpeakController extends Controller
             ]);
 
             try {
-                Mail::to('mukul@rustx.com')->send(new MindSpeakSubmittedMail($entry->load('user')));
+                Mail::to('mukul@rustx.com')->send(new MindSpeakSubmittedMail($entry));
             } catch (\Exception $mailEx) {
                 Log::warning('Mind Speak notification mail failed', [
                     'entry_id'  => $entry->id,

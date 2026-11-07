@@ -34,7 +34,7 @@
   <div class="ms-ident">
     @if($entry->is_anonymous)
       <div class="ms-name">Anonymous</div>
-      <div class="ms-meta">Identity hidden from public view</div>
+      <div class="ms-meta">Submitted anonymously</div>
     @else
       <div class="ms-name">{{ optional($submitter)->getFullName() ?? '—' }}</div>
       <div class="ms-meta">
