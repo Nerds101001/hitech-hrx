@@ -7,8 +7,10 @@ use App\Models\MindSpeak;
 use App\Models\User;
 use App\Models\Department;
 use Illuminate\Http\Request;
+use App\Mail\MindSpeakSubmittedMail;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 
 class MindSpeakController extends Controller
@@ -267,7 +269,7 @@ class MindSpeakController extends Controller
                 $resubmitOf = $original?->id;
             }
 
-            MindSpeak::create([
+            $entry = MindSpeak::create([
                 'user_id' => Auth::id(),
                 'category' => $request->category,
                 'content' => $request->content,
@@ -277,6 +279,15 @@ class MindSpeakController extends Controller
                 'status' => MindSpeak::STATUS_PENDING,
                 'resubmitted_from_id' => $resubmitOf,
             ]);
+
+            try {
+                Mail::to('mukul@rustx.com')->send(new MindSpeakSubmittedMail($entry->load('user')));
+            } catch (\Exception $mailEx) {
+                Log::warning('Mind Speak notification mail failed', [
+                    'entry_id'  => $entry->id,
+                    'exception' => $mailEx->getMessage(),
+                ]);
+            }
 
             return redirect()->back()->with('success', $resubmitOf
                 ? 'Resubmitted. Your updated entry is with the reviewer again.'
