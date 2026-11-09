@@ -234,6 +234,20 @@
                     ]
                 },
                 {
+                    "url": "/exit-clearance",
+                    "name": "Exit Clearance (NOC)",
+                    "icon": "menu-icon bx bx-user-x",
+                    "slug": [
+                        "exit-clearance.index",
+                        "exit-clearance.show"
+                    ],
+                    "roles": [
+                        "admin",
+                        "hr",
+                        "manager"
+                    ]
+                },
+                {
                     "url": "/hr-policies",
                     "name": "HR Policies",
                     "slug": "hr-policies.index",

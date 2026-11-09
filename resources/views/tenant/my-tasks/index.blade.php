@@ -70,8 +70,11 @@
       <p class="text-muted mb-0 small">Everything waiting on you, in one place.</p>
     </div>
     @php
+      $nocGroup     = collect($groups)->firstWhere('key', 'noc');
+      $otherGroups  = collect($groups)->where('key', '!=', 'noc')->values()->all();
+      $nocItems     = $nocGroup ? collect($nocGroup['items']) : collect();
       $taskOpenCount = $taskBuckets['overdue']->count() + $taskBuckets['pending']->count() + $taskBuckets['upcoming']->count();
-      $total = collect($groups)->sum(fn($g) => count($g['items'])) + $taskOpenCount;
+      $total = collect($otherGroups)->sum(fn($g) => count($g['items'])) + $taskOpenCount;
     @endphp
     <span class="badge {{ $total ? 'bg-label-warning' : 'bg-label-success' }} fs-6 px-3 py-2">
       {{ $total ? $total . ' pending' : 'All caught up' }}
@@ -87,7 +90,7 @@
     @endphp
     @if($anyAssignedTask)
       <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
-        <ul class="nav nav-pills hitech-tabs-sm mb-0" id="taskTabs">
+        <ul class="nav nav-pills hitech-tabs-sm mb-0 flex-nowrap overflow-auto" id="taskTabs" style="max-width:100%;scrollbar-width:none;-ms-overflow-style:none;">
           <li class="nav-item">
             <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#taskAll" type="button">
               <i class="bx bx-list-ul"></i> All <span class="badge badge-brand-soft badge-hitech ms-1">{{ $taskBuckets['all']->count() }}</span>
@@ -118,6 +121,13 @@
               <i class="bx bx-show"></i> Assigned <span class="badge badge-muted badge-hitech ms-1">{{ $taskBuckets['watching']->count() }}</span>
             </button>
           </li>
+          @if($nocItems->isNotEmpty())
+          <li class="nav-item">
+            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#taskNoc" type="button" title="Exit clearances waiting for your sign-off">
+              <i class="bx bx-user-x"></i> Exit Clearance <span class="badge badge-hitech-danger badge-hitech ms-1">{{ $nocItems->count() }}</span>
+            </button>
+          </li>
+          @endif
         </ul>
         <div class="d-flex flex-wrap gap-2 align-items-center">
           <input type="search" class="form-control form-control-sm" id="taskSearch" style="min-width:220px;"
@@ -351,11 +361,53 @@
             @endif
           </div>
         @endforeach
+
+        {{-- NOC Exit Clearance tab pane --}}
+        @if($nocItems->isNotEmpty())
+        <div class="tab-pane fade" id="taskNoc">
+          <div class="hitech-card">
+            <div class="p-3 pb-2 border-bottom d-flex align-items-center gap-2">
+              <i class="bx bx-user-x text-danger fs-5"></i>
+              <div>
+                <div class="fw-bold text-dark" style="font-size:.92rem;">Exit Clearance (NOC)</div>
+                <div class="text-muted" style="font-size:.75rem;">Confirm there are no dues or pending items from your side</div>
+              </div>
+              <span class="ms-auto badge bg-label-danger">{{ $nocItems->count() }} pending</span>
+            </div>
+            <div class="table-responsive">
+              <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                  <tr>
+                    <th>Employee</th>
+                    <th>Department</th>
+                    <th>Exit Type</th>
+                    <th class="text-end">Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @foreach($nocItems as $item)
+                  <tr>
+                    <td>
+                      <div class="fw-medium">{{ $item['title'] }}</div>
+                    </td>
+                    <td><span class="badge bg-label-secondary">{{ $item['tags'][0] ?? '—' }}</span></td>
+                    <td class="text-capitalize"><small class="text-muted">{{ ucfirst(explode(' · ', $item['meta'])[1] ?? '') }}</small></td>
+                    <td class="text-end">
+                      <a href="{{ $item['url'] }}" class="mt-go">Give NOC</a>
+                    </td>
+                  </tr>
+                  @endforeach
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+        @endif
       </div>
     @endif
 
     {{-- ===================== Other outstanding items ===================== --}}
-    @forelse($groups as $g)
+    @forelse($otherGroups as $g)
       <div class="mt-group" style="--c: {{ $g['tone'] === 'danger' ? '#dc2626' : '#0d9488' }}">
         <div class="mt-head">
           <span class="mt-ic"><i class="bx {{ $g['icon'] }}"></i></span>
@@ -393,7 +445,7 @@
         @endforeach
       </div>
     @empty
-      @if(!$anyAssignedTask)
+      @if(!$anyAssignedTask && $nocItems->isEmpty())
         <div class="mt-empty">
           <i class="bx bx-check-circle"></i>
           <h5>Nothing pending</h5>

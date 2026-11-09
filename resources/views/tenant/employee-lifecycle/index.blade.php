@@ -218,7 +218,7 @@
             <div class="table-responsive">
               <table class="table table-hover mb-0">
                 <thead><tr>
-                  <th>Employee</th><th>Resigned</th><th>Last Working Day</th><th>Reason</th><th>Type</th><th>Status</th>
+                  <th>Employee</th><th>Resigned</th><th>Last Working Day</th><th>Reason</th><th>Type</th><th>Status</th><th>NOC</th>
                 </tr></thead>
                 <tbody>
                 @forelse($tabResignations as $r)
@@ -229,9 +229,23 @@
                     <td><small class="text-muted">{{ \Illuminate\Support\Str::limit($r->reason ?: '—', 40) }}</small></td>
                     <td class="text-capitalize"><small>{{ str_replace('_', ' ', $r->reason_type ?? '—') }}</small></td>
                     <td>{!! $pill($r->status ?? null) !!}</td>
+                    <td>
+                      @if($r->id && isset($tabResignationsClearanceMap[$r->id]))
+                        @php $prog = $tabResignationsClearanceMap[$r->id]; @endphp
+                        <a href="{{ route('exit-clearance.show', ['type' => 'resignation', 'exitId' => $r->id]) }}"
+                           class="badge {{ $prog['done'] ? 'bg-label-success' : ($prog['blocked'] ? 'bg-label-danger' : 'bg-label-warning') }} text-decoration-none"
+                           title="{{ $prog['label'] }}">
+                          {{ $prog['cleared'] }}/{{ $prog['total'] }}
+                        </a>
+                      @elseif($r->id && !($r->from_user_record ?? false))
+                        <span class="badge bg-label-secondary" style="font-size:0.7rem;">No NOC</span>
+                      @else
+                        <span class="text-muted">—</span>
+                      @endif
+                    </td>
                   </tr>
                 @empty
-                  <tr><td colspan="6" class="text-center text-muted py-5">No resignations recorded</td></tr>
+                  <tr><td colspan="7" class="text-center text-muted py-5">No resignations recorded</td></tr>
                 @endforelse
                 </tbody>
               </table>
@@ -256,7 +270,7 @@
             <div class="table-responsive">
               <table class="table table-hover mb-0">
                 <thead><tr>
-                  <th>Employee</th><th>Type</th><th>Effective</th><th>Reason</th><th>Rehireable</th><th>Status</th>
+                  <th>Employee</th><th>Type</th><th>Effective</th><th>Reason</th><th>Rehireable</th><th>Status</th><th>NOC</th>
                 </tr></thead>
                 <tbody>
                 @forelse($tabTerminations as $r)
@@ -275,9 +289,23 @@
                       @endif
                     </td>
                     <td>{!! $pill($r->status ?? null) !!}</td>
+                    <td>
+                      @if($r->id && isset($tabTerminationsClearanceMap[$r->id]))
+                        @php $prog = $tabTerminationsClearanceMap[$r->id]; @endphp
+                        <a href="{{ route('exit-clearance.show', ['type' => 'termination', 'exitId' => $r->id]) }}"
+                           class="badge {{ $prog['done'] ? 'bg-label-success' : ($prog['blocked'] ? 'bg-label-danger' : 'bg-label-warning') }} text-decoration-none"
+                           title="{{ $prog['label'] }}">
+                          {{ $prog['cleared'] }}/{{ $prog['total'] }}
+                        </a>
+                      @elseif($r->id && !($r->from_user_record ?? false))
+                        <span class="badge bg-label-secondary" style="font-size:0.7rem;">No NOC</span>
+                      @else
+                        <span class="text-muted">—</span>
+                      @endif
+                    </td>
                   </tr>
                 @empty
-                  <tr><td colspan="6" class="text-center text-muted py-5">No terminations recorded</td></tr>
+                  <tr><td colspan="7" class="text-center text-muted py-5">No terminations recorded</td></tr>
                 @endforelse
                 </tbody>
               </table>

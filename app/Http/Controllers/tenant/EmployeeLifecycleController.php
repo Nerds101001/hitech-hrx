@@ -108,6 +108,19 @@ class EmployeeLifecycleController extends Controller
         $tabResignations = $this->exitRows(true)->getCollection();
         $tabTerminations = $this->exitRows(false)->getCollection();
 
+        $tabTerminationsClearanceMap = [];
+        foreach ($tabTerminations as $t) {
+            if ($t->id && !($t->from_user_record ?? false)) {
+                $tabTerminationsClearanceMap[$t->id] = ExitClearance::progress('termination', $t->id);
+            }
+        }
+        $tabResignationsClearanceMap = [];
+        foreach ($tabResignations as $r) {
+            if ($r->id && !($r->from_user_record ?? false)) {
+                $tabResignationsClearanceMap[$r->id] = ExitClearance::progress('resignation', $r->id);
+            }
+        }
+
         $employees = User::notTerminated()
             ->where('status', \App\Enums\UserAccountStatus::ACTIVE)
             ->orderBy('first_name')
@@ -129,6 +142,8 @@ class EmployeeLifecycleController extends Controller
             'tabTrips',
             'tabResignations',
             'tabTerminations',
+            'tabResignationsClearanceMap',
+            'tabTerminationsClearanceMap',
             'employees',
             'departments',
             'designations'
