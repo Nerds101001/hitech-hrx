@@ -46,6 +46,7 @@
   <div class="sec-tabs">
     <a href="{{ route('security.index') }}" class="active">Login activity</a>
     <a href="{{ route('security.sessions') }}">Active sessions</a>
+    <a href="{{ route('security.backups') }}">Backups</a>
     <a href="{{ route('auditLogs.index') }}">Audit log</a>
   </div>
 

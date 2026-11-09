@@ -76,7 +76,8 @@ class SystemStats
                 if ($newest === 0) {
                     return 'None';
                 }
-                return (time() - $newest) <= 2 * 86400 ? 'OK' : 'Stale';
+                $label = (time() - $newest) <= 2 * 86400 ? 'OK' : 'Stale';
+                return $label . ' · ' . date('d M H:i', $newest); // e.g. "OK · 09 Nov 14:59"
             } catch (\Throwable $e) {
                 return 'Unknown';
             }

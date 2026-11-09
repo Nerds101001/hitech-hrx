@@ -1557,6 +1557,7 @@
                 "roles.index",
                 "auditLogs.index",
                 "security.index",
+                "security.backups",
                 "settings.index",
                 "reports.index"
             ],
@@ -1614,6 +1615,15 @@
                     "url": "/security/login-activity",
                     "name": "Login & Security",
                     "slug": "security.index",
+                    "roles": [
+                        "admin",
+                        "hr"
+                    ]
+                },
+                {
+                    "url": "/security/backups",
+                    "name": "Backups",
+                    "slug": "security.backups",
                     "roles": [
                         "admin",
                         "hr"

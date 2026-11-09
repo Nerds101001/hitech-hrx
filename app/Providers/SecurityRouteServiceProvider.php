@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Http\Controllers\BackupController;
 use App\Http\Controllers\SecurityLogController;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
@@ -24,6 +25,9 @@ class SecurityRouteServiceProvider extends ServiceProvider
                 Route::get('login-activity', [SecurityLogController::class, 'index'])->name('index');
                 Route::get('sessions', [SecurityLogController::class, 'sessions'])->name('sessions');
                 Route::post('sessions/{id}/revoke', [SecurityLogController::class, 'destroySession'])->name('sessions.revoke');
+                Route::get('backups', [BackupController::class, 'index'])->name('backups');
+                Route::get('backups/download/{file}', [BackupController::class, 'download'])->name('backups.download')->where('file', '[^/]+');
+                Route::post('backups/run', [BackupController::class, 'runNow'])->name('backups.run');
             });
     }
 }
