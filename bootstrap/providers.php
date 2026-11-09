@@ -8,5 +8,6 @@ return [
   App\Providers\TelescopeServiceProvider::class,
   App\Providers\TenancyServiceProvider::class,
   App\Providers\WebRepoServiceProvider::class,
+  App\Providers\SecurityRouteServiceProvider::class,
   \App\Providers\RouteServiceProvider::class
 ];

@@ -31,6 +31,61 @@
 @endsection
 
 @section('content')
+<style>
+  /* Settings page refresh — !important beats hitech-portal.scss's late overrides. */
+  .settings-revamp .hitech-stat-card{border:1px solid #e7eeee !important;border-radius:18px !important;
+    background:#fff !important;padding:1.3rem 1.4rem !important;
+    box-shadow:0 1px 2px rgba(16,40,40,.04),0 10px 28px rgba(16,40,40,.06) !important;
+    transition:transform .2s ease,box-shadow .2s ease;}
+  .settings-revamp .hitech-stat-card:hover{transform:translateY(-3px);
+    box-shadow:0 18px 40px rgba(13,115,119,.14) !important;}
+  .settings-revamp .stat-icon-wrap{width:48px !important;height:48px !important;border-radius:14px !important;
+    display:flex !important;align-items:center;justify-content:center;font-size:1.45rem;}
+  .settings-revamp .stat-icon-wrap.icon-teal,.settings-revamp .stat-icon-wrap.icon-primary{background:rgba(13,115,119,.12) !important;color:#0d7377 !important;}
+  .settings-revamp .stat-icon-wrap.icon-blue{background:rgba(37,99,235,.12) !important;color:#2563eb !important;}
+  .settings-revamp .stat-icon-wrap.icon-amber{background:rgba(217,119,6,.15) !important;color:#d97706 !important;}
+  .settings-revamp .stat-card-value{font-size:2rem !important;color:#0f2e2e !important;font-weight:800 !important;}
+  .settings-revamp .stat-card-label{color:#8aa0a0 !important;}
+
+  .settings-revamp .hitech-card{border:1px solid #e7eeee !important;border-radius:18px !important;background:#fff !important;
+    box-shadow:0 1px 2px rgba(16,40,40,.04),0 10px 30px rgba(16,40,40,.06) !important;overflow:hidden;}
+  .settings-revamp .hitech-card-header{padding:1.15rem 1.4rem !important;
+    background:linear-gradient(90deg,#eef8f7,#ffffff) !important;border-bottom:1px solid #e8f1f0 !important;position:relative;}
+  .settings-revamp .hitech-card-header::before{content:"";position:absolute;left:0;top:0;bottom:0;width:5px;
+    background:linear-gradient(#0d7377,#19a89e);}
+  .settings-revamp .hitech-card-header .title{color:#0f2e2e !important;font-weight:800 !important;font-size:1.06rem !important;}
+  .settings-revamp .card-body{padding:1.5rem 1.4rem !important;}
+  .settings-revamp .card-footer{background:#fbfdfd !important;border-top:1px solid #eef3f3 !important;}
+
+  .settings-revamp #settingsMenu .nav-link{color:#56696a !important;border-radius:12px !important;padding:.72rem .9rem !important;
+    font-weight:600 !important;margin-bottom:.25rem;transition:all .15s;}
+  .settings-revamp #settingsMenu .nav-link i{color:#8aa0a0 !important;}
+  .settings-revamp #settingsMenu .nav-link:hover{background:#eef7f6 !important;color:#0d7377 !important;}
+  .settings-revamp #settingsMenu .nav-link:hover i{color:#0d7377 !important;}
+  .settings-revamp #settingsMenu .nav-link.active{background:linear-gradient(135deg,#0d7377,#13a197) !important;color:#fff !important;
+    box-shadow:0 8px 20px rgba(13,115,119,.3) !important;}
+  .settings-revamp #settingsMenu .nav-link.active i{color:#fff !important;}
+
+  .settings-revamp .form-label-hitech{color:#5c6f6f !important;font-weight:600 !important;font-size:.8rem !important;
+    text-transform:uppercase;letter-spacing:.03em;margin-bottom:.4rem !important;}
+  .settings-revamp .form-control-hitech,.settings-revamp .form-select-hitech{background:#f7fafa !important;
+    border:1px solid #e2eaea !important;border-radius:11px !important;padding:.65rem .9rem !important;color:#17302f !important;}
+  .settings-revamp .form-control-hitech:focus,.settings-revamp .form-select-hitech:focus{background:#fff !important;
+    border-color:#0d7377 !important;box-shadow:0 0 0 .2rem rgba(13,115,119,.14) !important;}
+
+  .settings-revamp .btn-hitech,.settings-revamp .card-footer .btn-primary{background:linear-gradient(135deg,#0d7377,#12948c) !important;
+    border:none !important;border-radius:11px !important;color:#fff !important;font-weight:700 !important;
+    padding:.6rem 1.5rem !important;box-shadow:0 8px 18px rgba(13,115,119,.25) !important;}
+  .settings-revamp .btn-hitech:hover,.settings-revamp .card-footer .btn-primary:hover{filter:brightness(1.08);transform:translateY(-1px);}
+  .settings-revamp .nav-pills{gap:.15rem;}
+  /* Two-column layout: nav (~30%) + active content (~70%) side by side on desktop. */
+  @media (min-width:992px){
+    .settings-revamp .settings-nav-col{flex:0 0 30% !important;max-width:30% !important;}
+    .settings-revamp .settings-content-col{flex:0 0 70% !important;max-width:70% !important;}
+    .settings-revamp .settings-nav-col > .hitech-card{position:sticky;top:1rem;}
+  }
+</style>
+<div class="settings-revamp">
 <div class="row g-6 px-4">
   <!-- Hero Banner -->
   <div class="col-lg-12">
@@ -43,9 +98,15 @@
   </div>
 
   <!-- Stats Cards -->
-  <x-stat-card 
-    title="System Health" 
-    value="{{ $systemHealth ?? 95 }}%" 
+  @php
+    $systemHealth  = \App\Support\SystemStats::systemHealth();
+    $activeModules = \App\Support\SystemStats::activeModules();
+    $storageUsed   = \App\Support\SystemStats::storageUsed();
+    $backupStatus  = \App\Support\SystemStats::backupStatus();
+  @endphp
+  <x-stat-card
+    title="System Health"
+    value="{{ $systemHealth ?? 95 }}%"
     icon="bx-check-shield" 
     color="success"
     animation-delay="0.1s"
@@ -76,8 +137,9 @@
   />
 </div>
 
+    <div class="row g-6 px-4">
     <!-- Navigation -->
-    <div class="col-12 col-lg-4">
+    <div class="col-12 settings-nav-col">
       <div class="d-flex justify-content-between flex-column mb-4 mb-md-0 hitech-card p-4 animate__animated animate__fadeInLeft">
         <h5 class="mb-4 text-primary fw-bold text-uppercase small ls-1">@lang('Settings')</h5>
         <ul class="nav nav-align-left nav-pills flex-column" id="settingsMenu">
@@ -92,12 +154,6 @@
             <a class="nav-link rounded-pill d-flex align-items-center py-3" href="?tab=appSettings" data-bs-toggle="pill" data-bs-target="#appSettings">
               <i class="bx bx-cog bx-sm me-3"></i>
               <span class="align-middle fw-semibold">App Settings</span>
-            </a>
-          </li>
-          <li class="nav-item mb-1">
-            <a class="nav-link rounded-pill d-flex align-items-center py-3" href="?tab=employeeSettings" data-bs-toggle="pill" data-bs-target="#employeeSettings">
-              <i class="bx bx-user bx-sm me-3"></i>
-              <span class="align-middle fw-semibold">Employee Settings</span>
             </a>
           </li>
           @if($addonService->isAddonEnabled(ModuleConstants::PAYROLL))
@@ -127,12 +183,6 @@
               <span class="align-middle fw-semibold">Maps</span>
             </a>
           </li>
-          <li class="nav-item mb-1">
-            <a class="nav-link rounded-pill d-flex align-items-center py-3" href="?tab=companySettings" data-bs-toggle="pill" data-bs-target="#companySettings">
-              <i class="bx bx-buildings bx-sm me-3"></i> 
-              <span class="align-middle fw-semibold">Company Settings</span>
-            </a>
-          </li>
           @if($addonService->isAddonEnabled(ModuleConstants::AI_CHATBOT))
             <li class="nav-item mb-1">
               <a class="nav-link rounded-pill d-flex align-items-center py-3" href="?tab=aiSettings" data-bs-toggle="pill" data-bs-target="#aiSettings">
@@ -148,7 +198,7 @@
     <!-- /Navigation -->
 
     <!-- Options -->
-    <div class=" col-12 col-lg-8 pt-6 pt-lg-0">
+    <div class="col-12 settings-content-col pt-6 pt-lg-0">
       <div class="tab-content p-0">
 
         <!-- General Settings Tab -->
@@ -161,11 +211,8 @@
               </div>
               <div class="card-body pt-4">
                 <div class="row g-6">
-                  <div class="col-12 col-md-6">
-                    <label for="appName" class="form-label-hitech">App Name</label>
-                    <input type="text" class="form-control form-control-hitech" id="appName" name="appName"
-                           value="{{ $settings->app_name ?? '' }}">
-                  </div>
+                  {{-- App Name is locked: no edit option on the UI; current value is preserved on save. --}}
+                  <input type="hidden" name="appName" value="{{ $settings->app_name ?? '' }}">
                   <div class="col-12 col-md-6">
                     <label for="country" class="form-label-hitech">Country</label>
                     <input type="text" class="form-control form-control-hitech" id="country" name="country"
@@ -263,56 +310,6 @@
         </div>
         <!-- /App Settings -->
 
-        <!-- Employee Settings -->
-        <div class="tab-pane fade animate__animated animate__fadeIn" id="employeeSettings" role="tabpanel">
-          <form action="{{ route('settings.updateEmployeeSettings') }}" method="POST">
-            @csrf
-            <div class="hitech-card mb-6">
-              <div class="hitech-card-header">
-                <h5 class="title m-0">Employee Settings</h5>
-              </div>
-              <div class="card-body pt-4">
-                <div class="row g-6">
-
-                  <!-- Biometric Verification -->
-                  <div class="col-12 col-md-6">
-                    <label class="form-label-hitech">Enable Biometric Verification</label>
-                    <div class="form-check form-switch custom-option-basic">
-                      <input class="form-check-input" type="checkbox" id="isBioMetricVerificationEnabled"
-                             name="isBioMetricVerificationEnabled"
-                        {{ $settings->is_biometric_verification_enabled ? 'checked' : '' }}>
-                      <label class="form-check-label ms-2"
-                             for="isBioMetricVerificationEnabled"> {{ $settings->is_biometric_verification_enabled ? 'Enabled' : 'Disabled' }}</label>
-                    </div>
-                  </div>
-
-                  <!-- Device Verification -->
-                  <div class="col-12 col-md-6">
-                    <label class="form-label-hitech">Enable Device Verification</label>
-                    <div class="form-check form-switch custom-option-basic">
-                      <input class="form-check-input" type="checkbox" id="isDeviceVerificationEnabled"
-                             name="isDeviceVerificationEnabled"
-                        {{ $settings->is_device_verification_enabled ? 'checked' : '' }}>
-                      <label class="form-check-label ms-2"
-                             for="isDeviceVerificationEnabled"> {{ $settings->is_device_verification_enabled ? 'Enabled' : 'Disabled' }}</label>
-                    </div>
-                  </div>
-
-                  <!-- Default Password -->
-                  <div class="col-12">
-                    <label for="defaultPassword" class="form-label-hitech">Default Password</label>
-                    <input type="password" class="form-control form-control-hitech" id="defaultPassword" name="defaultPassword"
-                           value="{{ $settings->default_password }}">
-                  </div>
-                </div>
-              </div>
-              <div class="card-footer bg-transparent border-top border-light text-end p-4">
-                <button type="submit" class="btn btn-hitech">Save Changes</button>
-              </div>
-            </div>
-          </form>
-        </div>
-        <!-- /Employee Settings -->
 
         <!-- Tracking Settings -->
         <div class="tab-pane fade animate__animated animate__fadeIn" id="trackingSettings" role="tabpanel">
@@ -414,12 +411,8 @@
                     </div>
                     <small class="text-muted mt-2 d-block small opacity-75">Click on the placeholder to upload. Max size: 2MB (JPG, PNG)</small>
                   </div>
-                  <!-- Company Name -->
-                  <div class="col-12 col-md-6">
-                    <label for="companyName" class="form-label-hitech">Company Name</label>
-                    <input type="text" class="form-control form-control-hitech" id="companyName" name="company_name"
-                           value="{{ $settings->company_name ?? '' }}">
-                  </div>
+                  {{-- Company Name is locked: no edit option on the UI; current value is preserved on save. --}}
+                  <input type="hidden" name="company_name" value="{{ $settings->company_name ?? '' }}">
                   <!-- Company Phone -->
                   <div class="col-12 col-md-6">
                     <label for="companyPhone" class="form-label-hitech">Company Phone</label>
@@ -711,6 +704,7 @@
     </div>
     <!-- /Options -->
   </div>
+</div>{{-- /.settings-revamp --}}
 @endsection
 
 @if($addonService->isAddonEnabled(ModuleConstants::PAYROLL))

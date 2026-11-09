@@ -67,6 +67,12 @@ return Application::configure(basePath: dirname(__DIR__))
     $schedule->command('goals:weekly')->dailyAt('06:00')->withoutOverlapping();
     // Hourly so it catches the ~12h-before-close mark whatever time a window ends.
     $schedule->command('ninety-day:remind-add-customers')->hourly()->withoutOverlapping();
+    /* Automated database backup (spatie/laravel-backup). --only-db keeps the
+       archive small and avoids bloating disk with the whole codebase (which is
+       deployable from git anyway). 01:30 sits after the 01:00 leave reconcile;
+       backup:clean prunes per the retention policy in config/backup.php. */
+    $schedule->command('backup:clean')->dailyAt('01:20')->withoutOverlapping();
+    $schedule->command('backup:run --only-db')->dailyAt('01:30')->withoutOverlapping();
   })
   ->withMiddleware(function (Middleware $middleware) {
     // Passphrase wall for a developer's temporary tunnel to a LOCAL instance (see TunnelAccessGate). Inert

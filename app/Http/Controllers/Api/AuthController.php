@@ -24,6 +24,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Tymon\JWTAuth\Exceptions\JWTException;
 use Tymon\JWTAuth\Facades\JWTAuth;
+use App\Support\AuthLog;
 
 class AuthController extends Controller
 {
@@ -39,6 +40,7 @@ class AuthController extends Controller
     $user = $this->userService->findUserByEmail($request['employeeId']);
 
     if (is_null($user)) {
+      AuthLog::record(AuthLog::UNKNOWN_USER, null, (string) $request['employeeId'], $request, false, [], 'api');
       return Error::response('User not found', 404);
     }
 
@@ -53,10 +55,12 @@ class AuthController extends Controller
     }
 
     if($user->status != UserAccountStatus::ACTIVE && $user->status != UserAccountStatus::ONBOARDING){
+      AuthLog::record(AuthLog::ACCOUNT_INACTIVE, $user, (string) $request['employeeId'], $request, false, [], 'api');
       return Error::response('User account is not active', 403);
     }
 
     if (!(new BcryptHasher)->check($request['password'], $user->password)) {
+      AuthLog::record(AuthLog::PASSWORD_FAILED, $user, (string) $request['employeeId'], $request, false, [], 'api');
       return Error::response('Email or password is incorrect. Authentication failed.');
     }
 
@@ -68,6 +72,8 @@ class AuthController extends Controller
       if ($token == '') {
         return Error::response('Could not generate token, authentication failed');
       }
+
+      AuthLog::record(AuthLog::LOGIN_SUCCESS, $user, (string) $request['employeeId'], $request, true, ['via' => 'password'], 'api');
 
       $response = [
         'id' => $user->id,
@@ -136,6 +142,8 @@ class AuthController extends Controller
     }
 
     JWTAuth::setToken($token)->invalidate();
+
+    try { AuthLog::record(AuthLog::LOGOUT, auth()->user(), auth()->user()?->email, request(), true, [], 'api'); } catch (\Throwable $e) {}
 
     return Success::response('Successfully logged out');
   }
@@ -229,6 +237,8 @@ class AuthController extends Controller
     } catch (JWTException $e) {
       return response()->json(['error' => 'could_not_create_token'], 500);
     }
+
+    AuthLog::record(AuthLog::LOGIN_SUCCESS, $user, $user->email, request(), true, ['via' => 'device_uid'], 'api');
 
     $response = [
       'token' => $token,

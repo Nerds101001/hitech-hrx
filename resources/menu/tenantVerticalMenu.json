@@ -1556,6 +1556,7 @@
                 "documenttypes.index",
                 "roles.index",
                 "auditLogs.index",
+                "security.index",
                 "settings.index",
                 "reports.index"
             ],
@@ -1604,6 +1605,15 @@
                     "url": "/auditLogs",
                     "name": "Audit Logs",
                     "slug": "auditLogs.index",
+                    "roles": [
+                        "admin",
+                        "hr"
+                    ]
+                },
+                {
+                    "url": "/security/login-activity",
+                    "name": "Login & Security",
+                    "slug": "security.index",
                     "roles": [
                         "admin",
                         "hr"

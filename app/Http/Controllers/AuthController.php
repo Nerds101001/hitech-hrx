@@ -24,6 +24,7 @@ use Carbon\Carbon;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Cookie;
 use App\Models\UserTrustedDevice;
+use App\Support\AuthLog;
 
 class AuthController extends Controller
 {
@@ -62,6 +63,7 @@ class AuthController extends Controller
         // 2. Check if account is locked
         if ($user->locked_until && now()->lt($user->locked_until)) {
             $minutes = now()->diffInMinutes($user->locked_until) + 1;
+            AuthLog::record(AuthLog::ACCOUNT_LOCKED, $user, $request->email, $request, false);
             return redirect()->back()->with('error', "This account is locked for $minutes minutes due to suspicious activity.");
         }
 
@@ -73,6 +75,7 @@ class AuthController extends Controller
           UserAccountStatus::ONBOARDING_SUBMITTED->value,
           UserAccountStatus::ONBOARDING_REQUESTED->value
         ])) {
+          AuthLog::record(AuthLog::ACCOUNT_INACTIVE, $user, $request->email, $request, false, ['status' => $userStatus]);
           return redirect()->back()->with('error', 'Your account is not active. Please contact the administrator.');
         }
 
@@ -104,7 +107,8 @@ class AuthController extends Controller
                   $trusted->update(['last_used_at' => now()]);
                   Auth::login($user, $request->has('rememberMe') && $request->rememberMe === "on");
                   Log::info("Login: OTP skipped for Trusted Device. User ID: {$user->id}");
-                  
+                  AuthLog::record(AuthLog::TRUSTED_DEVICE, $user, $request->email, $request, true);
+
                   return $this->handlePostLoginRedirect($user);
               }
           }
@@ -139,14 +143,17 @@ class AuthController extends Controller
             'auth_otp_remember' => $request->has('rememberMe') && $request->rememberMe === "on"
           ]);
 
+          AuthLog::record(AuthLog::OTP_SENT, $user, $request->email, $request, true);
           return redirect()->route('auth.otp.form')->with('success', 'Security code sent to your email.');
         } else {
           // Increment attempts on failure
           $user->increment('login_attempts');
+          AuthLog::record(AuthLog::PASSWORD_FAILED, $user, $request->email, $request, false, ['attempts' => $user->login_attempts]);
 
           if ($user->login_attempts >= 3) {
             $lockTime = 40;
             $user->update(['locked_until' => now()->addMinutes($lockTime)]);
+            AuthLog::record(AuthLog::BRUTE_FORCE_LOCK, $user, $request->email, $request, false, ['attempts' => $user->login_attempts]);
 
             // Send Security Alert to Admin
             try {
@@ -194,6 +201,7 @@ class AuthController extends Controller
         $key = 'login_fail:' . sha1(strtolower(trim((string) $request->email)));
         $tries = (int) \Illuminate\Support\Facades\Cache::get($key, 0) + 1;
         \Illuminate\Support\Facades\Cache::put($key, $tries, now()->addMinutes(40));
+        AuthLog::record(AuthLog::UNKNOWN_USER, null, $request->email, $request, false, ['tries' => $tries]);
         if ($tries >= 3) {
           return redirect()->back()->with('error', self::LOCKED_MSG);
         }
@@ -275,15 +283,18 @@ class AuthController extends Controller
 
             $userStatus = $user->status instanceof \UnitEnum ? $user->status->value : $user->status;
             Log::info("OTP Verified: User ID {$user->id}, Status: {$userStatus}, Redirecting...");
+            AuthLog::record(AuthLog::LOGIN_SUCCESS, $user, $user->email, $request, true, ['via' => $localBypass ? 'local_bypass' : 'otp']);
 
             return $this->handlePostLoginRedirect($user);
         } else {
             // Failure
             $user->increment('otp_attempts');
+            AuthLog::record(AuthLog::OTP_FAILED, $user, $user->email, $request, false, ['otp_attempts' => $user->otp_attempts]);
 
             if ($user->otp_attempts >= 3) {
                 $user->update(['locked_until' => now()->addMinutes(40)]);
-                
+                AuthLog::record(AuthLog::OTP_LOCKED, $user, $user->email, $request, false);
+
                 // Notify Admin
                 try {
                     \Illuminate\Support\Facades\Notification::route('mail', config('app.security_alert_email', 'admin@example.com'))
@@ -596,6 +607,7 @@ class AuthController extends Controller
     if (Cache::has('accessible_module_routes')) {
       Cache::forget('accessible_module_routes');
     }
+    try { AuthLog::record(AuthLog::LOGOUT, auth()->user(), auth()->user()?->email, request(), true); } catch (\Throwable $e) {}
     auth()->logout();
     return redirect('auth/login')->with('success', 'Successfully logged out');
   }
