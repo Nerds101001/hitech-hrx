@@ -120,6 +120,20 @@ class SecurityLogController extends Controller
 
     public function destroySession(Request $request, string $id)
     {
+        // SECURITY (2026-11-10 audit fix): this route is reachable by
+        // admin|hr|audit.view (see SecurityRouteServiceProvider), but the
+        // underlying row can belong to ANY user. Without this check, an
+        // `hr` user or anyone holding the read-only `audit.view` permission
+        // could end an administrator's session. Anyone may sign out their
+        // own current session; only admin may revoke someone else's.
+        $isOwnSession = $id === $request->session()->getId();
+        if (!$isOwnSession) {
+            $target = DB::table('sessions')->where('id', $id)->first();
+            if ($target && (int) $target->user_id !== auth()->id() && !auth()->user()->hasRole('admin')) {
+                abort(403, 'Only an administrator can revoke another user\'s session.');
+            }
+        }
+
         $killed = DB::table('sessions')->where('id', $id)->delete();
 
         AuthLog::record('session_revoked', auth()->user(), auth()->user()?->email, $request, true, [

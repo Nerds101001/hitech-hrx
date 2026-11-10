@@ -46,7 +46,9 @@
   <div class="sec-tabs">
     <a href="{{ route('security.index') }}" class="active">Login activity</a>
     <a href="{{ route('security.sessions') }}">Active sessions</a>
-    <a href="{{ route('security.backups') }}">Backups</a>
+    @if(auth()->user()->hasRole('admin'))
+      <a href="{{ route('security.backups') }}">Backups</a>
+    @endif
     <a href="{{ route('auditLogs.index') }}">Audit log</a>
   </div>
 

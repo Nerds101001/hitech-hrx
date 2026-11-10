@@ -32,7 +32,9 @@
   <div class="sec-tabs">
     <a href="{{ route('security.index') }}">Login activity</a>
     <a href="{{ route('security.sessions') }}" class="active">Active sessions</a>
-    <a href="{{ route('security.backups') }}">Backups</a>
+    @if(auth()->user()->hasRole('admin'))
+      <a href="{{ route('security.backups') }}">Backups</a>
+    @endif
     <a href="{{ route('auditLogs.index') }}">Audit log</a>
   </div>
 
@@ -65,10 +67,14 @@
               <td><div class="sec-name" style="font-weight:600">{{ $s->device }}</div><div class="sec-sub" title="{{ $s->agent }}">{{ \Illuminate\Support\Str::limit($s->agent, 46) }}</div></td>
               <td class="sec-sub">{{ $s->last ? $s->last->diffForHumans() : '—' }}<br><small>{{ $s->last?->format('d M, H:i') }}</small></td>
               <td class="text-end">
-                <form method="POST" action="{{ route('security.sessions.revoke', $s->id) }}" onsubmit="return confirm('Sign this device out now?');" class="d-inline">
-                  @csrf
-                  <button class="btn btn-sm btn-outline-danger" style="font-size:.74rem">{{ $s->is_current ? 'Sign me out' : 'Revoke' }}</button>
-                </form>
+                @if($s->is_current || auth()->user()->hasRole('admin'))
+                  <form method="POST" action="{{ route('security.sessions.revoke', $s->id) }}" onsubmit="return confirm('Sign this device out now?');" class="d-inline">
+                    @csrf
+                    <button class="btn btn-sm btn-outline-danger" style="font-size:.74rem">{{ $s->is_current ? 'Sign me out' : 'Revoke' }}</button>
+                  </form>
+                @else
+                  <span class="text-muted" style="font-size:.74rem">Admin only</span>
+                @endif
               </td>
             </tr>
           @empty
